@@ -1,0 +1,1 @@
+![alt text](event_storming.excalidraw.png "Event Storming")
