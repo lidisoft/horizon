@@ -1,0 +1,115 @@
+# Data model
+
+PostgreSQL schema outline. Authoritative definitions live in
+`internal/migrations/`; this page explains intent. Conventions:
+
+- Primary keys are **UUIDv7** (`uuid`), generated in Go.
+- Every workspace-owned table has `workspace_id` as its first column; it leads
+  every index.
+- `created_at`, `updated_at` are `timestamptz`. Aggregates have a `version int`
+  for optimistic concurrency.
+- Foreign keys use `ON DELETE CASCADE` along ownership lines, so a hard delete
+  of an aggregate removes what it owns.
+- Names are snake_case and plural.
+
+## Identity and access
+
+| Table | Key columns |
+|-------|-------------|
+| `users` | email (unique, citext), name, avatar, password_hash (argon2id, nullable), locale, timezone, is_instance_admin |
+| `sessions` | user_id, token_hash, expires_at, user_agent, ip |
+| `magic_links` | user_id, token_hash, expires_at, used_at |
+| `oidc_providers` | workspace_id (nullable = instance-wide), issuer, client_id, client_secret (encrypted), domain allowlist |
+| `user_identities` | user_id, provider_id, subject |
+| `api_tokens` | user_id, name, token_hash, scopes, last_used_at, expires_at |
+| `workspaces` | slug (unique), name, settings JSONB |
+| `workspace_members` | workspace_id, user_id, status (invited, active, suspended) |
+| `teams` / `team_members` | workspace_id, name / team_id, user_id |
+| `roles` | workspace_id, name, permissions text[] |
+| `role_grants` | workspace_id, role_id, subject_type (user/team), subject_id, project_id (nullable = workspace scope) |
+
+## Projects and configuration
+
+| Table | Key columns |
+|-------|-------------|
+| `projects` | workspace_id, key, name, lead_id, visibility, settings JSONB (overrides), issue_seq bigint, archived_at |
+| `project_key_aliases` | workspace_id, project_id, old_key |
+| `issue_types` | workspace_id, project_id (nullable = workspace), name, icon, colour, workflow_id, allowed_parent_type_ids |
+| `workflows` | workspace_id, project_id (nullable), name, version |
+| `statuses` | workflow_id, name, colour, category, position, is_initial |
+| `transitions` | workflow_id, from_status_id (nullable = any), to_status_id, name, rules JSONB |
+| `custom_fields` | workspace_id, project_id (nullable), name, type, options JSONB |
+| `issue_type_fields` | issue_type_id, field_id, required, position |
+| `config_disables` | project_id, definition_type, definition_id — inherited definitions a project switched off |
+| `labels` | workspace_id, project_id (nullable), name, colour |
+
+## Work items
+
+| Table | Key columns |
+|-------|-------------|
+| `issues` | workspace_id, project_id, number, type_id, title, status_id, priority, rank (text, collate "C"), estimate, assignee_id, parent_id, iteration_id, release_id, start_date, due_date, fields JSONB, description_doc_id, search tsvector, archived_at, version |
+| `issue_labels` | issue_id, label_id |
+| `issue_links` | workspace_id, source_id, target_id, type, lag_days |
+| `comments` | issue_id, author_id, document_id, edited_at |
+| `attachments` | workspace_id, issue_id, uploader_id, filename, content_type, size, object_key |
+| `iterations` | workspace_id, project_id, name, goal, state, start_date, end_date, completed_at, archived_at, version |
+| `releases` | workspace_id, project_id, name, description, state, start_date, release_date |
+| `milestones` | workspace_id, project_id (nullable), name, date |
+| `milestone_issues` | milestone_id, issue_id |
+
+Notable indexes:
+
+- `issues (workspace_id, project_id, number)` unique — issue keys.
+- `issues (workspace_id, project_id, status_id, rank)` — board columns and lists.
+- `issues USING gin (fields jsonb_path_ops)` — custom field filters.
+- `issues USING gin (search)` — full-text search.
+
+The issue number comes from `UPDATE projects SET issue_seq = issue_seq + 1 …
+RETURNING issue_seq` in the creating transaction, so numbers are gap-free per
+project in practice and never reused.
+
+**Rank** uses fractional indexing (base-62 strings): inserting between two
+issues generates a key between theirs, so only the moved row changes. A
+rebalance job normalises keys that grow past a length threshold.
+
+## Documents and collaboration
+
+| Table | Key columns |
+|-------|-------------|
+| `documents` | workspace_id, owner_type, owner_id, version bigint, content JSONB (latest snapshot) |
+| `document_steps` | document_id, version, client_id, user_id, steps JSONB, created_at — unique (document_id, version) |
+
+Steps older than the latest snapshot minus a retention window are compacted
+away. See [realtime.md](realtime.md).
+
+## Events and integration
+
+| Table | Key columns |
+|-------|-------------|
+| `events` | id (UUIDv7), workspace_id, aggregate_type, aggregate_id, aggregate_version, type, actor_id, occurred_at, payload JSONB, published_at |
+| `subscriptions` | user_id, issue_id, reason (creator, assignee, mention, manual) |
+| `inbox_items` | user_id, workspace_id, event_id, issue_id, read_at, snoozed_until, archived_at |
+| `webhooks` | workspace_id, project_id (nullable), url, secret, event_types text[], active |
+| `webhook_deliveries` | webhook_id, event_id, attempt, status_code, response_excerpt, next_attempt_at |
+| `vcs_connections` | workspace_id, provider, installation details (encrypted) |
+| `vcs_links` | issue_id, kind (branch, pr, commit), url, title, state |
+| `views` | workspace_id, project_id (nullable), owner_id (nullable = shared), name, layout, query JSONB, display JSONB |
+
+Indexes on `events`: `(workspace_id, aggregate_type, aggregate_id, aggregate_version)`
+for history; partial index on `(id) WHERE published_at IS NULL` for the relay.
+
+## Hard delete
+
+Deleting an issue, in one transaction:
+
+1. Re-parent children, remove it from its iteration (emits `IterationLoaded`).
+2. `DELETE FROM issues` — cascades remove labels, links, comments, documents,
+   steps, attachment rows, subscriptions, inbox items, VCS links.
+3. `DELETE FROM events WHERE aggregate_type='issue' AND aggregate_id=$1`, and
+   delete `webhook_deliveries` that referenced those events.
+4. Insert the tombstone `IssueDeleted` event.
+
+The `purge` worker then purges the JetStream subject
+`horizon.<ws>.issue.<id>.>` and deletes the S3 objects. Events emitted by
+**other** aggregates may mention the deleted issue by id (e.g. an iteration's
+`IterationLoaded`); their payloads carry ids only, never issue content.
