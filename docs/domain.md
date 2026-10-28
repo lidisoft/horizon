@@ -66,7 +66,8 @@ change also appends a domain event in the same transaction. See
 | **Issue type** | Configurable kind of issue (Epic, Story, Bug, …), with an icon, colour, workflow and fields |
 | **Workflow** | A state machine of statuses and allowed transitions, bound to an issue type |
 | **Status** | A state in a workflow. Each status belongs to one **status category** |
-| **Status category** | Fixed set: `backlog`, `todo`, `in_progress`, `done`, `canceled`. Drives boards, reports and iteration rules across differing workflows |
+| **Status category** | Configurable grouping of statuses (workspace default, project override). Each has an **outcome**. Built-in: Backlog, Todo (unstarted), In progress (started), Done (completed), Canceled (abandoned) |
+| **Outcome** | Fixed property of a category — `unstarted`, `started` (both *open*), `completed`, `abandoned` (both *final*). What cross-project features (reports, iteration completion, Git automation) rely on |
 | **Iteration** | A time-boxed sprint within a project |
 | **Release** | A version issues are targeted to (Jira's *fix version*) |
 | **Milestone** | A dated point on the timeline, at project or workspace level |
@@ -121,6 +122,20 @@ sequence counter.
   workflow.
 - Archived issues accept only *Unarchive* and *Delete*.
 
+**Moving to another project**
+- Type, status, labels and custom fields are matched by name in the target
+  project's resolved configuration; the user maps what doesn't match, or
+  accepts that unmapped values are dropped (listed before confirming).
+- Iteration and release are cleared; links, comments, attachments and history
+  are kept.
+- The issue gets a new key from the target project's sequence; the old key
+  becomes an **alias** and keeps resolving.
+- If the issue has children, the user chooses: move the subtree (same mapping
+  applied to every descendant) or leave the children where they are (their
+  parent is then in another project, which is allowed).
+- Requires `issue.move` on the source project and `issue.create` on the
+  target.
+
 **Events** (in addition to those in the storm): `IssueUnarchived`,
 `IssueMoved` (to another project), `IssueParentChanged`, `IssueUnlinked`,
 `IssueRanked`, `IssueIterationChanged`, `IssueReleaseChanged`,
@@ -134,7 +149,7 @@ Stored with its source issue, typed:
 | `relates_to` | `relates_to` | — |
 | `blocks` | `blocked_by` | — |
 | `duplicates` | `duplicated_by` | — |
-| `precedes` | `follows` | Yes. Optional lag in days; drives auto-scheduling on the timeline |
+| `precedes` | `follows` | Yes. Optional lag in working days; drives auto-scheduling on the timeline ([working calendar](configuration.md#time-zone-and-working-calendar)) |
 
 Parent/child is not a link; it is the `parent` field.
 
@@ -185,7 +200,7 @@ settings are aggregates too: changing them emits events
 |------|------|-------|
 | `IssueDeleted` | Remove the issue from its iteration's scope (`IterationLoaded`) | Storm policy 1 |
 | `IterationCompleted` | Apply the completion policy | Storm policy 2, generalised |
-| `IssueDeleted` | Delete its links, comments, attachments and children's parent pointer | Children are re-parented to the deleted issue's parent |
+| `IssueDeleted` | Delete its links, comments, attachments; handle children as chosen | See [Deletion](#deletion) |
 | Git PR merged referencing an issue | Transition to the configured status, if allowed | Configurable per project |
 | `IssueAssigned`, `IssueCommented` with @mention, any change to a subscribed issue | Notify | See notifications in [architecture.md](architecture.md#workers) |
 | Any domain event | Fan out to WebSocket clients and matching webhooks | |
@@ -198,19 +213,26 @@ Configurable at workspace level, overridable per project
 | Mode | On completion |
 |------|---------------|
 | `archive_all` | Every issue in the iteration is archived. The storm's original reading |
-| `archive_done_rollover_rest` *(default)* | Issues in `done`/`canceled` categories are archived; others move to the next iteration or to the backlog, chosen by the facilitator when closing |
+| `archive_done_rollover_rest` *(default)* | Issues in a final category (outcome `completed` or `abandoned`) are archived; others move to the next iteration or to the backlog, chosen by the facilitator when closing |
 | `none` | Nothing changes; issues stay in the completed iteration |
 
 ## Deletion
 
 Delete is a **hard delete** (see [ADR-0012](adr/0012-hard-delete-with-event-scrubbing.md)):
 
-1. The aggregate row and everything it owns (comments, attachments in object
+1. If the issue has children, the user chooses at delete time (the API
+   requires `children=reparent|cascade` and refuses the delete otherwise):
+   - `reparent` — children move to the deleted issue's parent (or become
+     top-level);
+   - `cascade` — the whole subtree is deleted, each descendant with its own
+     tombstone. Requires `issue.delete` on every descendant; the confirmation
+     dialog lists them.
+2. The aggregate row and everything it owns (comments, attachments in object
    storage, editor history, links, notifications, webhook delivery logs,
    search entries) is removed.
-2. Every stored domain event of that aggregate is removed, from PostgreSQL
+3. Every stored domain event of that aggregate is removed, from PostgreSQL
    **and** from the JetStream stream.
-3. A single **tombstone** event is written: `IssueDeleted` with id, key, actor
+4. A single **tombstone** event is written: `IssueDeleted` with id, key, actor
    and timestamp only — no content.
 
 Archive is the non-destructive alternative: archived items are read-only,

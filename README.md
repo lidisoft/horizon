@@ -27,9 +27,12 @@ Design phase. The documentation below is the specification; no code exists yet.
 | [docs/architecture.md](docs/architecture.md) | You want to know how the system is put together |
 | [docs/data-model.md](docs/data-model.md) | You are writing a migration or a query |
 | [docs/api.md](docs/api.md) | You are adding or consuming an endpoint, event or webhook |
+| [docs/reports.md](docs/reports.md) | You work on reports or the project overview |
 | [docs/realtime.md](docs/realtime.md) | You work on WebSockets, presence or collaborative editing |
 | [docs/frontend.md](docs/frontend.md) | You work on the SPA |
 | [docs/security.md](docs/security.md) | You touch authentication, roles or permissions |
+| [docs/operations.md](docs/operations.md) | You run an instance, or automate running many |
+| [docs/development.md](docs/development.md) | You write code: tests, CI, branches and commits |
 | [docs/roadmap.md](docs/roadmap.md) | You are picking up the next chunk of work |
 | [docs/adr/](docs/adr/README.md) | You are wondering *why* something is the way it is |
 

@@ -8,6 +8,11 @@ shell later ([ADR-0018](adr/0018-standalone-spa-shell-ready.md)).
 
 ## Look and feel
 
+v1 targets **desktop browsers only** (minimum viewport about 1024 px wide).
+Layouts need not adapt to phones yet, but avoid choices that would make it
+hard later (fixed pixel widths for content, hover-only actions).
+
+
 Linear is the reference: a slim left sidebar (workspace switcher, inbox, my
 issues, projects, views), a dense content area, an issue detail panel or full
 page, ⌘K for everything, keyboard shortcuts for every frequent action, subtle
@@ -83,6 +88,8 @@ semantic tokens only, `:host` display):
 | `hzn-editor` | Block editor |
 | `hzn-*-picker` | Status, priority, assignee, labels, estimate, iteration, release pickers |
 | `hzn-inbox` | Notifications |
+| `hzn-chart-*`, `hzn-sparkline` | Hand-written SVG charts for reports ([reports.md](reports.md#charts)) |
+| `hzn-project-overview` | Fixed project overview page |
 
 ## Shell readiness
 

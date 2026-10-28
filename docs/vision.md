@@ -47,7 +47,8 @@ custom fields, sprints, releases, tables and Gantt charts.
 ### Issues
 - Configurable issue types (workspace-wide, overridable per project)
 - Free parent/child hierarchy
-- A workflow (state machine) per issue type; statuses map to fixed categories
+- A workflow (state machine) per issue type; statuses grouped into configurable
+  categories, each with an outcome (unstarted, started, completed, abandoned)
 - Typed custom fields
 - Priority levels plus manual ranking
 - Estimates on a configurable scale (points, T-shirt sizes or none)
@@ -75,6 +76,15 @@ custom fields, sprints, releases, tables and Gantt charts.
 - Calendar
 - Filter builder, grouping, sorting; personal and shared saved views
 
+### Reports
+- Sprint: burndown, burnup, sprint report, velocity
+- Flow: cumulative flow, cycle and lead time, throughput
+- Release and milestone progress
+- Workload: distribution, created vs resolved
+- Any report scoped by a view filter, measured in issue count or estimate,
+  available through the API and shareable by link
+- A fixed project overview page
+
 ### Collaboration and integration
 - Realtime updates and presence over WebSockets
 - In-app inbox and email notifications, subscriptions, @mentions
@@ -85,7 +95,8 @@ custom fields, sprints, releases, tables and Gantt charts.
 
 ### Platform
 - English UI, with every string in a message catalog (i18n-ready)
-- Full-text search across issues and comments
+- Full-text and fuzzy search across issues and comments (PostgreSQL FTS and
+  `pg_trgm`)
 
 ## Out of scope for v1
 
@@ -99,6 +110,8 @@ Listed so nobody builds them by accident. Several are on the
 - Embedding in the LiDiSoft ecosystem shell (the SPA is designed to allow it
   later; see [ADR-0018](adr/0018-standalone-spa-shell-ready.md))
 - Text query language (JQL-like)
+- Configurable dashboards, forecasts, CSV and image exports of reports
 - Offline editing
-- Native mobile apps
+- Native mobile apps, and phone-sized layouts: v1 is desktop only (minimum
+  width about 1024 px)
 - Additional UI languages

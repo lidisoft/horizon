@@ -24,9 +24,12 @@ number.
 | [0011](0011-workspace-defaults-project-overrides.md) | Workspace defaults, project overrides | Accepted |
 | [0012](0012-hard-delete-with-event-scrubbing.md) | Hard delete with event scrubbing and a tombstone | Accepted |
 | [0013](0013-configurable-roles-and-permission-sets.md) | Configurable roles built from permission sets | Accepted |
-| [0014](0014-workflow-state-machines-with-categories.md) | Workflow state machines per issue type, statuses in categories | Proposed |
+| [0014](0014-workflow-state-machines-with-categories.md) | Workflow state machines per issue type, statuses in configurable categories | Accepted |
 | [0015](0015-block-editor-server-authoritative-collab.md) | Block editor with server-authoritative collaborative editing | Accepted |
 | [0016](0016-s3-compatible-storage-only.md) | S3-compatible object storage only | Accepted |
 | [0017](0017-english-only-i18n-ready.md) | English only, i18n-ready | Accepted |
 | [0018](0018-standalone-spa-shell-ready.md) | Standalone SPA, ready for the LiDiSoft shell | Accepted |
 | [0019](0019-task-runner.md) | Task instead of Make | Accepted |
+| [0020](0020-postgresql-search.md) | Search with PostgreSQL full-text search and pg_trgm | Accepted |
+| [0021](0021-report-projections.md) | Report projections fed by domain events | Accepted |
+| [0022](0022-integration-tests-real-dependencies.md) | Integration tests against real dependencies | Accepted |

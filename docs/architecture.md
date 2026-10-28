@@ -75,6 +75,7 @@ internal/
   webhook/                endpoints, deliveries, signing
   vcs/                    git forge integrations
   search/                 PostgreSQL full-text search
+  report/                 report projections, report queries, project overview
   i18n/                   message catalogs (server-side strings: emails)
   migrations/             goose SQL files
   docs/                   generated OpenAPI
@@ -109,7 +110,7 @@ so a missed notification is only latency).
   Including the aggregate id makes hard-delete scrubbing a single
   subject-filtered purge.
 - The `events` table is the **activity history** shown in the UI. JetStream
-  retention is bounded (configurable, default 30 days) because PostgreSQL is
+  retention is bounded (`HORIZON_EVENTS_RETENTION`, default 7 days) because PostgreSQL is
   the long-term record.
 
 ## Read path
@@ -117,8 +118,10 @@ so a missed notification is only latency).
 - REST reads go straight to PostgreSQL through sqlc queries.
 - Views compile their filter tree to parameterised SQL (`internal/view`);
   custom fields use JSONB operators backed by GIN indexes.
-- Full-text search uses PostgreSQL `tsvector` columns on issues and comments,
-  updated in the write transaction.
+- Search uses PostgreSQL only ([ADR-0020](adr/0020-postgresql-search.md)):
+  `tsvector` columns for word search on issues and comments, and `pg_trgm`
+  trigram indexes on titles and keys for typo-tolerant, prefix matching in ⌘K.
+  The `tsvector` columns are updated in the write transaction.
 
 ## Realtime fan-out
 
@@ -138,6 +141,7 @@ JetStream durable consumers, one per concern, each idempotent:
 | `vcs` | Processes forge webhooks: links branches/PRs/commits, applies merge transitions |
 | `policy` | Runs cross-aggregate policies (e.g. iteration completion) as new commands |
 | `purge` | Scrubs JetStream subjects and S3 objects after hard deletes |
+| `reports` | Maintains report projections ([reports.md](reports.md), [ADR-0021](adr/0021-report-projections.md)) |
 
 ## Object storage
 
@@ -149,7 +153,9 @@ to a short-lived presigned GET. Keys: `ws/<workspace_id>/att/<attachment_id>`.
 
 Environment variables, prefixed `HORIZON_` (as in `tocsin`):
 `DATABASE_URL`, `NATS_URL`, `S3_ENDPOINT`/`S3_BUCKET`/`S3_ACCESS_KEY`/
-`S3_SECRET_KEY`, `SMTP_URL`, `BASE_URL`, `SESSION_SECRET`, `LOG_LEVEL`.
+`S3_SECRET_KEY`, `SMTP_URL`, `BASE_URL`, `SESSION_SECRET`, `LOG_LEVEL`,
+`EVENTS_RETENTION` (JetStream, default `168h`). The full operator contract is
+in [operations.md](operations.md).
 
 ## Development environment
 
@@ -162,7 +168,8 @@ Tasks run with [Task](https://taskfile.dev) (`Taskfile.yml`), not Make — see
 | Task | Does |
 |------|------|
 | `task up` / `task down` / `task logs` | Docker Compose environment |
-| `task test` | `go test ./...` |
+| `task test` | All tests, including integration tests with testcontainers ([development.md](development.md#tests)) |
+| `task test:unit` | Unit tests only, no Docker |
 | `task check` | fmt, vet, tests, generated-code freshness — run before finishing |
 | `task migrate:up` / `migrate:down` / `migrate:status` | goose via `horizon migrate` |
 | `task migrate:create -- <name>` | New numbered migration in `internal/migrations/` |

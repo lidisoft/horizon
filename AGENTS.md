@@ -17,12 +17,15 @@ The task runner is [Task](https://taskfile.dev), not Make
 
 ```bash
 task up                       # dev environment under Docker + Air
-task test                     # go test ./...
+task test                     # all tests (needs Docker for testcontainers)
+task test:unit                # unit tests only
 task check                    # fmt + vet + test + generated-code freshness — run before finishing
 task migrate:up               # apply migrations
 task migrate:create -- name   # new migration
 task gen                      # sqlc + swagger
 ```
+
+Tests, CI, branch and commit conventions: [docs/development.md](docs/development.md).
 
 ## Rules that are not negotiable
 

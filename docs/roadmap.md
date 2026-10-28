@@ -1,6 +1,6 @@
 # Roadmap
 
-Ordered by what unblocks the most. All of phases 1–7 make up **v1** (see
+Ordered by what unblocks the most. All of phases 1–8 make up **v1** (see
 [vision.md](vision.md#v1-scope)); the phases sequence it so that something
 usable exists early.
 
@@ -8,7 +8,7 @@ usable exists early.
 
 - [x] Event storm (Issue and Iteration aggregates)
 - [x] Documentation set and ADRs
-- [ ] Review open questions (below) with the team
+- [x] Review open questions (below) with the team
 - [ ] Wireframes for list, issue detail, board, backlog
 
 ## Phase 1 — Skeleton
@@ -20,7 +20,9 @@ usable exists early.
 - [ ] Event log: append in transaction, outbox relay, subject scheme
 - [ ] LDS embedded at `/lds/`; `web/` embedded with hashed import map
 - [ ] SPA core: `api`, `store`, `router`, `i18n`, `shortcuts`; `hzn-app` frame
-- [ ] In-browser test runner and chromedp harness in CI
+- [ ] In-browser test runner and chromedp harness
+- [ ] testcontainers harness with template databases
+- [ ] GitHub Actions: `check` and `release` workflows
 
 ## Phase 2 — Identity and organisation
 
@@ -35,7 +37,8 @@ usable exists early.
 - [ ] Configuration resolver; issue types, workflows (state machine, rules),
       custom fields, labels, estimation scales — with defaults
 - [ ] Issues: create, field edits, transition, assign, estimate, prioritise,
-      rank, parent/child, links, archive, hard delete with scrubbing
+      rank, parent/child, links, move between projects, archive, hard delete
+      with scrubbing
 - [ ] Comments (plain text first), attachments via S3
 - [ ] Activity feed from `events`
 - [ ] WebSocket pushes for domain events (no collab yet)
@@ -61,16 +64,26 @@ usable exists early.
 
 - [ ] Filter AST → SQL compiler, filter bar, saved views (personal / shared)
 - [ ] Table view with inline editing
-- [ ] Timeline / Gantt with dependencies, auto-scheduling, milestones
+- [ ] Working calendars (weekdays, holidays) and time zone settings
+- [ ] Timeline / Gantt with dependencies, auto-scheduling in working days, milestones
 - [ ] Calendar view
 - [ ] Workspace roadmap across projects
 
-## Phase 7 — Notifications and integrations
+## Phase 7 — Reports
+
+- [ ] `reports` worker and projections, `admin rebuild-reports`
+- [ ] SVG chart components
+- [ ] Sprint reports, flow reports, release and milestone progress, workload
+- [ ] Project overview page
+
+## Phase 8 — Notifications and integrations
 
 - [ ] Subscriptions, inbox, email notifications and digests
 - [ ] Outbound webhooks with signing, retries, delivery log
 - [ ] Git integration: GitHub, GitLab, Forgejo
 - [ ] Magic link login, OIDC / SSO, enforced SSO
+- [ ] Operator contract complete: graceful shutdown, `admin reconcile`,
+      `admin rekey`, upgrade checks ([operations.md](operations.md))
 
 ## After v1
 
@@ -82,27 +95,34 @@ usable exists early.
 - LiDiSoft shell adapter
 - Additional languages
 - Offline editing
+- Public intake forms per project; customer portal for external users
+- Workspace export / import between instances; Helm chart
+- Configurable dashboards; release forecasts; CSV and PNG/SVG report exports
+- Phone-sized layouts
+- Individual availability (absences) in scheduling
+- Move Horizon's own tickets into Horizon (dogfooding)
 
 ## Open questions
 
-Assumptions made while writing these docs that still need a decision:
+None at the moment.
 
-1. **Status categories** — workflows are full state machines; the docs also
-   map every status to a fixed category (backlog, todo, in progress, done,
-   canceled) so boards, reports and iteration completion work across
-   projects. Confirm.
-2. **Commands over WebSocket** — the docs keep domain commands on REST and use
-   the socket for pushes, presence and editor steps. Confirm, or move commands
-   to the socket.
-3. **Search** — PostgreSQL full-text search is assumed sufficient; no external
-   engine.
-4. **Children of a deleted issue** — re-parented to the deleted issue's parent
-   (assumed), rather than deleted too.
-5. **JetStream retention** — 30 days assumed, with PostgreSQL as the long-term
-   history.
-6. **Guests** — external collaborators are modelled as a Guest role; is
-   anything more (e.g. a portal) needed?
-7. **SaaS operations** — provisioning, upgrades and backups of
-   one-instance-per-customer are not covered yet.
-8. **Licensing vs SaaS** — the repository is GPL-3.0; confirm that is
-   intended (AGPL would also cover network use).
+### Resolved
+
+| Question | Decision |
+|----------|----------|
+| Status categories | Configurable, each with an outcome (`unstarted`, `started`, `completed`, `abandoned`) — [ADR-0014](adr/0014-workflow-state-machines-with-categories.md) |
+| Commands over WebSocket | No: REST only — [ADR-0008](adr/0008-websockets-for-realtime.md) |
+| Search | PostgreSQL FTS + `pg_trgm` — [ADR-0020](adr/0020-postgresql-search.md) |
+| Children of a deleted issue | The user chooses re-parent or cascade at delete time — [domain.md](domain.md#deletion) |
+| JetStream retention | Configurable per instance, default 7 days — [operations.md](operations.md#configuration) |
+| Guests | Guest role only in v1; intake forms and a portal after v1 |
+| SaaS operations | Out of this repository; Horizon defines the instance contract — [operations.md](operations.md) |
+| License | GPL-3.0 kept |
+| Reports | Sprint, flow, release/milestone and workload reports; fixed project overview; event-fed projections — [reports.md](reports.md), [ADR-0021](adr/0021-report-projections.md) |
+| Moving an issue between projects | Mapping dialog with auto-match by name; old key becomes an alias; user chooses whether children move — [domain.md](domain.md#issue) |
+| Time zones | Workspace time zone, project override; timestamps in the user's zone — [configuration.md](configuration.md#time-zone-and-working-calendar) |
+| Gantt calendars | Working days: configurable weekdays and holidays, workspace default, project override — [configuration.md](configuration.md#time-zone-and-working-calendar) |
+| Responsive / mobile web | Desktop only in v1 — [frontend.md](frontend.md#look-and-feel) |
+| Backend testing | Real dependencies via testcontainers — [ADR-0022](adr/0022-integration-tests-real-dependencies.md) |
+| CI | GitHub Actions: PR checks, release on tag — [development.md](development.md#ci) |
+| Branch and commit conventions | `dev/<user>/<ticket>-<slug>`, conventional commits, squash merge; tickets move to Horizon once it can host them — [development.md](development.md#branches-commits-and-pull-requests) |

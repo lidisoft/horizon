@@ -36,18 +36,21 @@ PostgreSQL schema outline. Authoritative definitions live in
 | `project_key_aliases` | workspace_id, project_id, old_key |
 | `issue_types` | workspace_id, project_id (nullable = workspace), name, icon, colour, workflow_id, allowed_parent_type_ids |
 | `workflows` | workspace_id, project_id (nullable), name, version |
-| `statuses` | workflow_id, name, colour, category, position, is_initial |
+| `status_categories` | workspace_id, project_id (nullable = workspace), name, colour, position, outcome (`unstarted`, `started`, `completed`, `abandoned`) |
+| `statuses` | workflow_id, name, colour, category_id, position, is_initial |
 | `transitions` | workflow_id, from_status_id (nullable = any), to_status_id, name, rules JSONB |
 | `custom_fields` | workspace_id, project_id (nullable), name, type, options JSONB |
 | `issue_type_fields` | issue_type_id, field_id, required, position |
 | `config_disables` | project_id, definition_type, definition_id — inherited definitions a project switched off |
 | `labels` | workspace_id, project_id (nullable), name, colour |
+| `non_working_dates` | workspace_id, project_id (nullable), date, name |
 
 ## Work items
 
 | Table | Key columns |
 |-------|-------------|
 | `issues` | workspace_id, project_id, number, type_id, title, status_id, priority, rank (text, collate "C"), estimate, assignee_id, parent_id, iteration_id, release_id, start_date, due_date, fields JSONB, description_doc_id, search tsvector, archived_at, version |
+| `issue_key_aliases` | workspace_id, issue_id, old_key — keys left behind by moves (and by project key renames, through `project_key_aliases`) |
 | `issue_labels` | issue_id, label_id |
 | `issue_links` | workspace_id, source_id, target_id, type, lag_days |
 | `comments` | issue_id, author_id, document_id, edited_at |
@@ -63,6 +66,8 @@ Notable indexes:
 - `issues (workspace_id, project_id, status_id, rank)` — board columns and lists.
 - `issues USING gin (fields jsonb_path_ops)` — custom field filters.
 - `issues USING gin (search)` — full-text search.
+- `issues USING gin (title gin_trgm_ops)` — fuzzy and prefix matching for ⌘K
+  (requires the `pg_trgm` extension).
 
 The issue number comes from `UPDATE projects SET issue_seq = issue_seq + 1 …
 RETURNING issue_seq` in the creating transaction, so numbers are gap-free per
@@ -98,11 +103,26 @@ away. See [realtime.md](realtime.md).
 Indexes on `events`: `(workspace_id, aggregate_type, aggregate_id, aggregate_version)`
 for history; partial index on `(id) WHERE published_at IS NULL` for the relay.
 
+## Reports
+
+Projections maintained by the `reports` worker ([reports.md](reports.md)).
+They hold ids, outcomes, weights and timestamps only.
+
+| Table | Key columns |
+|-------|-------------|
+| `report_status_intervals` | workspace_id, project_id, issue_id, status_id, category_id, outcome, entered_at, left_at (null = current) |
+| `report_iteration_scope` | workspace_id, iteration_id, issue_id, added_at, removed_at, committed (bool: present at start), estimate_weight, completed_at, abandoned_at, ended_as (completed, abandoned, rolled_over, removed) |
+| `report_issue_milestones` | workspace_id, issue_id, created_at, first_started_at, last_completed_at, abandoned_at — derived per issue for lead/cycle time |
+| `report_daily_totals` | workspace_id, project_id, day, outcome, issue_count, estimate_total |
+| `report_cursor` | consumer name, last event id — for replay and rebuild |
+
 ## Hard delete
 
 Deleting an issue, in one transaction:
 
-1. Re-parent children, remove it from its iteration (emits `IterationLoaded`).
+1. Handle children as requested (`reparent`, or `cascade`: repeat these steps
+   for each descendant, deepest first); remove it from its iteration (emits
+   `IterationLoaded`).
 2. `DELETE FROM issues` — cascades remove labels, links, comments, documents,
    steps, attachment rows, subscriptions, inbox items, VCS links.
 3. `DELETE FROM events WHERE aggregate_type='issue' AND aggregate_id=$1`, and

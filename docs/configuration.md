@@ -28,6 +28,7 @@ events, so clients invalidate their resolved view.
 | Item | Kind | Built-in default |
 |------|------|------------------|
 | Issue types | Definitions | Epic, Story, Task, Bug, Sub-task |
+| Status categories | Definitions | Backlog, Todo (unstarted); In progress (started); Done (completed); Canceled (abandoned) |
 | Workflows | Definitions | One simple workflow (Backlog → Todo → In progress → Done, Canceled from anywhere) |
 | Type → workflow binding | Setting per type | All types use the default workflow |
 | Custom fields | Definitions | None |
@@ -37,6 +38,8 @@ events, so clients invalidate their resolved view.
 | Iteration completion policy | Setting | `archive_done_rollover_rest` |
 | Max active iterations | Setting | 1 |
 | Default iteration length | Setting | 2 weeks |
+| Time zone | Setting | `UTC` until set at workspace creation |
+| Working calendar | Setting | Monday–Friday, no holidays |
 | Git merge transition | Setting | Off |
 | Roles | Definitions (workspace only) | Admin, Facilitator, Contributor, Viewer, Guest |
 
@@ -58,21 +61,40 @@ A workflow is a **state machine**, bound per issue type.
 
 | Element | Properties |
 |---------|------------|
-| Status | name, colour, **category** (`backlog`, `todo`, `in_progress`, `done`, `canceled`), position |
+| Status | name, colour, **category**, position |
 | Initial status | Exactly one |
 | Transition | from status (or *any*), to status, name, and optional rules |
 
 Transition rules (evaluated server-side):
 
 - **Conditions** — who may perform the transition (permission or role), and
-  whether all children must be in `done`/`canceled`.
+  whether all children must be in a final category.
 - **Validators** — required fields (built-in or custom) on transition.
 - **Post-actions** — set or clear a field (e.g. clear the assignee, set the
   resolution).
 
-The fixed **status categories** let boards, filters ("open issues"), reports,
-iteration completion and the Git integration work across projects whose
-workflows differ.
+### Status categories
+
+Categories group statuses so that features work across workflows that differ.
+They are configurable like any other definition (workspace default, project
+override).
+
+| Property | Notes |
+|----------|-------|
+| name, colour, position | Position orders board columns and groupings |
+| **outcome** | `unstarted` or `started` (together: *open*), or final: `completed` or `abandoned` |
+
+- Several categories may be final. Finality is what iteration completion,
+  "open issues" filters, the "all children closed" condition and archiving
+  use.
+- Velocity, burndown and release progress count only `completed`; `abandoned`
+  work is closed but not counted as delivered.
+- Cross-project features (workspace views, roadmap, reports) rely on the
+  **outcome**, which is fixed, never on category names, because projects may
+  define their own categories.
+- Entering a `started` category for the first time marks when work began
+  (cycle time, cumulative flow); see [reports.md](reports.md).
+- A workflow's initial status must be in an `unstarted` or `started` category.
 
 Editing a workflow that is in use requires a **migration mapping** for any
 removed status; affected issues are moved in the same operation and emit
@@ -94,6 +116,26 @@ removed status; affected issues are moved in the same operation and emit
 Fields are defined at workspace or project scope and attached per issue type.
 Values live in the issue's `fields` JSONB column, keyed by field id, and are
 filterable, sortable and groupable in every view.
+
+## Time zone and working calendar
+
+**Time zone** (workspace setting, project override). Dates such as due dates,
+start dates and iteration bounds are calendar dates without a time; the
+project's time zone decides when a day starts and ends — when an iteration
+starts or a due date passes — and how reports bucket days. Timestamps
+(comments, activity) are shown in each user's own time zone.
+
+**Working calendar** (workspace setting, project override):
+
+| Property | Notes |
+|----------|-------|
+| working weekdays | Default Monday–Friday |
+| non-working dates | Holidays, with a name; a project override replaces the workspace list or adds to it |
+
+The timeline schedules in **working days**: durations and `precedes` lags count
+working days only, auto-scheduling skips non-working days, and they are shaded
+on the timeline and calendar. Individual availability (absences) is not
+modelled in v1.
 
 ## Estimation scales
 

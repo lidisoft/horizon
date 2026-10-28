@@ -11,7 +11,8 @@ custom fields, full-text search and an event log.
 ## Decision
 
 PostgreSQL is the only database. JSONB holds custom field values, event
-payloads, settings and documents; `tsvector` provides full-text search.
+payloads, settings and documents; `tsvector` and `pg_trgm` provide search
+([0020](0020-postgresql-search.md)).
 
 ## Consequences
 

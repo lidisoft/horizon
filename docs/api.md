@@ -46,10 +46,40 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
     /transition  /assign  /estimate  /prioritize  /rank  /move  /archive  /unarchive
     /links  /children  /comments  /attachments  /activity  /subscription
   /views  /milestones  /search
+  /reports/{report}                        report data (see reports.md)
+  /projects/{key}/overview                 project overview blocks
   /webhooks  /webhooks/{id}/deliveries
   /integrations/vcs
 /hooks/vcs/{provider}                      inbound forge webhooks
 ```
+
+## Deleting issues
+
+`DELETE /w/{ws}/issues/{key}?children=reparent|cascade`. The `children`
+parameter is required when the issue has children (`422` with code
+`children_choice_required` otherwise). `cascade` fails as a whole with `403`
+if the caller lacks `issue.delete` on any descendant.
+
+## Moving issues
+
+`POST /w/{ws}/issues/{key}/move` with the target project and the mapping:
+
+```json
+{
+  "project": "OPS",
+  "children": "move",
+  "mapping": {
+    "types":    { "<source type id>": "<target type id>" },
+    "statuses": { "<source status id>": "<target status id>" },
+    "fields":   { "<source field id>": "<target field id> | null" }
+  }
+}
+```
+
+`GET …/move/preview?project=OPS` returns the automatic matches and what is
+left to map. `children` (`move` or `leave`) is required when the issue has
+children. The response contains the new key; requests for the old key resolve
+to it.
 
 ## Querying issues
 
@@ -60,7 +90,7 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   "filter": {
     "and": [
       { "field": "project", "op": "in", "value": ["HZN"] },
-      { "field": "status.category", "op": "in", "value": ["todo", "in_progress"] },
+      { "field": "status.outcome", "op": "eq", "value": "open" },
       { "or": [
         { "field": "assignee", "op": "eq", "value": "@me" },
         { "field": "cf:01J…", "op": "gte", "value": 3 }
@@ -73,7 +103,10 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
 }
 ```
 
-Fields: built-ins, `status.category`, `cf:<field id>` for custom fields.
+Fields: built-ins, `status.category`, `status.outcome` (`unstarted`,
+`started`, `completed`, `abandoned`, or the shorthand `open` = unstarted or
+started; use it for cross-project queries), `cf:<field id>` for custom
+fields.
 Operators: `eq`, `neq`, `in`, `nin`, `lt`, `lte`, `gt`, `gte`, `contains`,
 `is_empty`, `is_not_empty`, `within` (relative dates such as `-7d`).
 Placeholders: `@me`, `@current_iteration`, `@today`.

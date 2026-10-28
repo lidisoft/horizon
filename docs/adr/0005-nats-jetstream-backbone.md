@@ -14,7 +14,7 @@ NATS.
 Use **NATS with JetStream**. The outbox relay publishes each event to
 `horizon.<workspace>.<aggregate_type>.<aggregate_id>.<event_type>`. Workers use
 durable JetStream consumers; `serve` replicas use plain subscriptions for
-fan-out. JetStream retention is bounded (default 30 days); PostgreSQL holds
+fan-out. JetStream retention is bounded (configurable per instance, default 7 days); PostgreSQL holds
 the long-term record.
 
 ## Consequences
