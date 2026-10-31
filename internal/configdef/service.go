@@ -34,6 +34,12 @@ type Issues interface {
 	// MoveTypeStatuses moves the issues of one type between statuses, when
 	// the type changes workflow.
 	MoveTypeStatuses(ctx context.Context, tx pgx.Tx, actor uuid.NullUUID, typeID uuid.UUID, mapping map[uuid.UUID]uuid.UUID) error
+	// CountByLabel returns the number of issues carrying each label that
+	// any carries.
+	CountByLabel(ctx context.Context, conn db.DBTX, workspaceID uuid.UUID) (map[uuid.UUID]int64, error)
+	// Relabel replaces label from with into on every issue carrying it,
+	// each recording the change in its history.
+	Relabel(ctx context.Context, tx pgx.Tx, actor uuid.NullUUID, from, into uuid.UUID) error
 }
 
 // NoIssues reports no issues anywhere.
@@ -59,6 +65,16 @@ func (NoIssues) CountTypeByStatus(context.Context, pgx.Tx, uuid.UUID) (map[uuid.
 
 // MoveTypeStatuses implements Issues.
 func (NoIssues) MoveTypeStatuses(context.Context, pgx.Tx, uuid.NullUUID, uuid.UUID, map[uuid.UUID]uuid.UUID) error {
+	return nil
+}
+
+// CountByLabel implements Issues.
+func (NoIssues) CountByLabel(context.Context, db.DBTX, uuid.UUID) (map[uuid.UUID]int64, error) {
+	return map[uuid.UUID]int64{}, nil
+}
+
+// Relabel implements Issues.
+func (NoIssues) Relabel(context.Context, pgx.Tx, uuid.NullUUID, uuid.UUID, uuid.UUID) error {
 	return nil
 }
 
@@ -120,7 +136,7 @@ func sameScope(t Target, project uuid.NullUUID) bool { return project == t.Proje
 
 // disabled returns the definitions a project switched off, by type.
 func disabled(ctx context.Context, q *db.Queries, t Target) (map[string]map[uuid.UUID]bool, error) {
-	out := map[string]map[uuid.UUID]bool{TypeCategory: {}, TypeWorkflow: {}, TypeIssueType: {}}
+	out := map[string]map[uuid.UUID]bool{TypeCategory: {}, TypeWorkflow: {}, TypeIssueType: {}, TypeCustomField: {}, TypeLabel: {}}
 	if !t.ProjectID.Valid {
 		return out, nil
 	}
@@ -148,6 +164,11 @@ type Resolved struct {
 	Categories map[uuid.UUID]Category
 	Workflows  map[uuid.UUID]Workflow
 	IssueTypes []IssueType
+	Fields     map[uuid.UUID]Field
+	// TypeFields lists the fields of each issue type, in order.
+	TypeFields map[uuid.UUID][]TypeField
+	Labels     map[uuid.UUID]Label
+	Estimation Estimation
 }
 
 // Status finds a status among the resolved workflows.
@@ -199,6 +220,35 @@ func (s *Service) Resolve(ctx context.Context, conn db.DBTX, workspaceID uuid.UU
 		if !off[TypeIssueType][it.ID] {
 			r.IssueTypes = append(r.IssueTypes, issueTypeFrom(it))
 		}
+	}
+	fields, attached, err := s.fields(ctx, q, t, off)
+	if err != nil {
+		return nil, err
+	}
+	r.Fields = map[uuid.UUID]Field{}
+	for _, f := range fields {
+		if !f.Disabled {
+			r.Fields[f.ID] = f
+		}
+	}
+	r.TypeFields = map[uuid.UUID][]TypeField{}
+	for _, a := range attached {
+		if _, ok := r.Fields[a.FieldID]; ok {
+			r.TypeFields[a.IssueTypeID] = append(r.TypeFields[a.IssueTypeID], TypeField{FieldID: a.FieldID, Required: a.Required})
+		}
+	}
+	labels, err := q.Labels(ctx, db.LabelsParams{WorkspaceID: workspaceID, ProjectID: projectID})
+	if err != nil {
+		return nil, err
+	}
+	r.Labels = map[uuid.UUID]Label{}
+	for _, l := range labels {
+		if !off[TypeLabel][l.ID] {
+			r.Labels[l.ID] = labelFrom(l)
+		}
+	}
+	if r.Estimation, err = estimation(ctx, q, t); err != nil {
+		return nil, err
 	}
 	return r, nil
 }
@@ -253,6 +303,18 @@ func (s *Service) checkInherited(ctx context.Context, q *db.Queries, t Target, d
 			return notFound(err, "issue_type_not_found")
 		}
 		project = it.ProjectID
+	case TypeCustomField:
+		f, err := q.LockField(ctx, db.LockFieldParams{WorkspaceID: t.WorkspaceID, ID: id})
+		if err != nil {
+			return notFound(err, "field_not_found")
+		}
+		project = f.ProjectID
+	case TypeLabel:
+		l, err := q.LockLabel(ctx, db.LockLabelParams{WorkspaceID: t.WorkspaceID, ID: id})
+		if err != nil {
+			return notFound(err, "label_not_found")
+		}
+		project = l.ProjectID
 	default:
 		return errors.New("configdef: unknown definition type " + defType)
 	}

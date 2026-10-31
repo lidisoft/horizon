@@ -20,9 +20,11 @@ import (
 
 // Definition types, as stored in config_disables and named in events.
 const (
-	TypeCategory  = "status_category"
-	TypeWorkflow  = "workflow"
-	TypeIssueType = "issue_type"
+	TypeCategory    = "status_category"
+	TypeWorkflow    = "workflow"
+	TypeIssueType   = "issue_type"
+	TypeCustomField = "custom_field"
+	TypeLabel       = "label"
 )
 
 // Outcomes of status categories (docs/configuration.md#status-categories).
@@ -111,7 +113,7 @@ type PostAction struct {
 	Op string `json:"op" enums:"clear,set_actor"`
 }
 
-// Built-in issue fields rules may name; custom fields join with their ids.
+// Built-in issue fields rules may name; custom fields are named by id.
 var BuiltinFields = []string{"assignee", "estimate", "priority", "due_date", "start_date", "iteration", "release", "description", "labels"}
 
 // Transition is a published transition.
@@ -181,4 +183,87 @@ func rulesFrom(raw json.RawMessage) Rules {
 	var r Rules
 	_ = json.Unmarshal(raw, &r)
 	return r
+}
+
+// Custom field types (docs/configuration.md#custom-fields).
+var FieldTypes = []string{"text", "number", "select", "multi_select", "date", "user", "url", "checkbox"}
+
+// Option is a choice of a select or multi_select field.
+type Option struct {
+	ID     uuid.UUID `json:"id"`
+	Name   string    `json:"name"`
+	Colour string    `json:"colour"`
+}
+
+// FieldOptions holds what depends on the field type.
+type FieldOptions struct {
+	// Options of select and multi_select fields.
+	Options []Option `json:"options,omitempty"`
+	// Unit and Precision of number fields.
+	Unit      string `json:"unit,omitempty" example:"h"`
+	Precision int    `json:"precision,omitempty"`
+}
+
+// Field is a custom field.
+type Field struct {
+	ID          uuid.UUID     `json:"id"`
+	ProjectID   uuid.NullUUID `json:"project_id" swaggertype:"string"`
+	Name        string        `json:"name" example:"Severity"`
+	Type        string        `json:"type" enums:"text,number,select,multi_select,date,user,url,checkbox"`
+	Description string        `json:"description"`
+	FieldOptions
+	Position int32 `json:"position"`
+	Origin
+	// UsedBy lists the issue types it's attached to, in the scope asked.
+	UsedBy  []uuid.UUID `json:"used_by"`
+	Version int32       `json:"version"`
+}
+
+// TypeField attaches a field to an issue type.
+type TypeField struct {
+	FieldID  uuid.UUID `json:"field_id"`
+	Required bool      `json:"required"`
+}
+
+// Label is a label.
+type Label struct {
+	ID          uuid.UUID     `json:"id"`
+	ProjectID   uuid.NullUUID `json:"project_id" swaggertype:"string"`
+	Name        string        `json:"name" example:"backend"`
+	Colour      string        `json:"colour"`
+	Description string        `json:"description"`
+	Origin
+	// Issues carrying it, in the workspace.
+	Issues  int64 `json:"issues"`
+	Version int32 `json:"version"`
+}
+
+// Estimation scales (docs/configuration.md#estimation-scales).
+const (
+	ScaleFibonacci = "fibonacci"
+	ScaleLinear    = "linear"
+	ScaleTShirt    = "tshirt"
+	ScaleCustom    = "custom"
+	ScaleNone      = "none"
+)
+
+// ScaleValue is one value of an estimation scale.
+type ScaleValue struct {
+	Label  string  `json:"label" example:"M"`
+	Weight float64 `json:"weight" example:"3"`
+}
+
+// Scale is an estimation scale.
+type Scale struct {
+	Kind   string       `json:"kind" enums:"fibonacci,linear,tshirt,custom,none"`
+	Values []ScaleValue `json:"values"`
+}
+
+// Estimation is the effective scale of a scope, and where it comes from.
+type Estimation struct {
+	Scale
+	// Overridden is true when the project sets its own scale.
+	Overridden bool `json:"overridden"`
+	// Workspace is the workspace's scale, which a project falls back to.
+	Workspace Scale `json:"workspace"`
 }

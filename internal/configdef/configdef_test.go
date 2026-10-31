@@ -15,6 +15,7 @@ import (
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/configdef"
+	configdefdb "github.com/lidisoft/horizon/internal/configdef/db"
 	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/identity"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
@@ -27,11 +28,25 @@ func TestMain(m *testing.M) { os.Exit(testenv.Main(m, testenv.Postgres)) }
 
 const password = "correct horse battery"
 
-// fakeIssues pretends issues sit in some statuses and records moves.
+// fakeIssues pretends issues sit in some statuses and carry some labels,
+// and records moves and relabels.
 type fakeIssues struct {
-	byStatus map[uuid.UUID]int64
-	byType   map[uuid.UUID]map[uuid.UUID]int64
-	moved    map[uuid.UUID]uuid.UUID
+	byStatus  map[uuid.UUID]int64
+	byType    map[uuid.UUID]map[uuid.UUID]int64
+	byLabel   map[uuid.UUID]int64
+	moved     map[uuid.UUID]uuid.UUID
+	relabeled map[uuid.UUID]uuid.UUID
+}
+
+func (f *fakeIssues) CountByLabel(context.Context, configdefdb.DBTX, uuid.UUID) (map[uuid.UUID]int64, error) {
+	return f.byLabel, nil
+}
+
+func (f *fakeIssues) Relabel(_ context.Context, _ pgx.Tx, _ uuid.NullUUID, from, into uuid.UUID) error {
+	f.relabeled[from] = into
+	f.byLabel[into] += f.byLabel[from]
+	delete(f.byLabel, from)
+	return nil
 }
 
 func (f *fakeIssues) CountByStatus(_ context.Context, _ pgx.Tx, ids []uuid.UUID) (map[uuid.UUID]int64, error) {
@@ -84,7 +99,8 @@ func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	pool := testenv.DB(t)
 	base := &url.URL{Scheme: "https", Host: "horizon.example.com"}
-	f := &fixture{t: t, db: pool, issues: &fakeIssues{byStatus: map[uuid.UUID]int64{}, byType: map[uuid.UUID]map[uuid.UUID]int64{}, moved: map[uuid.UUID]uuid.UUID{}}}
+	f := &fixture{t: t, db: pool, issues: &fakeIssues{byStatus: map[uuid.UUID]int64{}, byType: map[uuid.UUID]map[uuid.UUID]int64{},
+		byLabel: map[uuid.UUID]int64{}, moved: map[uuid.UUID]uuid.UUID{}, relabeled: map[uuid.UUID]uuid.UUID{}}}
 	f.ids = identity.New(identity.Options{Pool: pool, Log: zerolog.Nop(), BaseURL: base, SessionSecret: "test-session-secret-at-least-32-chars"})
 	f.acc = access.New(pool, nil)
 	f.cfg = configdef.New(pool, f.acc, f.issues, nil)
@@ -472,4 +488,171 @@ func TestIssueTypes(t *testing.T) {
 	if err := f.cfg.DeleteWorkflow(ctx, f.ws_(), other.ID); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func typeNamed(f *fixture, t configdef.Target, n string) configdef.IssueType {
+	f.t.Helper()
+	types, err := f.cfg.IssueTypes(context.Background(), t)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	return byName(types, func(it configdef.IssueType) string { return it.Name }, n)
+}
+
+func TestFields(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, err := f.cfg.CreateField(ctx, f.ws_(), configdef.FieldInput{Name: s("Mood"), Type: s("emoji")})
+	wantField(t, err, "type", "invalid")
+	opts := []configdef.Option{{Name: "S1", Colour: "coral"}, {Name: "S2"}, {Name: "s1"}}
+	_, err = f.cfg.CreateField(ctx, f.ws_(), configdef.FieldInput{Name: s("Severity"), Type: s("select"), Options: &opts})
+	wantField(t, err, "options[2].name", "taken")
+	_, err = f.cfg.CreateField(ctx, f.ws_(), configdef.FieldInput{Name: s("Notes"), Type: s("text"), Options: &opts})
+	wantField(t, err, "options", "not_select")
+
+	opts = opts[:2]
+	sev, err := f.cfg.CreateField(ctx, f.ws_(), configdef.FieldInput{Name: s("Severity"), Type: s("select"), Options: &opts})
+	if err != nil || len(sev.Options) != 2 || sev.Options[1].Colour != "grey" || sev.Options[0].ID == uuid.Nil {
+		t.Fatalf("severity = %+v, %v", sev, err)
+	}
+	unit, precision := "h", 1
+	effort, err := f.cfg.CreateField(ctx, f.ws_(), configdef.FieldInput{Name: s("Effort"), Type: s("number"), Unit: &unit, Precision: &precision})
+	if err != nil || effort.Unit != "h" || effort.Precision != 1 {
+		t.Fatalf("effort = %+v, %v", effort, err)
+	}
+	_, err = f.cfg.UpdateField(ctx, f.ws_(), effort.ID, 0, configdef.FieldInput{Type: s("text")})
+	wantField(t, err, "type", "fixed")
+
+	// Attach to Bug, Severity required.
+	bug := typeNamed(f, f.ws_(), "Bug")
+	if err := f.cfg.SetTypeFields(ctx, f.ws_(), bug.ID, []configdef.TypeField{{FieldID: sev.ID, Required: true}, {FieldID: effort.ID}}); err != nil {
+		t.Fatal(err)
+	}
+	r := f.resolve(f.ws_())
+	if tf := r.TypeFields[bug.ID]; len(tf) != 2 || !tf[0].Required || tf[1].FieldID != effort.ID {
+		t.Errorf("bug fields = %+v", tf)
+	}
+	// From the project, the inherited Bug is read-only; a copy keeps its fields.
+	wantCode(t, f.cfg.SetTypeFields(ctx, f.proj(), bug.ID, nil), "inherited_read_only")
+	copyBug, err := f.cfg.CopyIssueType(ctx, f.proj(), bug.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tf := f.resolve(f.proj()).TypeFields[copyBug.ID]; len(tf) != 2 {
+		t.Errorf("copied bug fields = %+v", tf)
+	}
+	// A project field can't go on a workspace type.
+	env, _ := f.cfg.CreateField(ctx, f.proj(), configdef.FieldInput{Name: s("Environment"), Type: s("text")})
+	err = f.cfg.SetTypeFields(ctx, f.ws_(), bug.ID, []configdef.TypeField{{FieldID: env.ID}})
+	wantField(t, err, "fields[0].field_id", "unknown")
+
+	// Rules may name custom fields; deleting the field drops it from them.
+	w := defaultWorkflow(f)
+	d := draftOf(w)
+	d.Transitions[4].Rules = configdef.Rules{Validators: []string{sev.ID.String(), "assignee"}, PostActions: []configdef.PostAction{{Field: effort.ID.String(), Op: "clear"}}}
+	saved, err := f.cfg.SaveDraft(ctx, f.ws_(), w.ID, w.DraftVersion, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.cfg.DeleteField(ctx, f.ws_(), sev.ID); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := f.cfg.Workflow(ctx, f.ws_(), w.ID)
+	if rules := after.Draft.Transitions[4].Rules; strings.Join(rules.Validators, ",") != "assignee" || len(rules.PostActions) != 1 || after.DraftVersion != saved.DraftVersion+1 {
+		t.Errorf("draft rules after delete = %+v", rules)
+	}
+	if tf := f.resolve(f.ws_()).TypeFields[bug.ID]; len(tf) != 1 {
+		t.Errorf("bug fields after delete = %+v", tf)
+	}
+}
+
+func TestLabels(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	backend, err := f.cfg.CreateLabel(ctx, f.ws_(), configdef.LabelInput{Name: s("backend"), Colour: s("blue"), Description: s("Go services")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.cfg.CreateLabel(ctx, f.ws_(), configdef.LabelInput{Name: s("Backend")})
+	wantField(t, err, "name", "taken")
+	customer, _ := f.cfg.CreateLabel(ctx, f.ws_(), configdef.LabelInput{Name: s("customer")})
+	realtime, err := f.cfg.CreateLabel(ctx, f.proj(), configdef.LabelInput{Name: s("realtime"), Colour: s("green")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws2, _ := f.cfg.CreateLabel(ctx, f.proj(), configdef.LabelInput{Name: s("ws")})
+
+	// Switching an inherited label off hides it from the project's pickers.
+	if err := f.cfg.SetDisabled(ctx, f.proj(), configdef.TypeLabel, customer.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.resolve(f.proj()).Labels[customer.ID]; ok {
+		t.Error("switched-off label resolved")
+	}
+	wantCode(t, f.cfg.SetDisabled(ctx, f.proj(), configdef.TypeLabel, realtime.ID, true), "not_inherited")
+
+	// Merge: issues follow, the label goes. A workspace label can't merge
+	// into a project one.
+	f.issues.byLabel[realtime.ID] = 3
+	f.issues.byLabel[backend.ID] = 5
+	wantField(t, f.cfg.MergeLabel(ctx, f.ws_(), backend.ID, realtime.ID), "into", "unknown")
+	if err := f.cfg.MergeLabel(ctx, f.proj(), realtime.ID, backend.ID); err != nil {
+		t.Fatal(err)
+	}
+	if f.issues.relabeled[realtime.ID] != backend.ID {
+		t.Errorf("relabeled = %v", f.issues.relabeled)
+	}
+	labels, _ := f.cfg.Labels(ctx, f.proj())
+	if got := byName(labels, func(l configdef.Label) string { return l.Name }, "backend"); got.Issues != 8 {
+		t.Errorf("backend issues = %d", got.Issues)
+	}
+	if got := byName(labels, func(l configdef.Label) string { return l.Name }, "realtime"); got.ID != uuid.Nil {
+		t.Error("merged label still listed")
+	}
+
+	// Move to workspace: every project sees it then.
+	moved, err := f.cfg.MoveLabelToWorkspace(ctx, f.proj(), ws2.ID)
+	if err != nil || moved.ProjectID.Valid {
+		t.Fatalf("moved = %+v, %v", moved, err)
+	}
+	if _, ok := f.resolve(f.ws_()).Labels[ws2.ID]; !ok {
+		t.Error("moved label not in the workspace")
+	}
+	dup, _ := f.cfg.CreateLabel(ctx, f.proj(), configdef.LabelInput{Name: s("Backend")})
+	_, err = f.cfg.MoveLabelToWorkspace(ctx, f.proj(), dup.ID)
+	wantField(t, err, "name", "taken")
+}
+
+func TestEstimation(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	e, err := f.cfg.Estimation(ctx, f.proj())
+	if err != nil || e.Kind != "fibonacci" || len(e.Values) != 8 || e.Overridden {
+		t.Fatalf("default = %+v, %v", e, err)
+	}
+	tshirt := configdef.Scale{Kind: "tshirt", Values: []configdef.ScaleValue{{"XS", 1}, {"S", 2}, {"M", 4}}}
+	if _, err := f.cfg.SetEstimation(ctx, f.ws_(), &tshirt); err != nil {
+		t.Fatal(err)
+	}
+	if e, _ := f.cfg.Estimation(ctx, f.proj()); e.Kind != "tshirt" || e.Values[2].Weight != 4 || e.Overridden {
+		t.Errorf("inherited = %+v", e)
+	}
+	bad := configdef.Scale{Kind: "custom", Values: []configdef.ScaleValue{{"tiny", 1}, {"TINY", 2}, {"", -1}}}
+	_, err = f.cfg.SetEstimation(ctx, f.proj(), &bad)
+	wantField(t, err, "values[1].label", "taken")
+	wantField(t, err, "values[2].label", "invalid")
+	wantField(t, err, "values[2].weight", "invalid")
+
+	linear := configdef.Scale{Kind: "linear"}
+	if e, err := f.cfg.SetEstimation(ctx, f.proj(), &linear); err != nil || e.Kind != "linear" || len(e.Values) != 9 || !e.Overridden || e.Workspace.Kind != "tshirt" {
+		t.Fatalf("override = %+v, %v", e, err)
+	}
+	if r := f.resolve(f.proj()); r.Estimation.Kind != "linear" {
+		t.Errorf("resolved = %+v", r.Estimation)
+	}
+	if e, err := f.cfg.SetEstimation(ctx, f.proj(), nil); err != nil || e.Kind != "tshirt" || e.Overridden {
+		t.Errorf("cleared = %+v, %v", e, err)
+	}
+	_, err = f.cfg.SetEstimation(ctx, f.ws_(), nil)
+	wantField(t, err, "scale", "required")
 }

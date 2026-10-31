@@ -42,11 +42,12 @@ func (h *HTTP) RegisterProject(p *gin.RouterGroup) {
 		c.Set(targetKey, Target{Principal: pc.Principal, WorkspaceID: pc.Workspace.ID, ProjectID: uuid.NullUUID{UUID: pc.Project.ID, Valid: true}})
 	})
 	h.register(g)
-	for kind, defType := range map[string]string{"categories": TypeCategory, "workflows": TypeWorkflow, "issue-types": TypeIssueType} {
+	for kind, defType := range map[string]string{"categories": TypeCategory, "workflows": TypeWorkflow, "issue-types": TypeIssueType, "fields": TypeCustomField, "labels": TypeLabel} {
 		g.POST("/"+kind+"/:id/disable", h.setDisabled(defType, true))
 		g.POST("/"+kind+"/:id/enable", h.setDisabled(defType, false))
 	}
 	g.POST("/issue-types/:id/copy", h.copyIssueType)
+	g.POST("/labels/:id/move-to-workspace", h.moveLabel)
 }
 
 func (h *HTTP) register(g *gin.RouterGroup) {
@@ -68,6 +69,19 @@ func (h *HTTP) register(g *gin.RouterGroup) {
 	g.PATCH("/issue-types/:id", h.updateIssueType)
 	g.DELETE("/issue-types/:id", h.deleteIssueType)
 	g.PUT("/issue-types/order", h.reorderIssueTypes)
+	g.GET("/issue-types/:id/fields", h.typeFields)
+	g.PUT("/issue-types/:id/fields", h.setTypeFields)
+	g.GET("/fields", h.fields)
+	g.POST("/fields", h.createField)
+	g.PATCH("/fields/:id", h.updateField)
+	g.DELETE("/fields/:id", h.deleteField)
+	g.GET("/labels", h.labels)
+	g.POST("/labels", h.createLabel)
+	g.PATCH("/labels/:id", h.updateLabel)
+	g.DELETE("/labels/:id", h.deleteLabel)
+	g.POST("/labels/:id/merge", h.mergeLabel)
+	g.GET("/settings/estimation", h.estimation)
+	g.PUT("/settings/estimation", h.setEstimation)
 }
 
 // CategoryList is the body of GET …/config/categories.
@@ -429,6 +443,296 @@ func (h *HTTP) setDisabled(defType string, off bool) gin.HandlerFunc {
 		if id, ok := idParam(c, defType+"_not_found"); ok {
 			noContent(c, h.svc.SetDisabled(c, targetOf(c), defType, id, off))
 		}
+	}
+}
+
+// FieldList is the body of GET …/config/fields.
+type FieldList = ListResponse[Field]
+
+// LabelList is the body of GET …/config/labels.
+type LabelList = ListResponse[Label]
+
+// FieldRequest creates or changes a custom field.
+type FieldRequest struct {
+	Name        *string   `json:"name,omitempty" example:"Severity"`
+	Type        *string   `json:"type,omitempty" enums:"text,number,select,multi_select,date,user,url,checkbox"`
+	Description *string   `json:"description,omitempty"`
+	Options     *[]Option `json:"options,omitempty"`
+	Unit        *string   `json:"unit,omitempty"`
+	Precision   *int      `json:"precision,omitempty"`
+}
+
+// TypeFieldsRequest lists an issue type's fields in display order.
+type TypeFieldsRequest struct {
+	Fields []TypeField `json:"fields"`
+}
+
+// LabelRequest creates or changes a label.
+type LabelRequest struct {
+	Name        *string `json:"name,omitempty" example:"backend"`
+	Colour      *string `json:"colour,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+// MergeRequest names the label taking over.
+type MergeRequest struct {
+	Into uuid.UUID `json:"into"`
+}
+
+// EstimationRequest sets the scale; at project scope, null scale removes
+// the override.
+type EstimationRequest struct {
+	Scale *Scale `json:"scale"`
+}
+
+// fields lists custom fields.
+//
+//	@Summary	List custom fields
+//	@Tags		configuration
+//	@Produce	json
+//	@Param		ws	path		string	true	"Workspace slug"
+//	@Success	200	{object}	FieldList
+//	@Router		/api/v1/w/{ws}/config/fields [get]
+func (h *HTTP) fields(c *gin.Context) {
+	t := targetOf(c)
+	items, err := h.svc.Fields(c, t)
+	list(c, items, err, h.svc.CanManage(c, t))
+}
+
+// createField adds a custom field.
+//
+//	@Summary	Create a custom field
+//	@Tags		configuration
+//	@Accept		json
+//	@Produce	json
+//	@Param		ws		path		string			true	"Workspace slug"
+//	@Param		body	body		FieldRequest	true	"Name, type and type options"
+//	@Success	201		{object}	Field
+//	@Router		/api/v1/w/{ws}/config/fields [post]
+func (h *HTTP) createField(c *gin.Context) {
+	var req FieldRequest
+	if bind(c, &req) {
+		v, err := h.svc.CreateField(c, targetOf(c), FieldInput(req))
+		reply(c, http.StatusCreated, v, err)
+	}
+}
+
+// updateField changes a custom field; its type is fixed.
+//
+//	@Summary	Update a custom field
+//	@Tags		configuration
+//	@Accept		json
+//	@Produce	json
+//	@Param		ws			path		string			true	"Workspace slug"
+//	@Param		id			path		string			true	"Field id"
+//	@Param		If-Match	header		string			false	"Field version"
+//	@Param		body		body		FieldRequest	true	"Fields to change"
+//	@Success	200			{object}	Field
+//	@Router		/api/v1/w/{ws}/config/fields/{id} [patch]
+func (h *HTTP) updateField(c *gin.Context) {
+	var req FieldRequest
+	id, ok := idParam(c, "field_not_found")
+	if ok && bind(c, &req) {
+		if version, ok := ifMatch(c); ok {
+			v, err := h.svc.UpdateField(c, targetOf(c), id, version, FieldInput(req))
+			reply(c, http.StatusOK, v, err)
+		}
+	}
+}
+
+// deleteField removes a custom field.
+//
+//	@Summary		Delete a custom field
+//	@Description	Detaches it from issue types and drops it from workflow rules.
+//	@Tags			configuration
+//	@Param			ws	path	string	true	"Workspace slug"
+//	@Param			id	path	string	true	"Field id"
+//	@Success		204
+//	@Router			/api/v1/w/{ws}/config/fields/{id} [delete]
+func (h *HTTP) deleteField(c *gin.Context) {
+	if id, ok := idParam(c, "field_not_found"); ok {
+		noContent(c, h.svc.DeleteField(c, targetOf(c), id))
+	}
+}
+
+// typeFields lists an issue type's fields.
+//
+//	@Summary	List the fields of an issue type
+//	@Tags		configuration
+//	@Produce	json
+//	@Param		ws	path		string	true	"Workspace slug"
+//	@Param		id	path		string	true	"Issue type id"
+//	@Success	200	{object}	TypeFieldsRequest
+//	@Router		/api/v1/w/{ws}/config/issue-types/{id}/fields [get]
+func (h *HTTP) typeFields(c *gin.Context) {
+	if id, ok := idParam(c, "issue_type_not_found"); ok {
+		v, err := h.svc.TypeFields(c, targetOf(c), id)
+		reply(c, http.StatusOK, TypeFieldsRequest{Fields: v}, err)
+	}
+}
+
+// setTypeFields replaces an issue type's fields.
+//
+//	@Summary		Set the fields of an issue type
+//	@Description	Fields the type's scope sees, in display order; required ones are checked when an issue is created.
+//	@Tags			configuration
+//	@Accept			json
+//	@Param			ws		path	string				true	"Workspace slug"
+//	@Param			id		path	string				true	"Issue type id"
+//	@Param			body	body	TypeFieldsRequest	true	"Fields in order"
+//	@Success		204
+//	@Router			/api/v1/w/{ws}/config/issue-types/{id}/fields [put]
+func (h *HTTP) setTypeFields(c *gin.Context) {
+	var req TypeFieldsRequest
+	id, ok := idParam(c, "issue_type_not_found")
+	if ok && bind(c, &req) {
+		noContent(c, h.svc.SetTypeFields(c, targetOf(c), id, req.Fields))
+	}
+}
+
+// labels lists labels with their issue counts.
+//
+//	@Summary	List labels
+//	@Tags		configuration
+//	@Produce	json
+//	@Param		ws	path		string	true	"Workspace slug"
+//	@Success	200	{object}	LabelList
+//	@Router		/api/v1/w/{ws}/config/labels [get]
+func (h *HTTP) labels(c *gin.Context) {
+	t := targetOf(c)
+	items, err := h.svc.Labels(c, t)
+	list(c, items, err, h.svc.CanManage(c, t))
+}
+
+// createLabel adds a label.
+//
+//	@Summary	Create a label
+//	@Tags		configuration
+//	@Accept		json
+//	@Produce	json
+//	@Param		ws		path		string			true	"Workspace slug"
+//	@Param		body	body		LabelRequest	true	"Name, colour, description"
+//	@Success	201		{object}	Label
+//	@Router		/api/v1/w/{ws}/config/labels [post]
+func (h *HTTP) createLabel(c *gin.Context) {
+	var req LabelRequest
+	if bind(c, &req) {
+		v, err := h.svc.CreateLabel(c, targetOf(c), LabelInput(req))
+		reply(c, http.StatusCreated, v, err)
+	}
+}
+
+// updateLabel changes a label.
+//
+//	@Summary	Update a label
+//	@Tags		configuration
+//	@Accept		json
+//	@Produce	json
+//	@Param		ws			path		string			true	"Workspace slug"
+//	@Param		id			path		string			true	"Label id"
+//	@Param		If-Match	header		string			false	"Label version"
+//	@Param		body		body		LabelRequest	true	"Fields to change"
+//	@Success	200			{object}	Label
+//	@Router		/api/v1/w/{ws}/config/labels/{id} [patch]
+func (h *HTTP) updateLabel(c *gin.Context) {
+	var req LabelRequest
+	id, ok := idParam(c, "label_not_found")
+	if ok && bind(c, &req) {
+		if version, ok := ifMatch(c); ok {
+			v, err := h.svc.UpdateLabel(c, targetOf(c), id, version, LabelInput(req))
+			reply(c, http.StatusOK, v, err)
+		}
+	}
+}
+
+// deleteLabel removes a label.
+//
+//	@Summary	Delete a label
+//	@Tags		configuration
+//	@Param		ws	path	string	true	"Workspace slug"
+//	@Param		id	path	string	true	"Label id"
+//	@Success	204
+//	@Router		/api/v1/w/{ws}/config/labels/{id} [delete]
+func (h *HTTP) deleteLabel(c *gin.Context) {
+	if id, ok := idParam(c, "label_not_found"); ok {
+		noContent(c, h.svc.DeleteLabel(c, targetOf(c), id))
+	}
+}
+
+// mergeLabel relabels issues with another label, then deletes this one.
+//
+//	@Summary		Merge a label into another
+//	@Description	Every issue carrying it gets the other label instead, recorded in its history.
+//	@Tags			configuration
+//	@Accept			json
+//	@Param			ws		path	string			true	"Workspace slug"
+//	@Param			id		path	string			true	"Label id"
+//	@Param			body	body	MergeRequest	true	"Label taking over"
+//	@Success		204
+//	@Router			/api/v1/w/{ws}/config/labels/{id}/merge [post]
+func (h *HTTP) mergeLabel(c *gin.Context) {
+	var req MergeRequest
+	id, ok := idParam(c, "label_not_found")
+	if ok && bind(c, &req) {
+		noContent(c, h.svc.MergeLabel(c, targetOf(c), id, req.Into))
+	}
+}
+
+// moveLabel promotes a project label to the workspace.
+//
+//	@Summary		Move a project label to the workspace
+//	@Description	Needs workspace.config.manage.
+//	@Tags			configuration
+//	@Produce		json
+//	@Param			ws	path		string	true	"Workspace slug"
+//	@Param			key	path		string	true	"Project key"
+//	@Param			id	path		string	true	"Label id"
+//	@Success		200	{object}	Label
+//	@Router			/api/v1/w/{ws}/projects/{key}/config/labels/{id}/move-to-workspace [post]
+func (h *HTTP) moveLabel(c *gin.Context) {
+	if id, ok := idParam(c, "label_not_found"); ok {
+		v, err := h.svc.MoveLabelToWorkspace(c, targetOf(c), id)
+		reply(c, http.StatusOK, v, err)
+	}
+}
+
+// EstimationResponse is the effective scale and whether the caller may
+// change it.
+type EstimationResponse struct {
+	Estimation
+	CanManage bool `json:"can_manage"`
+}
+
+// estimation returns the effective estimation scale.
+//
+//	@Summary	Get the estimation scale
+//	@Tags		configuration
+//	@Produce	json
+//	@Param		ws	path		string	true	"Workspace slug"
+//	@Success	200	{object}	EstimationResponse
+//	@Router		/api/v1/w/{ws}/config/settings/estimation [get]
+func (h *HTTP) estimation(c *gin.Context) {
+	t := targetOf(c)
+	e, err := h.svc.Estimation(c, t)
+	reply(c, http.StatusOK, EstimationResponse{Estimation: e, CanManage: h.svc.CanManage(c, t)}, err)
+}
+
+// setEstimation sets the estimation scale.
+//
+//	@Summary		Set the estimation scale
+//	@Description	At project scope, {"scale": null} returns the project to the workspace's scale.
+//	@Tags			configuration
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws		path		string				true	"Workspace slug"
+//	@Param			body	body		EstimationRequest	true	"Scale"
+//	@Success		200		{object}	Estimation
+//	@Router			/api/v1/w/{ws}/config/settings/estimation [put]
+func (h *HTTP) setEstimation(c *gin.Context) {
+	var req EstimationRequest
+	if bind(c, &req) {
+		v, err := h.svc.SetEstimation(c, targetOf(c), req.Scale)
+		reply(c, http.StatusOK, v, err)
 	}
 }
 

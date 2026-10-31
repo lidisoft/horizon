@@ -37,6 +37,20 @@ type ConfigDisable struct {
 	DefinitionID   uuid.UUID
 }
 
+type CustomField struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	ProjectID   uuid.NullUUID
+	Name        string
+	Type        string
+	Description string
+	Options     json.RawMessage
+	Position    int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
 type Event struct {
 	ID               uuid.UUID
 	WorkspaceID      uuid.NullUUID
@@ -82,6 +96,26 @@ type IssueType struct {
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 	Version              int32
+}
+
+type IssueTypeField struct {
+	WorkspaceID uuid.UUID
+	IssueTypeID uuid.UUID
+	FieldID     uuid.UUID
+	Required    bool
+	Position    int32
+}
+
+type Label struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	ProjectID   uuid.NullUUID
+	Name        string
+	Colour      string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
 }
 
 type PasswordReset struct {

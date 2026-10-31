@@ -352,12 +352,12 @@ func (s *Service) validateDraft(ctx context.Context, tx pgx.Tx, t Target, w db.W
 			}
 		}
 		for _, f := range tr.Rules.Validators {
-			if !slices.Contains(BuiltinFields, f) {
+			if !knownField(r, f) {
 				fields.Add(at+".rules.validators", "unknown")
 			}
 		}
 		for _, pa := range tr.Rules.PostActions {
-			if !slices.Contains(BuiltinFields, pa.Field) || (pa.Op != "clear" && !(pa.Op == "set_actor" && pa.Field == "assignee")) {
+			if !knownField(r, pa.Field) || (pa.Op != "clear" && !(pa.Op == "set_actor" && pa.Field == "assignee")) {
 				fields.Add(at+".rules.post_actions", "invalid")
 			}
 		}
@@ -516,4 +516,18 @@ func (s *Service) writePublished(ctx context.Context, tx pgx.Tx, workflowID uuid
 		}
 	}
 	return nil
+}
+
+// knownField reports whether rules may name f: a built-in field, or the id
+// of a custom field the workflow's scope sees.
+func knownField(r *Resolved, f string) bool {
+	if slices.Contains(BuiltinFields, f) {
+		return true
+	}
+	id, err := uuid.Parse(f)
+	if err != nil {
+		return false
+	}
+	_, ok := r.Fields[id]
+	return ok
 }

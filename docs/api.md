@@ -59,7 +59,9 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   /config/workflows  /config/workflows/{id}      POST copies {name, copy_from}
   /config/workflows/{id}/draft             PUT {version, draft} | DELETE (discard)
   /config/workflows/{id}/publish           POST {version, status_mapping}; 409 unmapped_statuses lists them
-  /config/fields  /config/labels  /config/settings
+  /config/fields  /config/fields/{id}       type fixed after creation; /config/issue-types/{id}/fields GET | PUT {fields: [{field_id, required}]}
+  /config/labels  /config/labels/{id}       /merge {into}; projects: /move-to-workspace
+  /config/settings/estimation              GET | PUT {scale}; at project scope {scale: null} follows the workspace
   /projects                                 GET (visible ones) | POST (project.create)
   /projects/{key}                          GET (current or former key; "can" lists the caller's permissions) | PATCH | /archive | /unarchive
     /config/…                              project overrides (same shape), plus …/{id}/disable|enable and issue-types/{id}/copy

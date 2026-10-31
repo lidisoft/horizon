@@ -170,9 +170,18 @@ issues of each status go, as publishing does.
 | url | string | |
 | checkbox | boolean | |
 
-Fields are defined at workspace or project scope and attached per issue type.
-Values live in the issue's `fields` JSONB column, keyed by field id, and are
-filterable, sortable and groupable in every view.
+Fields are defined at workspace or project scope and attached per issue type,
+in order, each optionally required. Values live in the issue's `fields` JSONB
+column, keyed by field id, and are filterable, sortable and groupable in every
+view.
+
+- A field's **type is fixed** once created. Select options carry stable ids,
+  so renaming an option keeps every value; removing one leaves values that
+  show as unknown until changed.
+- A workspace issue type takes workspace fields only; a project that wants
+  its own fields on an inherited type copies the type (its fields come along).
+- Deleting a field detaches it from every type and drops it from workflow
+  rules (validators and post-actions name custom fields by id).
 
 ## Time zone and working calendar
 
@@ -209,6 +218,11 @@ the new scale are shown as-is and flagged.
 
 The estimate picker is a **segmented control** for scales of six values or
 fewer, and a **combobox** for longer ones.
+
+`fibonacci` and `linear` have fixed values; `tshirt` (XS 1, S 2, M 3, L 5,
+XL 8 by default) and `custom` carry up to 20 labels with weights from 0 to
+1000, which velocity counts. A project follows the workspace's scale unless
+it overrides it; removing the override returns it to the workspace's.
 
 ## Labels
 

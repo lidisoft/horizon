@@ -42,6 +42,8 @@ const GROUPS = [
       { name: "issue-types", icon: "bookmark", label: "settings.issueTypes" },
       { name: "workflows", icon: "git-branch", label: "settings.workflows" },
       { name: "categories", icon: "circle-dot", label: "settings.categories" },
+      { name: "labels", icon: "tag", label: "settings.labels" },
+      { name: "estimation", icon: "signal-medium", label: "settings.estimation" },
     ],
   },
 ];

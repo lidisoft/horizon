@@ -34,7 +34,7 @@ usable exists early.
 
 ## Phase 3 — Issues core
 
-- [ ] Configuration resolver; issue types, workflows (state machine, rules),
+- [x] Configuration resolver; issue types, workflows (state machine, rules),
       custom fields, labels, estimation scales — with defaults
 - [ ] Issues: create, field edits, transition, assign, estimate, prioritise,
       rank, parent/child, links, move between projects, archive, hard delete

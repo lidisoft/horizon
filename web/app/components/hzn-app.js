@@ -37,6 +37,8 @@ export const ROUTES = [
   { name: "settings-issue-types", path: "/w/:ws/settings/issue-types", view: "hzn-settings-issue-types", layout: "settings" },
   { name: "settings-workflows", path: "/w/:ws/settings/workflows", view: "hzn-settings-workflows", layout: "settings" },
   { name: "settings-categories", path: "/w/:ws/settings/categories", view: "hzn-settings-categories", layout: "settings" },
+  { name: "settings-labels", path: "/w/:ws/settings/labels", view: "hzn-settings-labels", layout: "settings" },
+  { name: "settings-estimation", path: "/w/:ws/settings/estimation", view: "hzn-settings-estimation", layout: "settings" },
   { name: "invitation", path: "/invitation", view: "hzn-invitation", public: true },
   { name: "sign-in", path: "/sign-in", view: "hzn-sign-in", public: true },
   { name: "forgot-password", path: "/forgot-password", view: "hzn-forgot-password", public: true },

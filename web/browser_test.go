@@ -308,6 +308,18 @@ func (p *page) eval(expr string) {
 	p.do(chromedp.Evaluate[chromedp.Void](expr))
 }
 
+// click clicks the middle of an element with the mouse, as a user would.
+func (p *page) click(selector string) {
+	p.t.Helper()
+	box := p.poll(`(() => { const r = (` + selector + `).getBoundingClientRect(); (` + selector + `).scrollIntoView({ block: "center" });
+		const b = (` + selector + `).getBoundingClientRect(); return JSON.stringify([b.x + b.width / 2, b.y + b.height / 2]); })()`)
+	var xy [2]float64
+	if err := json.Unmarshal([]byte(box), &xy); err != nil {
+		p.t.Fatalf("click %s: %v", selector, err)
+	}
+	p.do(chromedp.MouseClickXY(xy[0], xy[1]))
+}
+
 // typeInto focuses a control and types text, as a user would.
 func (p *page) typeInto(selector, text string) {
 	p.t.Helper()
@@ -724,6 +736,37 @@ func TestConfiguration(t *testing.T) {
 	pg.poll(view + `.querySelector(".head h2")?.textContent === "Spike" && "created"`)
 	if got := pg.poll(view + `.querySelector(".head .muted").textContent`); got != "Horizon only" {
 		t.Errorf("origin = %q", got)
+	}
+
+	// Labels: a workspace label, switched off in the project.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/labels"))
+	pg.poll(view + `.querySelector('[data-action="new"]') && "page"`)
+	pg.eval(view + `.querySelector('[data-action="new"]').click()`)
+	pg.typeInto(view+`.querySelector('[data-dialog="edit"] [name="name"]')`, "backend")
+	pg.eval(view + `.querySelector('[data-dialog="edit"] [data-action="save"]').click()`)
+	pg.poll(view + `.querySelector("tbody tr")?.textContent.includes("backend") && "created"`)
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/labels?project=HZN"))
+	pg.poll(view + `.querySelector("lds-switch[data-toggle][checked]") && "inherited"`)
+	pg.click(view + `.querySelector("lds-switch[data-toggle]")`)
+	pg.poll(view + `.querySelector("tbody tr.off") && "switched off"`)
+
+	// Estimation: the project overrides the workspace with T-shirt sizes.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/estimation?project=HZN"))
+	pg.poll(view + `.querySelector("[data-override]") && "page"`)
+	pg.click(view + `.querySelector("[data-override]")`)
+	pg.poll(`!` + view + `.querySelector("lds-radio-group").hasAttribute("disabled") && "editable"`)
+	pg.click(view + `.querySelector('lds-radio-group button[value="tshirt"]')`)
+	pg.poll(view + `.querySelector("[data-label]") && "sizes"`)
+	pg.click(view + `.querySelector('[data-action="save"]')`)
+	scale := `fetch("/api/v1/w/acme/projects/HZN/config/settings/estimation").then((r) => r.json()).then((e) => e.kind + " " + e.overridden + " " + e.values.map((v) => v.label).join(","))`
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		got, err := chromedp.Run(pg.ctx, chromedp.Evaluate[string](scale, chromedp.EvalAwaitPromise))
+		if err == nil && got == "tshirt true XS,S,M,L,XL" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("project scale = %q, %v", got, err)
+		}
 	}
 
 	pg.logs.failOnErrors(t)

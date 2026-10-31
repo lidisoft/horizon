@@ -863,6 +863,153 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/config/fields": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "List custom fields",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.FieldList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Create a custom field",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Name, type and type options",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.FieldRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Field"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/fields/{id}": {
+            "delete": {
+                "description": "Detaches it from issue types and drops it from workflow rules.",
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Delete a custom field",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Update a custom field",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.FieldRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Field"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/config/issue-types": {
             "get": {
                 "produces": [
@@ -1045,6 +1192,336 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/configdef.IssueType"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/issue-types/{id}/fields": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "List the fields of an issue type",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue type id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.TypeFieldsRequest"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Fields the type's scope sees, in display order; required ones are checked when an issue is created.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Set the fields of an issue type",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue type id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields in order",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.TypeFieldsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/labels": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "List labels",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.LabelList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Create a label",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Name, colour, description",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.LabelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Label"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/labels/{id}": {
+            "delete": {
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Delete a label",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Label id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Update a label",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Label id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Label version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.LabelRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Label"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/labels/{id}/merge": {
+            "post": {
+                "description": "Every issue carrying it gets the other label instead, recorded in its history.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Merge a label into another",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Label id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Label taking over",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.MergeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/settings/estimation": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Get the estimation scale",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.EstimationResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "At project scope, {\"scale\": null} returns the project to the workspace's scale.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Set the estimation scale",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Scale",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.EstimationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Estimation"
                         }
                     }
                 }
@@ -1981,6 +2458,49 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/projects/{key}/config/labels/{id}/move-to-workspace": {
+            "post": {
+                "description": "Needs workspace.config.manage.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Move a project label to the workspace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Label id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Label"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/projects/{key}/unarchive": {
             "post": {
                 "produces": [
@@ -2796,6 +3316,202 @@
                 }
             }
         },
+        "configdef.Estimation": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "fibonacci",
+                        "linear",
+                        "tshirt",
+                        "custom",
+                        "none"
+                    ]
+                },
+                "overridden": {
+                    "description": "Overridden is true when the project sets its own scale.",
+                    "type": "boolean"
+                },
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.ScaleValue"
+                    }
+                },
+                "workspace": {
+                    "description": "Workspace is the workspace's scale, which a project falls back to.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/configdef.Scale"
+                        }
+                    ]
+                }
+            }
+        },
+        "configdef.EstimationRequest": {
+            "type": "object",
+            "properties": {
+                "scale": {
+                    "$ref": "#/definitions/configdef.Scale"
+                }
+            }
+        },
+        "configdef.EstimationResponse": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "type": "boolean"
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "fibonacci",
+                        "linear",
+                        "tshirt",
+                        "custom",
+                        "none"
+                    ]
+                },
+                "overridden": {
+                    "description": "Overridden is true when the project sets its own scale.",
+                    "type": "boolean"
+                },
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.ScaleValue"
+                    }
+                },
+                "workspace": {
+                    "description": "Workspace is the workspace's scale, which a project falls back to.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/configdef.Scale"
+                        }
+                    ]
+                }
+            }
+        },
+        "configdef.Field": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "disabled": {
+                    "description": "Disabled is true when the project switched the inherited one off.",
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inherited": {
+                    "description": "Inherited is true for a workspace definition seen from a project.",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Severity"
+                },
+                "options": {
+                    "description": "Options of select and multi_select fields.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Option"
+                    }
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "precision": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "text",
+                        "number",
+                        "select",
+                        "multi_select",
+                        "date",
+                        "user",
+                        "url",
+                        "checkbox"
+                    ]
+                },
+                "unit": {
+                    "description": "Unit and Precision of number fields.",
+                    "type": "string",
+                    "example": "h"
+                },
+                "used_by": {
+                    "description": "UsedBy lists the issue types it's attached to, in the scope asked.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "configdef.FieldList": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "description": "CanManage tells whether the caller may edit this scope's definitions.",
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Field"
+                    }
+                }
+            }
+        },
+        "configdef.FieldRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Severity"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Option"
+                    }
+                },
+                "precision": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "text",
+                        "number",
+                        "select",
+                        "multi_select",
+                        "date",
+                        "user",
+                        "url",
+                        "checkbox"
+                    ]
+                },
+                "unit": {
+                    "type": "string"
+                }
+            }
+        },
         "configdef.IssueType": {
             "type": "object",
             "properties": {
@@ -2905,6 +3621,94 @@
                 }
             }
         },
+        "configdef.Label": {
+            "type": "object",
+            "properties": {
+                "colour": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "disabled": {
+                    "description": "Disabled is true when the project switched the inherited one off.",
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inherited": {
+                    "description": "Inherited is true for a workspace definition seen from a project.",
+                    "type": "boolean"
+                },
+                "issues": {
+                    "description": "Issues carrying it, in the workspace.",
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "backend"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "configdef.LabelList": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "description": "CanManage tells whether the caller may edit this scope's definitions.",
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Label"
+                    }
+                }
+            }
+        },
+        "configdef.LabelRequest": {
+            "type": "object",
+            "properties": {
+                "colour": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "backend"
+                }
+            }
+        },
+        "configdef.MergeRequest": {
+            "type": "object",
+            "properties": {
+                "into": {
+                    "type": "string"
+                }
+            }
+        },
+        "configdef.Option": {
+            "type": "object",
+            "properties": {
+                "colour": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "configdef.OrderRequest": {
             "type": "object",
             "properties": {
@@ -3010,6 +3814,40 @@
                 }
             }
         },
+        "configdef.Scale": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "fibonacci",
+                        "linear",
+                        "tshirt",
+                        "custom",
+                        "none"
+                    ]
+                },
+                "values": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.ScaleValue"
+                    }
+                }
+            }
+        },
+        "configdef.ScaleValue": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "type": "string",
+                    "example": "M"
+                },
+                "weight": {
+                    "type": "number",
+                    "example": 3
+                }
+            }
+        },
         "configdef.Status": {
             "type": "object",
             "properties": {
@@ -3050,6 +3888,28 @@
                 },
                 "to": {
                     "type": "string"
+                }
+            }
+        },
+        "configdef.TypeField": {
+            "type": "object",
+            "properties": {
+                "field_id": {
+                    "type": "string"
+                },
+                "required": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "configdef.TypeFieldsRequest": {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.TypeField"
+                    }
                 }
             }
         },

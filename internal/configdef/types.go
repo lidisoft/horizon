@@ -283,6 +283,11 @@ func (s *Service) CopyIssueType(ctx context.Context, t Target, id uuid.UUID) (Is
 		if err != nil {
 			return err
 		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO issue_type_fields (workspace_id, issue_type_id, field_id, required, position)
+			SELECT workspace_id, $1, field_id, required, position FROM issue_type_fields WHERE issue_type_id = $2`, created.ID, src.ID); err != nil {
+			return err
+		}
 		if err := q.Disable(ctx, db.DisableParams{WorkspaceID: t.WorkspaceID, ProjectID: t.ProjectID.UUID, DefinitionType: TypeIssueType, DefinitionID: src.ID}); err != nil {
 			return err
 		}
