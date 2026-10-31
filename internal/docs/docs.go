@@ -681,6 +681,684 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/w/{ws}/config/categories": {
+            "get": {
+                "description": "Same at project scope: /w/{ws}/projects/{key}/config/categories, with inherited ones flagged.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "List status categories",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.CategoryList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Create a status category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Name, colour, outcome",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.CategoryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Category"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/categories/order": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Reorder status categories",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Category ids in board order",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.OrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/categories/{id}": {
+            "delete": {
+                "description": "A category in use needs ?replacement= with the same kind of outcome (open or final); its statuses move there in every workflow (409 replacement_required otherwise).",
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Delete a status category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Category id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Category taking over its statuses",
+                        "name": "replacement",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "description": "A category holding a workflow's initial status can't become final (409 initial_status_in_category).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Update a status category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Category id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Category version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.CategoryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Category"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/issue-types": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "List issue types",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.IssueTypeList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Create an issue type",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Name, icon, colour, workflow, parent rule",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.IssueTypeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.IssueType"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/issue-types/order": {
+            "put": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Reorder issue types",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Issue type ids in order",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.OrderRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/issue-types/{id}": {
+            "delete": {
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Delete an issue type",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue type id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "409": {
+                        "description": "issue_type_in_use",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Moving it to another workflow needs status_mapping for statuses holding its issues (409 unmapped_statuses).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Update an issue type",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue type id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue type version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.IssueTypeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.IssueType"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/workflows": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "List workflows",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.WorkflowList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Create a workflow (a copy)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Name and the workflow to copy",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.CreateWorkflowRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Workflow"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/workflows/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Get a workflow",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Workflow id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Workflow"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Delete a workflow",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Workflow id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "409": {
+                        "description": "workflow_in_use",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Rename a workflow",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Workflow id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "New name",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.RenameRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/workflows/{id}/draft": {
+            "put": {
+                "description": "The whole draft document; version is the draft_version it was based on (409 version_conflict if someone saved since).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Save a workflow draft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Workflow id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Draft and base version",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.DraftRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.Workflow"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Discard a workflow draft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Workflow id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/config/workflows/{id}/publish": {
+            "post": {
+                "description": "409 unmapped_statuses lists each removed status holding issues (field status_mapping.\u003cid\u003e, code required:\u003ccount\u003e).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Publish a workflow draft",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Workflow id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Draft version and status mapping",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.PublishRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.PublishResult"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/grants": {
             "get": {
                 "produces": [
@@ -1262,6 +1940,49 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/project.Project"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/config/issue-types/{id}/copy": {
+            "post": {
+                "description": "The copy is editable; the original is switched off in the project.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Copy an inherited issue type into a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue type id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.IssueType"
                         }
                     }
                 }
@@ -1952,6 +2673,473 @@ const docTemplate = `{
                 },
                 "field": {
                     "type": "string"
+                }
+            }
+        },
+        "configdef.Category": {
+            "type": "object",
+            "properties": {
+                "colour": {
+                    "type": "string"
+                },
+                "disabled": {
+                    "description": "Disabled is true when the project switched the inherited one off.",
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inherited": {
+                    "description": "Inherited is true for a workspace definition seen from a project.",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "In progress"
+                },
+                "outcome": {
+                    "type": "string",
+                    "enum": [
+                        "unstarted",
+                        "started",
+                        "completed",
+                        "abandoned"
+                    ]
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "statuses": {
+                    "description": "Statuses using it, across the workspace's workflows.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "workflows": {
+                    "type": "integer"
+                }
+            }
+        },
+        "configdef.CategoryList": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "description": "CanManage tells whether the caller may edit this scope's definitions.",
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Category"
+                    }
+                }
+            }
+        },
+        "configdef.CategoryRequest": {
+            "type": "object",
+            "properties": {
+                "colour": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "In review"
+                },
+                "outcome": {
+                    "type": "string",
+                    "enum": [
+                        "unstarted",
+                        "started",
+                        "completed",
+                        "abandoned"
+                    ]
+                }
+            }
+        },
+        "configdef.CreateWorkflowRequest": {
+            "type": "object",
+            "properties": {
+                "copy_from": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Engineering"
+                }
+            }
+        },
+        "configdef.Draft": {
+            "type": "object",
+            "properties": {
+                "statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Status"
+                    }
+                },
+                "transitions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Transition"
+                    }
+                }
+            }
+        },
+        "configdef.DraftRequest": {
+            "type": "object",
+            "properties": {
+                "draft": {
+                    "$ref": "#/definitions/configdef.Draft"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "configdef.IssueType": {
+            "type": "object",
+            "properties": {
+                "colour": {
+                    "type": "string"
+                },
+                "copied_from": {
+                    "type": "string"
+                },
+                "disabled": {
+                    "description": "Disabled is true when the project switched the inherited one off.",
+                    "type": "boolean"
+                },
+                "icon": {
+                    "type": "string",
+                    "example": "alert-circle"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inherited": {
+                    "description": "Inherited is true for a workspace definition seen from a project.",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Bug"
+                },
+                "parent_rule": {
+                    "type": "string",
+                    "enum": [
+                        "any",
+                        "none",
+                        "required"
+                    ]
+                },
+                "parent_type_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "position": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "workflow_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "configdef.IssueTypeList": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "description": "CanManage tells whether the caller may edit this scope's definitions.",
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.IssueType"
+                    }
+                }
+            }
+        },
+        "configdef.IssueTypeRequest": {
+            "type": "object",
+            "properties": {
+                "colour": {
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Bug"
+                },
+                "parent_rule": {
+                    "type": "string",
+                    "enum": [
+                        "any",
+                        "none",
+                        "required"
+                    ]
+                },
+                "parent_type_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "status_mapping": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "workflow_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "configdef.OrderRequest": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "configdef.PostAction": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string",
+                    "example": "assignee"
+                },
+                "op": {
+                    "description": "Op is clear, or set_actor (assignee only: the person transitioning).",
+                    "type": "string",
+                    "enum": [
+                        "clear",
+                        "set_actor"
+                    ]
+                }
+            }
+        },
+        "configdef.PublishRequest": {
+            "type": "object",
+            "properties": {
+                "status_mapping": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "configdef.PublishResult": {
+            "type": "object",
+            "properties": {
+                "added": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "moved": {
+                    "description": "Moved counts issues moved from each removed status.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                },
+                "removed": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "configdef.RenameRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "configdef.Rules": {
+            "type": "object",
+            "properties": {
+                "children_final": {
+                    "description": "ChildrenFinal requires every child issue to be in a final category.",
+                    "type": "boolean"
+                },
+                "post_actions": {
+                    "description": "PostActions run after the transition.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.PostAction"
+                    }
+                },
+                "roles": {
+                    "description": "Roles that may perform it; empty: anyone holding issue.transition.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "validators": {
+                    "description": "Validators are fields that must be set to enter the target status.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "configdef.Status": {
+            "type": "object",
+            "properties": {
+                "category_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "initial": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "configdef.Transition": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "description": "invalid: from any status",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "rules": {
+                    "description": "Rules has its zero value when the transition is unrestricted.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/configdef.Rules"
+                        }
+                    ]
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
+        "configdef.Workflow": {
+            "type": "object",
+            "properties": {
+                "copied_from": {
+                    "type": "string"
+                },
+                "disabled": {
+                    "description": "Disabled is true when the project switched the inherited one off.",
+                    "type": "boolean"
+                },
+                "draft": {
+                    "description": "Draft is the shared work in progress, if any.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/configdef.Draft"
+                        }
+                    ]
+                },
+                "draft_updated_at": {
+                    "type": "string"
+                },
+                "draft_updated_by": {
+                    "type": "string"
+                },
+                "draft_version": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inherited": {
+                    "description": "Inherited is true for a workspace definition seen from a project.",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Engineering"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "published_at": {
+                    "type": "string"
+                },
+                "statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Status"
+                    }
+                },
+                "transitions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Transition"
+                    }
+                },
+                "used_by": {
+                    "description": "UsedBy lists the issue types bound to it, in the scope asked.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "configdef.WorkflowList": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "description": "CanManage tells whether the caller may edit this scope's definitions.",
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Workflow"
+                    }
                 }
             }
         },

@@ -54,12 +54,15 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   /teams  /teams/{id}  /teams/{id}/members/{user}
   /roles  /roles/{id}                      GET (with the permission catalogue) | POST | PATCH | DELETE (unused roles; never Admin)
   /grants  /grants/{id}                    GET | PUT {role_id, user_id or team_id, project_id?} sets a subject's role in a scope | DELETE
-  /config/issue-types  /workflows  /fields  /labels  /settings
-  /config/workflows/{id}/draft             GET | PUT | DELETE (discard)
-  /config/workflows/{id}/publish           POST {status_mapping}; 409 lists unmapped statuses
+  /config/categories  /config/categories/{id}   ?replacement= on DELETE when in use; /config/categories/order
+  /config/issue-types  /config/issue-types/{id}  PATCH may carry status_mapping (workflow change); /config/issue-types/order
+  /config/workflows  /config/workflows/{id}      POST copies {name, copy_from}
+  /config/workflows/{id}/draft             PUT {version, draft} | DELETE (discard)
+  /config/workflows/{id}/publish           POST {version, status_mapping}; 409 unmapped_statuses lists them
+  /config/fields  /config/labels  /config/settings
   /projects                                 GET (visible ones) | POST (project.create)
   /projects/{key}                          GET (current or former key; "can" lists the caller's permissions) | PATCH | /archive | /unarchive
-    /config/…                              project overrides (same shape)
+    /config/…                              project overrides (same shape), plus …/{id}/disable|enable and issue-types/{id}/copy
     /iterations  /iterations/{id}/start|complete|archive
     /releases  /milestones
   /issues                                  filter via view query (POST /issues/query)

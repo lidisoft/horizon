@@ -56,7 +56,7 @@ service, queries and events.
 cmd/horizon/              entry point
 internal/
   cli/                    command wiring
-  config/                 process config (env) AND the workspace→project resolver
+  config/                 process config (env)
   server/                 Gin setup, middleware, routing, SPA + LDS serving
   platform/               pg pool, tx helper, NATS, S3, mailer, clock, ids
   eventlog/               event append, outbox relay, scrubbing, subjects
@@ -64,7 +64,7 @@ internal/
   access/                 roles, permission sets, grants, checks
   workspace/              workspaces, members, teams
   project/                projects, keys, sequences
-  configdef/              issue types, workflows, fields, scales, labels
+  configdef/              status categories, workflows, issue types, fields, scales, labels; the workspace→project resolver
   issue/                  issues, links, hierarchy, ranking, comments
   planning/               iterations, releases, milestones
   view/                   saved views, filter AST → SQL compiler

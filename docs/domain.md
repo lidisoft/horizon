@@ -242,3 +242,9 @@ Delete is a **hard delete** (see [ADR-0012](adr/0012-hard-delete-with-event-scru
 
 Archive is the non-destructive alternative: archived items are read-only,
 hidden from active views by default, and still searchable.
+
+**Deleting a project** is the same hard delete applied to all its issues:
+only an **archived** project can be deleted, with `project.manage`, typing
+its key to confirm. Its issues and their content are removed as above, its
+configuration overrides and grants with it, and one tombstone event
+(`ProjectDeleted`: id, key, actor, time) remains.

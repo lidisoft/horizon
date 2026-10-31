@@ -19,9 +19,9 @@ type HTTP struct{ svc *Service }
 // NewHTTP returns the handlers.
 func NewHTTP(svc *Service) *HTTP { return &HTTP{svc: svc} }
 
-// Register mounts the routes on the /w/:ws group. Routes of other modules
-// under a project go on the group returned by Group.
-func (h *HTTP) Register(ws *gin.RouterGroup) {
+// Register mounts the routes on the /w/:ws group; more registers other
+// modules' routes under /projects/:key, after the project is resolved.
+func (h *HTTP) Register(ws *gin.RouterGroup, more ...func(p *gin.RouterGroup)) {
 	ws.GET("/projects", h.list)
 	ws.POST("/projects", h.create)
 	p := ws.Group("/projects/:key", h.enter)
@@ -29,6 +29,9 @@ func (h *HTTP) Register(ws *gin.RouterGroup) {
 	p.PATCH("", h.update)
 	p.POST("/archive", h.archive)
 	p.POST("/unarchive", h.unarchive)
+	for _, register := range more {
+		register(p)
+	}
 }
 
 // enter resolves /projects/:key (current or former key) and narrows the

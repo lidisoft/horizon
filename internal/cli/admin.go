@@ -15,6 +15,7 @@ import (
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/config"
+	"github.com/lidisoft/horizon/internal/configdef"
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
@@ -95,7 +96,11 @@ func admin(fn adminFunc) cli.ActionFunc {
 		}
 		defer pool.Close()
 		ids := identity.New(identity.Options{Pool: pool, Log: log, BaseURL: cfg.BaseURL, SessionSecret: cfg.SessionSecret})
-		ws := workspace.New(workspace.Options{Pool: pool, Log: log, Identity: ids, Access: access.New(pool, nil), BaseURL: cfg.BaseURL})
+		acc := access.New(pool, nil)
+		ws := workspace.New(workspace.Options{
+			Pool: pool, Log: log, Identity: ids, Access: acc, BaseURL: cfg.BaseURL,
+			OnCreate: []workspace.CreateHook{configdef.New(pool, acc, nil, nil).SeedDefaults},
+		})
 		return describe(fn(ctx, cmd, adminServices{ids: ids, workspaces: ws}))
 	}
 }

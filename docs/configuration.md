@@ -19,8 +19,8 @@ Two kinds of configurable things:
 | **Settings** (scalar values) | iteration completion policy, estimation scale, max active iterations | Project value replaces the workspace value |
 | **Definitions** (collections) | issue types, workflows, custom fields, labels | A project **inherits** workspace definitions, can **disable** inherited ones, and can **add** its own. Inherited definitions can't be edited from a project — the project copies one and disables the original instead |
 
-All reads go through a single resolver (`internal/config` in Go, mirrored by
-the client cache), never directly from one scope. Changes to either scope emit
+All reads go through a single resolver (`configdef.Service.Resolve` in Go,
+mirrored by the client cache), never directly from one scope. Changes to either scope emit
 events, so clients invalidate their resolved view.
 
 ## Catalogue
@@ -118,6 +118,45 @@ the workflow.
 Status categories are not edited in the workflow editor: they are managed on
 their own settings page, and a status only picks one.
 
+The draft is saved as it is edited, as a whole document guarded by a
+`draft_version`: a save based on an older version is refused (409) and the
+editor reloads the newer draft. Saving checks the draft's structure (unique
+names, one initial status in an open category, transitions between its own
+statuses, known roles and fields in rules); publishing checks it again.
+
+Transition rules, as stored:
+
+```json
+{ "roles": ["<role id>"], "children_final": true,
+  "validators": ["assignee", "estimate"],
+  "post_actions": [{ "field": "assignee", "op": "clear" }, { "field": "assignee", "op": "set_actor" }] }
+```
+
+`roles` empty means anyone holding `issue.transition`. Validators and
+post-actions name built-in fields (`assignee`, `estimate`, `priority`,
+`due_date`, `start_date`, `iteration`, `release`, `description`, `labels`)
+and, once they exist, custom fields. `set_actor` applies to `assignee` only.
+
+#### Deleting a category in use
+
+Deleting a status category that statuses use asks for a **replacement with
+the same kind of outcome** (open or final). Its statuses move there in every
+workflow of the workspace, drafts included, in one step. A workspace
+category can only be replaced by a workspace one, since its statuses may be
+in any project's workflows. A category holding a workflow's initial status
+can't become final.
+
+#### Workspace and project definitions
+
+A project sees every workspace category, workflow and issue type it hasn't
+switched off, plus its own. Switching off is refused while something
+effective in the project depends on it (a category used by a workflow, a
+workflow bound to an issue type). Copying an inherited **issue type** into a
+project makes an editable copy and switches the original off there; copying
+a **workflow** doesn't switch the original off, because issue types are moved
+to the copy one by one. Changing an issue type's workflow asks where the
+issues of each status go, as publishing does.
+
 ## Custom fields
 
 | Type | Stored as | Notes |
@@ -167,3 +206,16 @@ modelled in v1.
 
 Changing a project's scale doesn't rewrite existing estimates; values outside
 the new scale are shown as-is and flagged.
+
+The estimate picker is a **segmented control** for scales of six values or
+fewer, and a **combobox** for longer ones.
+
+## Labels
+
+Labels are definitions like the others (workspace, project override).
+
+- **Switching off** an inherited label in a project hides it from pickers and
+  filters there; issues that carry it keep it, shown greyed.
+- **Merge into…** relabels every issue carrying the label with another one,
+  each change recorded in the issue's history, then deletes it.
+- **Move to workspace** promotes a project label to the workspace.

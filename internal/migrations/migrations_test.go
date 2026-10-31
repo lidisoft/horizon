@@ -90,3 +90,43 @@ func TestRolesBackfill(t *testing.T) {
 		t.Errorf("roles %d, admin permissions %d, admin %s, contributor %s", roles, adminPerms, admin, contributor)
 	}
 }
+
+// Workspaces created before configuration get the defaults: categories, the
+// Default workflow and the issue types.
+func TestConfigurationBackfill(t *testing.T) {
+	ctx := context.Background()
+	pool := testenv.DB(t)
+	db := stdlib.OpenDBFromPool(pool)
+	defer db.Close()
+	p, err := migrations.Provider(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.DownTo(ctx, 7); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO workspaces (id, slug, name, created_at, updated_at)
+		VALUES ('01900000-0000-7000-8000-0000000000bb', 'old', 'Old', now(), now())`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var cats, statuses, transitions, types, initials int
+	var subParents int
+	err = pool.QueryRow(ctx, `
+		SELECT (SELECT count(*) FROM status_categories),
+		       (SELECT count(*) FROM statuses),
+		       (SELECT count(*) FROM transitions),
+		       (SELECT count(*) FROM issue_types),
+		       (SELECT count(*) FROM statuses WHERE is_initial),
+		       (SELECT cardinality(allowed_parent_type_ids) FROM issue_types WHERE name = 'Sub-task')`).
+		Scan(&cats, &statuses, &transitions, &types, &initials, &subParents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cats != 5 || statuses != 5 || transitions != 8 || types != 5 || initials != 1 || subParents != 3 {
+		t.Errorf("backfill: %d categories, %d statuses, %d transitions, %d types, %d initial, sub-task parents %d",
+			cats, statuses, transitions, types, initials, subParents)
+	}
+}

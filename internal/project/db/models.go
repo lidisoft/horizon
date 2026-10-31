@@ -30,6 +30,13 @@ type AuthThrottle struct {
 	WindowStart time.Time
 }
 
+type ConfigDisable struct {
+	WorkspaceID    uuid.UUID
+	ProjectID      uuid.UUID
+	DefinitionType string
+	DefinitionID   uuid.UUID
+}
+
 type Event struct {
 	ID               uuid.UUID
 	WorkspaceID      uuid.NullUUID
@@ -58,6 +65,23 @@ type Invitation struct {
 	RevokedAt   *time.Time
 	Version     int32
 	RoleID      uuid.NullUUID
+}
+
+type IssueType struct {
+	WorkspaceID          uuid.UUID
+	ID                   uuid.UUID
+	ProjectID            uuid.NullUUID
+	Name                 string
+	Icon                 string
+	Colour               string
+	WorkflowID           uuid.UUID
+	ParentRule           string
+	AllowedParentTypeIds []uuid.UUID
+	Position             int32
+	CopiedFrom           uuid.NullUUID
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	Version              int32
 }
 
 type PasswordReset struct {
@@ -129,6 +153,28 @@ type Session struct {
 	Ip         *netip.Addr
 }
 
+type Status struct {
+	WorkflowID uuid.UUID
+	ID         uuid.UUID
+	Name       string
+	CategoryID uuid.UUID
+	Position   int32
+	IsInitial  bool
+}
+
+type StatusCategory struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	ProjectID   uuid.NullUUID
+	Name        string
+	Colour      string
+	Outcome     string
+	Position    int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
 type Team struct {
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID
@@ -146,6 +192,15 @@ type TeamMember struct {
 	AddedAt     time.Time
 }
 
+type Transition struct {
+	WorkflowID   uuid.UUID
+	ID           uuid.UUID
+	FromStatusID uuid.NullUUID
+	ToStatusID   uuid.UUID
+	Name         string
+	Rules        json.RawMessage
+}
+
 type User struct {
 	ID              uuid.UUID
 	Email           string
@@ -158,6 +213,22 @@ type User struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	Version         int32
+}
+
+type Workflow struct {
+	WorkspaceID    uuid.UUID
+	ID             uuid.UUID
+	ProjectID      uuid.NullUUID
+	Name           string
+	CopiedFrom     uuid.NullUUID
+	Draft          []byte
+	DraftUpdatedBy uuid.NullUUID
+	DraftUpdatedAt *time.Time
+	DraftVersion   int32
+	PublishedAt    time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Version        int32
 }
 
 type Workspace struct {

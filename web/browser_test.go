@@ -29,6 +29,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/lidisoft/horizon/internal/access"
+	"github.com/lidisoft/horizon/internal/configdef"
 	"github.com/lidisoft/horizon/internal/identity"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
 	"github.com/lidisoft/horizon/internal/project"
@@ -247,17 +248,22 @@ func appServer(t *testing.T) app {
 	}
 	auth := identity.NewHTTP(ids, false)
 	acc := access.New(pool, nil)
+	config := configdef.New(pool, acc, nil, nil)
 	workspaces := workspace.NewHTTP(workspace.New(workspace.Options{
 		Pool: pool, Log: zerolog.Nop(), Identity: ids, Access: acc, Mail: a.mail, BaseURL: baseURL,
+		OnCreate: []workspace.CreateHook{config.SeedDefaults},
 	}), auth)
 	roles := access.NewHTTP(acc)
 	projects := project.NewHTTP(project.New(pool, acc, nil))
+	configHTTP := configdef.NewHTTP(config)
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
 	ln.Serve(server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
-		workspaces.Register(api, roles.Register, projects.Register)
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, func(ws *gin.RouterGroup) {
+			projects.Register(ws, configHTTP.RegisterProject)
+		})
 	}}))
 	return a
 }
@@ -652,6 +658,75 @@ func TestProjects(t *testing.T) {
 
 	admin.logs.failOnErrors(t)
 	grace.logs.failOnErrors(t)
+}
+
+// TestConfiguration edits a workflow (draft, then publish), a category and
+// an issue type through the settings pages.
+func TestConfiguration(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+
+	// Workflow: add a status and a transition to it; the draft saves itself.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/workflows"))
+	pg.poll(view + `.querySelector('[data-action="add-status"]') && "editor"`)
+	pg.eval(view + `.querySelector('[data-action="add-status"]').click()`)
+	pg.poll(view + `.querySelector('[data-status-name][value="Status 6"]') && "added"`)
+	// The "+" in the Any status row, Status 6 column (the last one).
+	pg.eval(`[...` + view + `.querySelectorAll("tbody tr")].find((r) => r.textContent.includes("Any status")).querySelector("td:last-child .cell").click()`)
+	pg.poll(view + `.querySelector("[data-tr-name]")?.getAttribute("value") === "To Status 6" && "transition"`)
+	pg.poll(view + `.querySelector("lds-badge[intent=warning]")?.textContent.includes("2 changes") && "counted"`)
+	draftSaved := `fetch("/api/v1/w/acme/config/workflows").then((r) => r.json()).then((b) => String(b.items[0].draft?.statuses.length ?? 0))`
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		got, err := chromedp.Run(pg.ctx, chromedp.Evaluate[string](draftSaved, chromedp.EvalAwaitPromise))
+		if err == nil && got == "6" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("draft not saved: %q, %v", got, err)
+		}
+	}
+	pg.eval(view + `.querySelector('[data-action="publish"]').click()`)
+	pg.poll(view + `.querySelector('[data-dialog="publish"]').hasAttribute("open") && "dialog"`)
+	pg.eval(view + `.querySelector('[data-action="confirm-publish"]').click()`)
+	pg.poll(`!` + view + `.querySelector("lds-badge[intent=warning]") && "published"`)
+	published := `fetch("/api/v1/w/acme/config/workflows").then((r) => r.json()).then((b) => b.items[0].statuses.map((s) => s.name).join(",") + " | " + (b.items[0].draft === null))`
+	if got, err := chromedp.Run(pg.ctx, chromedp.Evaluate[string](published, chromedp.EvalAwaitPromise)); err != nil || got != "Backlog,Todo,In progress,Done,Canceled,Status 6 | true" {
+		t.Errorf("published workflow = %q, %v", got, err)
+	}
+
+	// Categories: create one.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/categories"))
+	pg.poll(view + `.querySelector('[data-action="new"]') && "page"`)
+	pg.eval(view + `.querySelector('[data-action="new"]').click()`)
+	pg.typeInto(view+`.querySelector('[data-dialog="edit"] [name="name"]')`, "Verification")
+	pg.eval(view + `.querySelector('[data-dialog="edit"] [data-action="save"]').click()`)
+	pg.poll(`[...` + view + `.querySelectorAll("tbody tr")].some((r) => r.textContent.includes("Verification")) && "created"`)
+
+	// Issue types: a project-only type.
+	created := `fetch("/api/v1/w/acme/projects", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": ` +
+		`document.querySelector("hzn-app").context.session.csrf }, body: JSON.stringify({ key: "HZN", name: "Horizon" }) }).then((r) => String(r.status))`
+	if got, err := chromedp.Run(pg.ctx, chromedp.Evaluate[string](created, chromedp.EvalAwaitPromise)); err != nil || got != "201" {
+		t.Fatalf("create project: %q, %v", got, err)
+	}
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/issue-types?project=HZN"))
+	pg.poll(view + `.querySelector('[data-action="new"]') && "page"`)
+	if got := pg.poll(`String(` + view + `.querySelectorAll("lds-switch[data-toggle]").length)`); got != "5" {
+		t.Errorf("inherited switches = %s", got)
+	}
+	pg.eval(view + `.querySelector('[data-action="new"]').click()`)
+	pg.typeInto(view+`.querySelector('[data-dialog="new"] [name="name"]')`, "Spike")
+	pg.eval(view + `.querySelector('[data-action="create"]').click()`)
+	pg.poll(view + `.querySelector(".head h2")?.textContent === "Spike" && "created"`)
+	if got := pg.poll(view + `.querySelector(".head .muted").textContent`); got != "Horizon only" {
+		t.Errorf("origin = %q", got)
+	}
+
+	pg.logs.failOnErrors(t)
 }
 
 func graceRowIn(view string) string {

@@ -11,7 +11,9 @@ export const settingsStyles = sheet(`
   nav.settings .back { display: flex; align-items: center; gap: var(--lds-space-2); font-weight: var(--lds-font-weight-semibold);
     color: var(--lds-color-fg-default); text-decoration: none; margin-bottom: var(--lds-space-6); }
   nav.settings h2 { font-size: var(--lds-font-size-2xs); letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--lds-color-fg-muted); margin: 0 0 var(--lds-space-2) var(--lds-space-2); }
+    color: var(--lds-color-fg-muted); margin: var(--lds-space-5) 0 var(--lds-space-2) var(--lds-space-2); }
+  nav.settings h2:first-of-type { margin-top: 0; }
+  lds-nav-item::part(label) { line-height: 1.25; }
   /* LDS v0.0.5 clips label descenders (g, p, y): overflow hidden with
      line-height 1. Remove once LDS fixes lds-nav-item. */
   lds-nav-item::part(label) { line-height: 1.25; }
@@ -24,12 +26,26 @@ export const settingsStyles = sheet(`
   lds-alert:empty { display: none; }
 `);
 
-const PAGES = [
-  { name: "general", icon: "settings", label: "settings.general" },
-  { name: "members", icon: "users", label: "settings.members" },
-  { name: "roles", icon: "lock", label: "settings.roles" },
-  { name: "projects", icon: "layers", label: "settings.projects" },
+const GROUPS = [
+  {
+    label: "settings.workspace",
+    pages: [
+      { name: "general", icon: "settings", label: "settings.general" },
+      { name: "members", icon: "users", label: "settings.members" },
+      { name: "roles", icon: "lock", label: "settings.roles" },
+      { name: "projects", icon: "layers", label: "settings.projects" },
+    ],
+  },
+  {
+    label: "settings.issues",
+    pages: [
+      { name: "issue-types", icon: "bookmark", label: "settings.issueTypes" },
+      { name: "workflows", icon: "git-branch", label: "settings.workflows" },
+      { name: "categories", icon: "circle-dot", label: "settings.categories" },
+    ],
+  },
 ];
+const PAGES = GROUPS.flatMap((g) => g.pages);
 
 /**
  * The settings frame around body; actions go to the header's end. crumb
@@ -40,9 +56,10 @@ export function settingsPage(t, ws, active, body, actions = "", crumb = "") {
   return html`
     <nav class="settings" aria-label="${t("settings.title")}">
       <a class="back" href="/w/${ws.slug}"><lds-icon name="chevron-left"></lds-icon>${t("settings.title")}</a>
-      <h2>${t("settings.workspace")}</h2>
-      ${PAGES.map((p) => html`<lds-nav-item href="/w/${ws.slug}/settings/${p.name}" ${p.name === active ? html`active aria-current="page"` : ""}>
-        <lds-icon slot="start" name="${p.icon}"></lds-icon>${t(p.label)}</lds-nav-item>`)}
+      ${GROUPS.map((g) => html`
+        <h2>${t(g.label)}</h2>
+        ${g.pages.map((p) => html`<lds-nav-item href="/w/${ws.slug}/settings/${p.name}" ${p.name === active ? html`active aria-current="page"` : ""}>
+          <lds-icon slot="start" name="${p.icon}"></lds-icon>${t(p.label)}</lds-nav-item>`)}`)}
     </nav>
     <div class="page">
       <header class="bar">

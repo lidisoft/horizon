@@ -50,7 +50,14 @@ type Options struct {
 	Mail    mail.Sender
 	BaseURL *url.URL
 	Now     func() time.Time
+	// OnCreate runs inside the transaction creating a workspace, after its
+	// roles: other modules seed their defaults (configuration).
+	OnCreate []CreateHook
 }
+
+// CreateHook seeds a module's defaults in a new workspace, inside its
+// creation transaction.
+type CreateHook func(ctx context.Context, tx pgx.Tx, workspaceID uuid.UUID, actor uuid.NullUUID) error
 
 // Service implements the workspace commands and queries.
 type Service struct {
@@ -61,6 +68,7 @@ type Service struct {
 	mail     mail.Sender
 	baseURL  *url.URL
 	now      func() time.Time
+	onCreate []CreateHook
 }
 
 // New returns a Service.
@@ -70,7 +78,7 @@ func New(o Options) *Service {
 		now = time.Now
 	}
 	return &Service{
-		pool: o.Pool, log: o.Log, identity: o.Identity, access: o.Access, mail: o.Mail, baseURL: o.BaseURL,
+		pool: o.Pool, log: o.Log, identity: o.Identity, access: o.Access, mail: o.Mail, baseURL: o.BaseURL, onCreate: o.OnCreate,
 		now: func() time.Time { return now().UTC().Truncate(time.Microsecond) },
 	}
 }
@@ -151,7 +159,15 @@ func (s *Service) Create(ctx context.Context, actor uuid.NullUUID, in NewWorkspa
 		_, err = s.access.SetGrantInTx(ctx, tx, created.ID, actor, access.GrantInput{
 			RoleID: roles[access.BuiltinAdmin], UserID: uuid.NullUUID{UUID: in.OwnerID, Valid: true},
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		for _, seed := range s.onCreate {
+			if err := seed(ctx, tx, created.ID, actor); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return Workspace{}, err

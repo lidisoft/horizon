@@ -37,10 +37,10 @@ PostgreSQL schema outline. Authoritative definitions live in
 |-------|-------------|
 | `projects` | workspace_id, key (unique per workspace, 2–10 upper-case letters or digits), name, description, colour (named swatch), lead_id, visibility (workspace, private), settings JSONB (overrides), issue_seq bigint, archived_at |
 | `project_key_aliases` | workspace_id, project_id, old_key — former keys; current keys and aliases share one namespace per workspace |
-| `issue_types` | workspace_id, project_id (nullable = workspace), name, icon, colour, workflow_id, allowed_parent_type_ids |
-| `workflows` | workspace_id, project_id (nullable), name, version, draft JSONB (nullable: statuses, transitions and rules being edited), draft_updated_by, draft_updated_at |
+| `issue_types` | workspace_id, project_id (nullable = workspace), name, icon, colour, workflow_id, parent_rule (any, none, required), allowed_parent_type_ids (empty = any), position, copied_from |
+| `workflows` | workspace_id, project_id (nullable), name, copied_from, version, draft JSONB (nullable: statuses, transitions and rules being edited), draft_version, draft_updated_by, draft_updated_at, published_at |
 | `status_categories` | workspace_id, project_id (nullable = workspace), name, colour, position, outcome (`unstarted`, `started`, `completed`, `abandoned`) |
-| `statuses` | workflow_id, name, colour, category_id, position, is_initial |
+| `statuses` | workflow_id, name, category_id, position, is_initial — the published version |
 | `transitions` | workflow_id, from_status_id (nullable = any), to_status_id, name, rules JSONB |
 | `custom_fields` | workspace_id, project_id (nullable), name, type, options JSONB |
 | `issue_type_fields` | issue_type_id, field_id, required, position |

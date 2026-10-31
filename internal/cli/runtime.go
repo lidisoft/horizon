@@ -13,6 +13,7 @@ import (
 
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/config"
+	"github.com/lidisoft/horizon/internal/configdef"
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/migrations"
@@ -94,6 +95,7 @@ func (rt *runtime) api() func(api *gin.RouterGroup) {
 	ids := rt.identity()
 	auth := identity.NewHTTP(ids, rt.cfg.BaseURL.Scheme == "https")
 	acc := access.New(rt.pool, nil)
+	config := configdef.New(rt.pool, acc, nil, nil)
 	workspaces := workspace.NewHTTP(workspace.New(workspace.Options{
 		Pool:     rt.pool,
 		Log:      logging.WithSystem(rt.log, "workspace"),
@@ -101,13 +103,17 @@ func (rt *runtime) api() func(api *gin.RouterGroup) {
 		Access:   acc,
 		Mail:     rt.mailer(),
 		BaseURL:  rt.cfg.BaseURL,
+		OnCreate: []workspace.CreateHook{config.SeedDefaults},
 	}), auth)
 	roles := access.NewHTTP(acc)
 	projects := project.NewHTTP(project.New(rt.pool, acc, nil))
+	configHTTP := configdef.NewHTTP(config)
 	return func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
-		workspaces.Register(api, roles.Register, projects.Register)
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, func(ws *gin.RouterGroup) {
+			projects.Register(ws, configHTTP.RegisterProject)
+		})
 	}
 }
 

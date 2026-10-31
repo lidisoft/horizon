@@ -1,0 +1,548 @@
+package configdef
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
+	"github.com/lidisoft/horizon/internal/apperr"
+	"github.com/lidisoft/horizon/internal/project"
+	"github.com/lidisoft/horizon/internal/server"
+	"github.com/lidisoft/horizon/internal/workspace"
+)
+
+// HTTP serves the configuration endpoints, at workspace scope
+// (/w/{ws}/config/…) and project scope (/w/{ws}/projects/{key}/config/…,
+// the same shape).
+type HTTP struct{ svc *Service }
+
+// NewHTTP returns the handlers.
+func NewHTTP(svc *Service) *HTTP { return &HTTP{svc: svc} }
+
+const targetKey = "horizon.configdef.target"
+
+func targetOf(c *gin.Context) Target { return c.MustGet(targetKey).(Target) }
+
+// RegisterWorkspace mounts the workspace-scope routes on /w/:ws.
+func (h *HTTP) RegisterWorkspace(ws *gin.RouterGroup) {
+	g := ws.Group("/config", func(c *gin.Context) {
+		wc := workspace.Current(c)
+		c.Set(targetKey, Target{Principal: wc.Principal, WorkspaceID: wc.Workspace.ID})
+	})
+	h.register(g)
+}
+
+// RegisterProject mounts the project-scope routes on /w/:ws/projects/:key:
+// the same as the workspace's, plus switching inherited definitions off and
+// copying issue types.
+func (h *HTTP) RegisterProject(p *gin.RouterGroup) {
+	g := p.Group("/config", func(c *gin.Context) {
+		pc := project.Current(c)
+		c.Set(targetKey, Target{Principal: pc.Principal, WorkspaceID: pc.Workspace.ID, ProjectID: uuid.NullUUID{UUID: pc.Project.ID, Valid: true}})
+	})
+	h.register(g)
+	for kind, defType := range map[string]string{"categories": TypeCategory, "workflows": TypeWorkflow, "issue-types": TypeIssueType} {
+		g.POST("/"+kind+"/:id/disable", h.setDisabled(defType, true))
+		g.POST("/"+kind+"/:id/enable", h.setDisabled(defType, false))
+	}
+	g.POST("/issue-types/:id/copy", h.copyIssueType)
+}
+
+func (h *HTTP) register(g *gin.RouterGroup) {
+	g.GET("/categories", h.categories)
+	g.POST("/categories", h.createCategory)
+	g.PATCH("/categories/:id", h.updateCategory)
+	g.DELETE("/categories/:id", h.deleteCategory)
+	g.PUT("/categories/order", h.reorderCategories)
+	g.GET("/workflows", h.workflows)
+	g.POST("/workflows", h.createWorkflow)
+	g.GET("/workflows/:id", h.workflow)
+	g.PATCH("/workflows/:id", h.renameWorkflow)
+	g.DELETE("/workflows/:id", h.deleteWorkflow)
+	g.PUT("/workflows/:id/draft", h.saveDraft)
+	g.DELETE("/workflows/:id/draft", h.discardDraft)
+	g.POST("/workflows/:id/publish", h.publish)
+	g.GET("/issue-types", h.issueTypes)
+	g.POST("/issue-types", h.createIssueType)
+	g.PATCH("/issue-types/:id", h.updateIssueType)
+	g.DELETE("/issue-types/:id", h.deleteIssueType)
+	g.PUT("/issue-types/order", h.reorderIssueTypes)
+}
+
+// CategoryList is the body of GET …/config/categories.
+type CategoryList = ListResponse[Category]
+
+// WorkflowList is the body of GET …/config/workflows.
+type WorkflowList = ListResponse[Workflow]
+
+// IssueTypeList is the body of GET …/config/issue-types.
+type IssueTypeList = ListResponse[IssueType]
+
+// categories lists status categories.
+//
+//	@Summary		List status categories
+//	@Description	Same at project scope: /w/{ws}/projects/{key}/config/categories, with inherited ones flagged.
+//	@Tags			configuration
+//	@Produce		json
+//	@Param			ws	path		string	true	"Workspace slug"
+//	@Success		200	{object}	CategoryList
+//	@Router			/api/v1/w/{ws}/config/categories [get]
+func (h *HTTP) categories(c *gin.Context) {
+	t := targetOf(c)
+	items, err := h.svc.Categories(c, t)
+	list(c, items, err, h.svc.CanManage(c, t))
+}
+
+// createCategory adds a status category.
+//
+//	@Summary	Create a status category
+//	@Tags		configuration
+//	@Accept		json
+//	@Produce	json
+//	@Param		ws		path		string			true	"Workspace slug"
+//	@Param		body	body		CategoryRequest	true	"Name, colour, outcome"
+//	@Success	201		{object}	Category
+//	@Router		/api/v1/w/{ws}/config/categories [post]
+func (h *HTTP) createCategory(c *gin.Context) {
+	var req CategoryRequest
+	if bind(c, &req) {
+		v, err := h.svc.CreateCategory(c, targetOf(c), CategoryInput(req))
+		reply(c, http.StatusCreated, v, err)
+	}
+}
+
+// updateCategory changes a status category.
+//
+//	@Summary		Update a status category
+//	@Description	A category holding a workflow's initial status can't become final (409 initial_status_in_category).
+//	@Tags			configuration
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws			path		string			true	"Workspace slug"
+//	@Param			id			path		string			true	"Category id"
+//	@Param			If-Match	header		string			false	"Category version"
+//	@Param			body		body		CategoryRequest	true	"Fields to change"
+//	@Success		200			{object}	Category
+//	@Router			/api/v1/w/{ws}/config/categories/{id} [patch]
+func (h *HTTP) updateCategory(c *gin.Context) {
+	var req CategoryRequest
+	id, ok := idParam(c, "category_not_found")
+	if ok && bind(c, &req) {
+		if version, ok := ifMatch(c); ok {
+			v, err := h.svc.UpdateCategory(c, targetOf(c), id, version, CategoryInput(req))
+			reply(c, http.StatusOK, v, err)
+		}
+	}
+}
+
+// deleteCategory removes a status category.
+//
+//	@Summary		Delete a status category
+//	@Description	A category in use needs ?replacement= with the same kind of outcome (open or final); its statuses move there in every workflow (409 replacement_required otherwise).
+//	@Tags			configuration
+//	@Param			ws			path	string	true	"Workspace slug"
+//	@Param			id			path	string	true	"Category id"
+//	@Param			replacement	query	string	false	"Category taking over its statuses"
+//	@Success		204
+//	@Router			/api/v1/w/{ws}/config/categories/{id} [delete]
+func (h *HTTP) deleteCategory(c *gin.Context) {
+	id, ok := idParam(c, "category_not_found")
+	if !ok {
+		return
+	}
+	var replacement uuid.NullUUID
+	if r := c.Query("replacement"); r != "" {
+		rid, err := uuid.Parse(r)
+		if err != nil {
+			server.WriteError(c, apperr.Invalid(apperr.Field{Field: "replacement", Code: "unknown"}))
+			return
+		}
+		replacement = uuid.NullUUID{UUID: rid, Valid: true}
+	}
+	noContent(c, h.svc.DeleteCategory(c, targetOf(c), id, replacement))
+}
+
+// reorderCategories sets the board order.
+//
+//	@Summary	Reorder status categories
+//	@Tags		configuration
+//	@Accept		json
+//	@Param		ws		path	string			true	"Workspace slug"
+//	@Param		body	body	OrderRequest	true	"Category ids in board order"
+//	@Success	204
+//	@Router		/api/v1/w/{ws}/config/categories/order [put]
+func (h *HTTP) reorderCategories(c *gin.Context) {
+	var req OrderRequest
+	if bind(c, &req) {
+		noContent(c, h.svc.ReorderCategories(c, targetOf(c), req.IDs))
+	}
+}
+
+// workflows lists workflows.
+//
+//	@Summary	List workflows
+//	@Tags		configuration
+//	@Produce	json
+//	@Param		ws	path		string	true	"Workspace slug"
+//	@Success	200	{object}	WorkflowList
+//	@Router		/api/v1/w/{ws}/config/workflows [get]
+func (h *HTTP) workflows(c *gin.Context) {
+	t := targetOf(c)
+	items, err := h.svc.Workflows(c, t)
+	list(c, items, err, h.svc.CanManage(c, t))
+}
+
+// createWorkflow copies a workflow under a new name.
+//
+//	@Summary	Create a workflow (a copy)
+//	@Tags		configuration
+//	@Accept		json
+//	@Produce	json
+//	@Param		ws		path		string					true	"Workspace slug"
+//	@Param		body	body		CreateWorkflowRequest	true	"Name and the workflow to copy"
+//	@Success	201		{object}	Workflow
+//	@Router		/api/v1/w/{ws}/config/workflows [post]
+func (h *HTTP) createWorkflow(c *gin.Context) {
+	var req CreateWorkflowRequest
+	if bind(c, &req) {
+		v, err := h.svc.CreateWorkflow(c, targetOf(c), req.Name, req.CopyFrom)
+		reply(c, http.StatusCreated, v, err)
+	}
+}
+
+// workflow returns a workflow with its draft.
+//
+//	@Summary	Get a workflow
+//	@Tags		configuration
+//	@Produce	json
+//	@Param		ws	path		string	true	"Workspace slug"
+//	@Param		id	path		string	true	"Workflow id"
+//	@Success	200	{object}	Workflow
+//	@Router		/api/v1/w/{ws}/config/workflows/{id} [get]
+func (h *HTTP) workflow(c *gin.Context) {
+	if id, ok := idParam(c, "workflow_not_found"); ok {
+		v, err := h.svc.Workflow(c, targetOf(c), id)
+		reply(c, http.StatusOK, v, err)
+	}
+}
+
+// renameWorkflow renames a workflow.
+//
+//	@Summary	Rename a workflow
+//	@Tags		configuration
+//	@Accept		json
+//	@Param		ws		path	string			true	"Workspace slug"
+//	@Param		id		path	string			true	"Workflow id"
+//	@Param		body	body	RenameRequest	true	"New name"
+//	@Success	204
+//	@Router		/api/v1/w/{ws}/config/workflows/{id} [patch]
+func (h *HTTP) renameWorkflow(c *gin.Context) {
+	var req RenameRequest
+	id, ok := idParam(c, "workflow_not_found")
+	if ok && bind(c, &req) {
+		noContent(c, h.svc.RenameWorkflow(c, targetOf(c), id, req.Name))
+	}
+}
+
+// deleteWorkflow removes an unused workflow.
+//
+//	@Summary	Delete a workflow
+//	@Tags		configuration
+//	@Param		ws	path	string	true	"Workspace slug"
+//	@Param		id	path	string	true	"Workflow id"
+//	@Success	204
+//	@Failure	409	{object}	server.Problem	"workflow_in_use"
+//	@Router		/api/v1/w/{ws}/config/workflows/{id} [delete]
+func (h *HTTP) deleteWorkflow(c *gin.Context) {
+	if id, ok := idParam(c, "workflow_not_found"); ok {
+		noContent(c, h.svc.DeleteWorkflow(c, targetOf(c), id))
+	}
+}
+
+// saveDraft stores the shared draft.
+//
+//	@Summary		Save a workflow draft
+//	@Description	The whole draft document; version is the draft_version it was based on (409 version_conflict if someone saved since).
+//	@Tags			configuration
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws		path		string			true	"Workspace slug"
+//	@Param			id		path		string			true	"Workflow id"
+//	@Param			body	body		DraftRequest	true	"Draft and base version"
+//	@Success		200		{object}	Workflow
+//	@Router			/api/v1/w/{ws}/config/workflows/{id}/draft [put]
+func (h *HTTP) saveDraft(c *gin.Context) {
+	var req DraftRequest
+	id, ok := idParam(c, "workflow_not_found")
+	if ok && bind(c, &req) {
+		v, err := h.svc.SaveDraft(c, targetOf(c), id, req.Version, req.Draft)
+		reply(c, http.StatusOK, v, err)
+	}
+}
+
+// discardDraft drops the draft.
+//
+//	@Summary	Discard a workflow draft
+//	@Tags		configuration
+//	@Param		ws	path	string	true	"Workspace slug"
+//	@Param		id	path	string	true	"Workflow id"
+//	@Success	204
+//	@Router		/api/v1/w/{ws}/config/workflows/{id}/draft [delete]
+func (h *HTTP) discardDraft(c *gin.Context) {
+	if id, ok := idParam(c, "workflow_not_found"); ok {
+		noContent(c, h.svc.DiscardDraft(c, targetOf(c), id))
+	}
+}
+
+// publish applies the draft.
+//
+//	@Summary		Publish a workflow draft
+//	@Description	409 unmapped_statuses lists each removed status holding issues (field status_mapping.<id>, code required:<count>).
+//	@Tags			configuration
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws		path		string			true	"Workspace slug"
+//	@Param			id		path		string			true	"Workflow id"
+//	@Param			body	body		PublishRequest	true	"Draft version and status mapping"
+//	@Success		200		{object}	PublishResult
+//	@Failure		409		{object}	server.Problem
+//	@Router			/api/v1/w/{ws}/config/workflows/{id}/publish [post]
+func (h *HTTP) publish(c *gin.Context) {
+	var req PublishRequest
+	id, ok := idParam(c, "workflow_not_found")
+	if ok && bind(c, &req) {
+		v, err := h.svc.Publish(c, targetOf(c), id, req.Version, req.StatusMapping)
+		reply(c, http.StatusOK, v, err)
+	}
+}
+
+// issueTypes lists issue types.
+//
+//	@Summary	List issue types
+//	@Tags		configuration
+//	@Produce	json
+//	@Param		ws	path		string	true	"Workspace slug"
+//	@Success	200	{object}	IssueTypeList
+//	@Router		/api/v1/w/{ws}/config/issue-types [get]
+func (h *HTTP) issueTypes(c *gin.Context) {
+	t := targetOf(c)
+	items, err := h.svc.IssueTypes(c, t)
+	list(c, items, err, h.svc.CanManage(c, t))
+}
+
+// createIssueType adds an issue type.
+//
+//	@Summary	Create an issue type
+//	@Tags		configuration
+//	@Accept		json
+//	@Produce	json
+//	@Param		ws		path		string				true	"Workspace slug"
+//	@Param		body	body		IssueTypeRequest	true	"Name, icon, colour, workflow, parent rule"
+//	@Success	201		{object}	IssueType
+//	@Router		/api/v1/w/{ws}/config/issue-types [post]
+func (h *HTTP) createIssueType(c *gin.Context) {
+	var req IssueTypeRequest
+	if bind(c, &req) {
+		v, err := h.svc.CreateIssueType(c, targetOf(c), req.input())
+		reply(c, http.StatusCreated, v, err)
+	}
+}
+
+// updateIssueType changes an issue type.
+//
+//	@Summary		Update an issue type
+//	@Description	Moving it to another workflow needs status_mapping for statuses holding its issues (409 unmapped_statuses).
+//	@Tags			configuration
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws			path		string				true	"Workspace slug"
+//	@Param			id			path		string				true	"Issue type id"
+//	@Param			If-Match	header		string				false	"Issue type version"
+//	@Param			body		body		IssueTypeRequest	true	"Fields to change"
+//	@Success		200			{object}	IssueType
+//	@Router			/api/v1/w/{ws}/config/issue-types/{id} [patch]
+func (h *HTTP) updateIssueType(c *gin.Context) {
+	var req IssueTypeRequest
+	id, ok := idParam(c, "issue_type_not_found")
+	if ok && bind(c, &req) {
+		if version, ok := ifMatch(c); ok {
+			v, err := h.svc.UpdateIssueType(c, targetOf(c), id, version, req.input(), req.StatusMapping)
+			reply(c, http.StatusOK, v, err)
+		}
+	}
+}
+
+// deleteIssueType removes an unused issue type.
+//
+//	@Summary	Delete an issue type
+//	@Tags		configuration
+//	@Param		ws	path	string	true	"Workspace slug"
+//	@Param		id	path	string	true	"Issue type id"
+//	@Success	204
+//	@Failure	409	{object}	server.Problem	"issue_type_in_use"
+//	@Router		/api/v1/w/{ws}/config/issue-types/{id} [delete]
+func (h *HTTP) deleteIssueType(c *gin.Context) {
+	if id, ok := idParam(c, "issue_type_not_found"); ok {
+		noContent(c, h.svc.DeleteIssueType(c, targetOf(c), id))
+	}
+}
+
+// reorderIssueTypes sets the order of issue types.
+//
+//	@Summary	Reorder issue types
+//	@Tags		configuration
+//	@Accept		json
+//	@Param		ws		path	string			true	"Workspace slug"
+//	@Param		body	body	OrderRequest	true	"Issue type ids in order"
+//	@Success	204
+//	@Router		/api/v1/w/{ws}/config/issue-types/order [put]
+func (h *HTTP) reorderIssueTypes(c *gin.Context) {
+	var req OrderRequest
+	if bind(c, &req) {
+		noContent(c, h.svc.ReorderIssueTypes(c, targetOf(c), req.IDs))
+	}
+}
+
+// copyIssueType copies an inherited issue type into the project.
+//
+//	@Summary		Copy an inherited issue type into a project
+//	@Description	The copy is editable; the original is switched off in the project.
+//	@Tags			configuration
+//	@Produce		json
+//	@Param			ws	path		string	true	"Workspace slug"
+//	@Param			key	path		string	true	"Project key"
+//	@Param			id	path		string	true	"Issue type id"
+//	@Success		201	{object}	IssueType
+//	@Router			/api/v1/w/{ws}/projects/{key}/config/issue-types/{id}/copy [post]
+func (h *HTTP) copyIssueType(c *gin.Context) {
+	if id, ok := idParam(c, "issue_type_not_found"); ok {
+		v, err := h.svc.CopyIssueType(c, targetOf(c), id)
+		reply(c, http.StatusCreated, v, err)
+	}
+}
+
+// setDisabled switches an inherited definition off or on in a project:
+// POST /w/{ws}/projects/{key}/config/{categories|workflows|issue-types}/{id}/disable|enable.
+func (h *HTTP) setDisabled(defType string, off bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if id, ok := idParam(c, defType+"_not_found"); ok {
+			noContent(c, h.svc.SetDisabled(c, targetOf(c), defType, id, off))
+		}
+	}
+}
+
+// --- Requests and helpers -------------------------------------------------------
+
+// CategoryRequest creates or changes a status category.
+type CategoryRequest struct {
+	Name    *string `json:"name,omitempty" example:"In review"`
+	Colour  *string `json:"colour,omitempty"`
+	Outcome *string `json:"outcome,omitempty" enums:"unstarted,started,completed,abandoned"`
+}
+
+// OrderRequest lists ids in their new order.
+type OrderRequest struct {
+	IDs []uuid.UUID `json:"ids"`
+}
+
+// CreateWorkflowRequest copies a workflow under a new name.
+type CreateWorkflowRequest struct {
+	Name     string    `json:"name" example:"Engineering"`
+	CopyFrom uuid.UUID `json:"copy_from"`
+}
+
+// RenameRequest renames a definition.
+type RenameRequest struct {
+	Name string `json:"name"`
+}
+
+// DraftRequest saves the shared draft; version is the draft_version it
+// was based on.
+type DraftRequest struct {
+	Version int32 `json:"version"`
+	Draft   Draft `json:"draft"`
+}
+
+// PublishRequest applies the draft; status_mapping sends the issues of each
+// removed status to a status of the draft.
+type PublishRequest struct {
+	Version       int32                   `json:"version"`
+	StatusMapping map[uuid.UUID]uuid.UUID `json:"status_mapping,omitempty"`
+}
+
+// IssueTypeRequest creates or changes an issue type; status_mapping is
+// needed when moving a type with issues to another workflow.
+type IssueTypeRequest struct {
+	Name          *string                 `json:"name,omitempty" example:"Bug"`
+	Icon          *string                 `json:"icon,omitempty"`
+	Colour        *string                 `json:"colour,omitempty"`
+	WorkflowID    *uuid.UUID              `json:"workflow_id,omitempty"`
+	ParentRule    *string                 `json:"parent_rule,omitempty" enums:"any,none,required"`
+	ParentTypeIDs *[]uuid.UUID            `json:"parent_type_ids,omitempty"`
+	StatusMapping map[uuid.UUID]uuid.UUID `json:"status_mapping,omitempty"`
+}
+
+func (r IssueTypeRequest) input() IssueTypeInput {
+	return IssueTypeInput{Name: r.Name, Icon: r.Icon, Colour: r.Colour, WorkflowID: r.WorkflowID, ParentRule: r.ParentRule, ParentTypeIDs: r.ParentTypeIDs}
+}
+
+// ListResponse is the body of the list endpoints.
+type ListResponse[T any] struct {
+	Items []T `json:"items"`
+	// CanManage tells whether the caller may edit this scope's definitions.
+	CanManage bool `json:"can_manage"`
+}
+
+func list[T any](c *gin.Context, items []T, err error, canManage bool) {
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	if items == nil {
+		items = []T{}
+	}
+	c.JSON(http.StatusOK, ListResponse[T]{Items: items, CanManage: canManage})
+}
+
+func reply(c *gin.Context, status int, v any, err error) {
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(status, v)
+}
+
+func noContent(c *gin.Context, err error) {
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func bind(c *gin.Context, v any) bool {
+	if err := server.BindJSON(c, v); err != nil {
+		server.WriteError(c, err)
+		return false
+	}
+	return true
+}
+
+func idParam(c *gin.Context, notFound string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		server.WriteError(c, apperr.NotFound(notFound))
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+func ifMatch(c *gin.Context) (int32, bool) {
+	v, err := server.IfMatch(c)
+	if err != nil {
+		server.WriteError(c, err)
+		return 0, false
+	}
+	return v, true
+}
