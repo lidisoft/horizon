@@ -8,8 +8,8 @@ conventions. The environment itself is described in
 
 Go (version from `go.mod`), [Task](https://taskfile.dev), Docker (Compose and
 testcontainers), and a Chromium for headless browser tests. Code generators
-(swag, and sqlc later) are Go tool dependencies run with `go tool`, so there is
-nothing else to install.
+(sqlc and swag) are Go tool dependencies run with `go tool`, so there is
+nothing else to install; sqlc needs cgo, so a C compiler (gcc) must be present.
 
 ## Development stack
 
@@ -41,11 +41,18 @@ Host-side tasks (`task migrate:*`) reach PostgreSQL on 5433; override with
 
 Rules:
 
-- One container set per test package (started in `TestMain`), not per test.
+- One container set per test package (started in `TestMain`), not per test:
+  `os.Exit(testenv.Main(m, testenv.Postgres|testenv.NATS))`
+  (`internal/testenv`).
 - Each test gets its **own database**, created from a template database that
   has all migrations applied (`CREATE DATABASE … TEMPLATE …`), so tests run in
   parallel without cleanup.
-- NATS subjects and S3 key prefixes are namespaced per test.
+  `testenv.DB(t)` returns a pool on a fresh copy, dropped after the test.
+- NATS subjects and S3 key prefixes are namespaced per test:
+  `testenv.JetStream(t)` gives each test its own stream name and subject
+  prefix.
+- Integration tests skip themselves under `-short`, which is how
+  `task test:unit` avoids Docker.
 - **Command tests assert both the new state and the emitted events**
   ([ADR-0004](adr/0004-state-tables-with-domain-event-log.md)).
 - Go and JS implementations of shared algorithms (document steps, rank keys,

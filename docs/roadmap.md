@@ -16,12 +16,12 @@ usable exists early.
 - [x] `cmd/horizon` with `serve`, `worker`, `migrate`, `admin`
 - [x] Docker Compose: PostgreSQL, NATS (JetStream), RustFS, Mailpit, Air
 - [x] Config, logging, health and readiness, metrics
-- [ ] sqlc + goose wiring; `Taskfile.yml` covering the same commands as `tocsin`'s Makefile
-- [ ] Event log: append in transaction, outbox relay, subject scheme
+- [x] sqlc + goose wiring; `Taskfile.yml` covering the same commands as `tocsin`'s Makefile
+- [x] Event log: append in transaction, outbox relay, subject scheme
 - [ ] LDS embedded at `/lds/`; `web/` embedded with hashed import map
 - [ ] SPA core: `api`, `store`, `router`, `i18n`, `shortcuts`; `hzn-app` frame
 - [ ] In-browser test runner and chromedp harness
-- [ ] testcontainers harness with template databases
+- [x] testcontainers harness with template databases
 - [x] GitHub Actions: `check` and `release` workflows
 
 ## Phase 2 — Identity and organisation

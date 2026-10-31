@@ -7,6 +7,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/lidisoft/horizon/internal/config"
+	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/platform/nats"
 	"github.com/lidisoft/horizon/internal/server"
@@ -43,6 +44,9 @@ func runWorker(ctx context.Context, rt *runtime) error {
 	}
 	return worker.Run(ctx, worker.Deps{
 		Log:       logging.WithSystem(rt.log, "worker"),
+		Pool:      rt.pool,
 		JetStream: js,
+		Stream:    eventlog.DefaultStream(rt.cfg.EventsRetention),
+		Metrics:   rt.metrics,
 	})
 }

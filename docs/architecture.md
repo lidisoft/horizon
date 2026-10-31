@@ -38,7 +38,7 @@ One binary, `horizon`, with subcommands (urfave/cli, as in `tocsin`):
 | Language | Go 1.26 (the `go` line in `go.mod`) |
 | HTTP | Gin |
 | Database driver | pgx v5 |
-| Queries | sqlc (SQL in `internal/<module>/queries/*.sql`) |
+| Queries | sqlc (SQL in `internal/<module>/queries/*.sql`, generated code in `internal/<module>/db`; one entry per module in `sqlc.yaml`) |
 | Migrations | goose, embedded in the binary |
 | Messaging | NATS + JetStream |
 | Logging | zerolog |
@@ -93,22 +93,46 @@ Every command follows the same steps, inside **one PostgreSQL transaction**:
 5. Append one or more domain events to `events` (which is also the outbox).
 6. Commit.
 
-After commit, `pg_notify('events', id)` nudges the outbox relay (it also polls,
-so a missed notification is only latency).
+When a transaction that appended events commits, a statement-level trigger on
+`events` notifies channel `events`, which wakes the outbox relay. The relay also
+polls every second, so a missed notification only costs latency.
+
+Commands write events through `eventlog.Append(ctx, tx, …)` inside the same
+`postgres.InTx` call as their state change.
 
 ## Domain events and the outbox
 
-- `events` holds every event: `id` (UUIDv7, time-ordered), `workspace_id`,
+- `events` holds every event: `id` (UUIDv7, time-ordered), `workspace_id`
+  (null for instance-level events such as users and workspaces themselves),
   `aggregate_type`, `aggregate_id`, `aggregate_version`, `type`, `actor_id`,
   `occurred_at`, `payload` (JSONB), `published_at`.
-- The **outbox relay** (in `worker`) reads unpublished rows in id order using
-  `FOR UPDATE SKIP LOCKED`, publishes to JetStream, then sets `published_at`.
-  Publishing is at-least-once; consumers dedupe by event id (JetStream's
-  `Nats-Msg-Id` header).
+- **Names**: `aggregate_type` is lower snake case (`issue`,
+  `status_category`); `type` is the event storm's name in PascalCase
+  (`IssueStatusUpdated`). Both are valid subject tokens. The public name used
+  by the API, WebSockets and webhooks derives from them: `issue.status_updated`
+  ([api.md](api.md#domain-event-format)). Avoid acronyms in event names
+  (`IssueUrlChanged`, not `IssueURLChanged`).
+- **Payloads** carry ids and changed values only, never another aggregate's
+  content, so they survive its deletion ([ADR-0012](adr/0012-hard-delete-with-event-scrubbing.md)).
+- The **outbox relay** (in `worker`) claims unpublished rows in id order using
+  `FOR UPDATE SKIP LOCKED`, publishes them to JetStream, and sets
+  `published_at` in the same transaction. Several relays can run at once.
+  Publishing is at-least-once: a failed batch is retried whole, JetStream drops
+  copies within its 2-minute duplicate window (`Nats-Msg-Id` = event id), and
+  consumers dedupe by event id after that. Order is by id across relays only
+  roughly; consumers order one aggregate's events by `aggregate_version`.
+- **Stream**: `HORIZON_EVENTS`, subjects `horizon.*.*.*.*`, file storage,
+  `MaxAge` = `HORIZON_EVENTS_RETENTION`, created or updated by the worker at
+  startup.
 - **Subject scheme**:
-  `horizon.<workspace_id>.<aggregate_type>.<aggregate_id>.<event_type>`.
+  `horizon.<workspace_id>.<aggregate_type>.<aggregate_id>.<event_type>`, with
+  `instance` in place of the workspace id for instance-level events.
   Including the aggregate id makes hard-delete scrubbing a single
   subject-filtered purge.
+- **Message body**: the stored row as JSON (`id`, `workspace_id`,
+  `aggregate_type`, `aggregate_id`, `aggregate_version`, `type`, `actor_id`,
+  `occurred_at`, `payload`), ids only. Consumers enrich it (workspace slug,
+  issue key, actor name) where it leaves the system.
 - The `events` table is the **activity history** shown in the UI. JetStream
   retention is bounded (`HORIZON_EVENTS_RETENTION`, default 7 days) because PostgreSQL is
   the long-term record.

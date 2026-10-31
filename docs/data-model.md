@@ -91,7 +91,7 @@ away. See [realtime.md](realtime.md).
 
 | Table | Key columns |
 |-------|-------------|
-| `events` | id (UUIDv7), workspace_id, aggregate_type, aggregate_id, aggregate_version, type, actor_id, occurred_at, payload JSONB, published_at |
+| `events` | id (UUIDv7), workspace_id (null = instance-level), aggregate_type, aggregate_id, aggregate_version, type, actor_id (null = system), occurred_at, payload JSONB, published_at |
 | `subscriptions` | user_id, issue_id, reason (creator, assignee, mention, manual) |
 | `inbox_items` | user_id, workspace_id, event_id, issue_id, read_at, snoozed_until, archived_at |
 | `webhooks` | workspace_id, project_id (nullable), url, secret, event_types text[], active |

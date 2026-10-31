@@ -88,6 +88,7 @@ tasks:
       - go tool swag init -q -g internal/server/server.go -o tmp/gen-check/docs --outputTypes go,json --parseInternal
       - |
         diff -r internal/docs tmp/gen-check/docs || { echo "generated code is stale; run task gen" >&2; exit 1; }
+      - go tool sqlc diff
 
   check:
     desc: Everything CI runs - run before finishing
@@ -102,7 +103,13 @@ tasks:
   gen:
     desc: Run all code generation
     cmds:
+      - task: gen:sqlc
       - task: gen:swagger
+
+  gen:sqlc:
+    desc: Generate query code from internal/<module>/queries into internal/<module>/db
+    cmds:
+      - go tool sqlc generate
 
   gen:swagger:
     desc: Generate the OpenAPI spec into internal/docs

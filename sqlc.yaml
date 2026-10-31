@@ -1,0 +1,34 @@
+# sqlc configuration: one entry per module (docs/architecture.md#module-layout).
+# Queries live in internal/<module>/queries/*.sql; generated code goes to
+# internal/<module>/db. The schema is the goose migrations.
+version: "2"
+
+overrides:
+  go:
+    overrides:
+      - db_type: uuid
+        go_type: github.com/google/uuid.UUID
+      - db_type: uuid
+        nullable: true
+        go_type: github.com/google/uuid.NullUUID
+      - db_type: timestamptz
+        go_type: time.Time
+      - db_type: timestamptz
+        nullable: true
+        go_type:
+          type: time.Time
+          pointer: true
+      - db_type: jsonb
+        go_type: encoding/json.RawMessage
+
+sql:
+  - engine: postgresql
+    schema: internal/migrations
+    queries: internal/eventlog/queries
+    gen:
+      go:
+        package: db
+        out: internal/eventlog/db
+        sql_package: pgx/v5
+        emit_methods_with_db_argument: false
+        emit_pointers_for_null_types: true
