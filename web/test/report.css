@@ -1,0 +1,7 @@
+/* Report styles for the test page (a file, so the strict CSP still applies). */
+body { margin: 0; padding: var(--lds-space-6); }
+#report h1 { font-size: var(--lds-font-size-xl); }
+#report ol { list-style: none; padding: 0; font-family: var(--lds-font-family-mono); font-size: var(--lds-font-size-sm); }
+#report .passed { color: var(--lds-color-success-fg); }
+#report .failed { color: var(--lds-color-danger-fg); }
+#report pre { white-space: pre-wrap; color: var(--lds-color-fg-default); }

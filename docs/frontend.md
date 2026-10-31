@@ -174,8 +174,15 @@ time zone. Only English ships in v1.
 
 No npm means no Jest or Playwright from Node:
 
-- Pure modules (`store`, `rank`, `editor` steps and mapping, filter evaluation)
-  are tested with a tiny in-browser runner (`web/test/index.html`), run
-  headless in CI through Go's `chromedp`.
-- The editor's step algorithms share their test vectors with Go.
-- End-to-end flows use `chromedp` from Go tests against a real server.
+- Pure modules are tested with a small in-browser runner: `web/test/runner.js`
+  (`describe`, `test`, `assert`) and one `*.test.js` per module under
+  `web/test/`, importing `horizon/…` modules and `horizon-test/runner.js`.
+  `web/test/` is read from disk by the tests and never embedded in the binary.
+- `web/browser_test.go` serves the runner page with the real app assets under
+  the production CSP, runs every test file in headless Chrome through
+  `chromedp`, and reports each JS test as a Go subtest. `task test:web` runs
+  them; `task test:web:serve` serves the page on http://localhost:8089/test/
+  to debug in a local browser (`?filter=store` runs a subset).
+- The editor's step algorithms will share their test vectors with Go.
+- End-to-end flows use `chromedp` from Go tests against the real server
+  engine and page (`TestAppShell`), with real keyboard input.

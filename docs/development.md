@@ -6,8 +6,9 @@ conventions. The environment itself is described in
 
 ## Prerequisites
 
-Go (version from `go.mod`), [Task](https://taskfile.dev), Docker (Compose and
-testcontainers), and a Chromium for headless browser tests. Code generators
+Go (version from `go.mod`), [Task](https://taskfile.dev) and Docker (Compose
+and testcontainers). Browser tests run headless Chrome in a container; set
+`HORIZON_TEST_CHROME` to a local Chrome or Chromium binary to use it instead. Code generators
 (sqlc and swag) are Go tool dependencies run with `go tool`, so there is
 nothing else to install; sqlc needs cgo, so a C compiler (gcc) must be present.
 
@@ -36,8 +37,8 @@ Host-side tasks (`task migrate:*`) reach PostgreSQL on 5433; override with
 |-------|------|-----|
 | Unit | Pure domain logic: invariants, workflow rules, configuration resolution, filter compiler, rank keys, document steps | Plain `go test`, no I/O |
 | Integration | Command handlers, queries, outbox relay, workers, permissions | Real PostgreSQL, NATS (JetStream) and RustFS started by **testcontainers-go** ([ADR-0022](adr/0022-integration-tests-real-dependencies.md)) |
-| Frontend units | `store`, `rank`, editor steps and mapping, filter evaluation | In-browser runner `web/test/index.html`, run headless by `chromedp` ([frontend.md](frontend.md#testing)) |
-| End to end | Key user flows through the SPA | `chromedp` against a real `horizon serve` |
+| Frontend units | `store`, `router`, `api`, `i18n`, `shortcuts`, later `rank`, editor steps and filter evaluation | In-browser runner (`web/test/`), run headless by `chromedp` in `web/browser_test.go` ([frontend.md](frontend.md#testing)) |
+| End to end | Key user flows through the SPA | `chromedp` against the real server engine and page (`TestAppShell`) |
 
 Rules:
 
@@ -53,6 +54,13 @@ Rules:
   prefix.
 - Integration tests skip themselves under `-short`, which is how
   `task test:unit` avoids Docker.
+- Browser tests use `testenv.Chrome`: `testenv.Browser(t)` opens a tab and
+  `testenv.Serve(t, handler)` returns a URL that tab can reach. On Linux the
+  Chrome container shares the host network, with DevTools and test servers on
+  127.0.0.1 only; on Docker Desktop it reaches them through
+  `host.docker.internal`.
+- Browser tests fail on any uncaught exception, console error or CSP
+  violation, except entries in `knownIssues` (each names its upstream fix).
 - **Command tests assert both the new state and the emitted events**
   ([ADR-0004](adr/0004-state-tables-with-domain-event-log.md)).
 - Go and JS implementations of shared algorithms (document steps, rank keys,

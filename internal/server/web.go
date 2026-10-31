@@ -41,6 +41,7 @@ type asset struct {
 // /static/<hash>/<path>, and LDS under /lds/<version>/.
 type Web struct {
 	assets   map[string]asset // by "<hash>/<path>"
+	imports  map[string]string
 	index    []byte
 	csp      string
 	ldsBase  string
@@ -59,8 +60,8 @@ type indexData struct {
 
 // NewWeb indexes webFS (index.html and app/) and renders the shell page.
 func NewWeb(webFS fs.FS) (*Web, error) {
-	w := &Web{assets: map[string]asset{}}
 	imports := map[string]string{}
+	w := &Web{assets: map[string]asset{}, imports: imports}
 
 	err := fs.WalkDir(webFS, "app", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -109,19 +110,7 @@ func NewWeb(webFS fs.FS) (*Web, error) {
 	w.index = buf.Bytes()
 
 	// The import map is the page's only inline script: allow exactly it.
-	mapHash := sha256.Sum256(importMap)
-	w.csp = strings.Join([]string{
-		"default-src 'self'",
-		"script-src 'self' 'sha256-" + base64.StdEncoding.EncodeToString(mapHash[:]) + "'",
-		"style-src 'self'",
-		"img-src 'self' data:",
-		"font-src 'self'",
-		"connect-src 'self'",
-		"object-src 'none'",
-		"base-uri 'none'",
-		"form-action 'self'",
-		"frame-ancestors 'none'",
-	}, "; ")
+	w.csp = CSP(importMap)
 	return w, nil
 }
 
@@ -152,6 +141,37 @@ func contentType(p string) string {
 		return ct
 	}
 	return "application/octet-stream"
+}
+
+// Imports returns the import map: horizon/… specifier → hashed URL. Test pages
+// extend it with their own modules.
+func (w *Web) Imports() map[string]string {
+	out := make(map[string]string, len(w.imports))
+	for k, v := range w.imports {
+		out[k] = v
+	}
+	return out
+}
+
+// LDSBase returns the URL prefix LDS is served under, e.g. /lds/v0.0.5/.
+func (w *Web) LDSBase() string { return w.ldsBase }
+
+// CSP returns the page's Content-Security-Policy for an import map whose
+// JSON is importMap. Test pages use it to run under the same policy.
+func CSP(importMap []byte) string {
+	sum := sha256.Sum256(importMap)
+	return strings.Join([]string{
+		"default-src 'self'",
+		"script-src 'self' 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'",
+		"style-src 'self'",
+		"img-src 'self' data:",
+		"font-src 'self'",
+		"connect-src 'self'",
+		"object-src 'none'",
+		"base-uri 'none'",
+		"form-action 'self'",
+		"frame-ancestors 'none'",
+	}, "; ")
 }
 
 func (w *Web) register(r *gin.Engine) {

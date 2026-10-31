@@ -4,9 +4,13 @@
 
 const EVENT = "hzn-context";
 
-/** Makes host answer context requests from its descendants. */
+/**
+ * Makes host answer context requests from its descendants. A request from
+ * host itself goes on to the provider above it.
+ */
 export function provideContext(host, context) {
   host.addEventListener(EVENT, (event) => {
+    if (event.composedPath()[0] === host) return;
     event.stopPropagation();
     event.detail.context = context;
   });

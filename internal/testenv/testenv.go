@@ -1,6 +1,6 @@
 // Package testenv starts the real dependencies integration tests run against
-// (ADR-0022): PostgreSQL and NATS with JetStream, in containers shared by
-// every test of a package.
+// (ADR-0022): PostgreSQL, NATS with JetStream and headless Chrome, in
+// containers shared by every test of a package.
 //
 // Each test gets its own database, cloned from a template that has every
 // migration applied, and its own JetStream stream and subject prefix, so
@@ -48,6 +48,9 @@ type Service uint8
 const (
 	Postgres Service = 1 << iota
 	NATS
+	// Chrome is headless Chrome for browser tests (Browser, Serve). Set
+	// HORIZON_TEST_CHROME to a local binary to skip the container.
+	Chrome
 )
 
 // Images match docker-compose.yml.
@@ -64,6 +67,8 @@ type env struct {
 	createMu sync.Mutex // CREATE DATABASE … TEMPLATE needs the template idle
 
 	natsURL string
+
+	browser *browserEnv
 }
 
 var current *env
@@ -82,6 +87,9 @@ func Main(m *testing.M, services Service) int {
 	defer func() {
 		if e.admin != nil {
 			e.admin.Close()
+		}
+		if e.browser != nil {
+			e.browser.cancel()
 		}
 		for _, c := range containers {
 			_ = testcontainers.TerminateContainer(c)
@@ -119,6 +127,15 @@ func Main(m *testing.M, services Service) int {
 		}
 		if e.natsURL, err = c.ConnectionString(ctx); err != nil {
 			fmt.Fprintln(os.Stderr, "testenv: nats:", err)
+			return 1
+		}
+	}
+
+	if services&Chrome != 0 {
+		cs, err := e.startChrome(ctx)
+		containers = append(containers, cs...)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "testenv: chrome:", err)
 			return 1
 		}
 	}

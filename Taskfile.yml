@@ -64,6 +64,16 @@ tasks:
     cmds:
       - go test -short ./...
 
+  test:web:
+    desc: Run the browser tests only (web/test units and the app smoke test, in headless Chrome)
+    cmds:
+      - go test -count=1 ./web/
+
+  test:web:serve:
+    desc: Serve the web unit tests for a local browser on http://localhost:8089/test/
+    cmds:
+      - go test ./web -run TestWebUnits -args -serve :8089
+
   fmt:
     desc: Format Go code
     cmds:

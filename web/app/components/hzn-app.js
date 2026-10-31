@@ -161,7 +161,9 @@ export class HznApp extends HTMLElement {
     this.help.querySelector(".help").innerHTML = shortcuts
       .list()
       .map((s) => {
-        const keys = displayKeys(s.keys).map((k) => String(html`<lds-kbd>${k}</lds-kbd>`)).join(then);
+        // Spaces between keys keep the text readable ("G then H") for
+        // assistive technology; flex layout ignores them.
+        const keys = displayKeys(s.keys).map((k) => String(html`<lds-kbd>${k}</lds-kbd>`)).join(` ${then} `);
         return String(html`<dt>${i18n.t(s.description)}</dt><dd>${raw(keys)}</dd>`);
       })
       .join("");

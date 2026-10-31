@@ -20,7 +20,7 @@ usable exists early.
 - [x] Event log: append in transaction, outbox relay, subject scheme
 - [x] LDS embedded at `/lds/`; `web/` embedded with hashed import map
 - [x] SPA core: `api`, `store`, `router`, `i18n`, `shortcuts`; `hzn-app` frame
-- [ ] In-browser test runner and chromedp harness
+- [x] In-browser test runner and chromedp harness
 - [x] testcontainers harness with template databases
 - [x] GitHub Actions: `check` and `release` workflows
 
