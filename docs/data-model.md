@@ -53,10 +53,10 @@ PostgreSQL schema outline. Authoritative definitions live in
 
 | Table | Key columns |
 |-------|-------------|
-| `issues` | workspace_id, project_id, number, type_id, title, status_id, priority, rank (text, collate "C"), estimate, assignee_id, parent_id, iteration_id, release_id, start_date, due_date, fields JSONB, description_doc_id, search tsvector, archived_at, version |
+| `issues` | workspace_id, project_id, number, type_id, title, description, status_id, priority, rank (text, collate "C"), estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields JSONB, started_at, resolved_at, description_doc_id, search tsvector, archived_at, version |
 | `issue_key_aliases` | workspace_id, issue_id, old_key — keys left behind by moves (and by project key renames, through `project_key_aliases`) |
 | `issue_labels` | issue_id, label_id |
-| `issue_links` | workspace_id, source_id, target_id, type, lag_days |
+| `issue_links` | workspace_id, source_id, target_id, type (`relates_to`, `blocks`, `duplicates`, `precedes`), lag_days (`precedes` only) — inverse types (`blocked_by` …) are the same row read from its target |
 | `comments` | issue_id, author_id, document_id, edited_at |
 | `attachments` | workspace_id, issue_id, uploader_id, filename, content_type, size, object_key |
 | `iterations` | workspace_id, project_id, name, goal, state, start_date, end_date, completed_at, archived_at, version |
@@ -78,8 +78,15 @@ RETURNING issue_seq` in the creating transaction, so numbers are gap-free per
 project in practice and never reused.
 
 **Rank** uses fractional indexing (base-62 strings): inserting between two
-issues generates a key between theirs, so only the moved row changes. A
-rebalance job normalises keys that grow past a length threshold.
+issues generates a key between theirs, so only the moved row changes.
+Appending or prepending steps the first or last digit, so keys stay short
+when issues pile up at either end; a rebalance job normalises keys that grow
+past a length threshold in the middle.
+
+`description` holds plain text until block documents arrive (phase 5), when
+`description_doc_id` replaces it. `started_at` is set the first time the issue
+enters a started category; `resolved_at` while it sits in a completed or
+abandoned one.
 
 ## Documents and collaboration
 

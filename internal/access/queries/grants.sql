@@ -62,3 +62,15 @@ SELECT EXISTS (
 SELECT role_id, count(user_id) AS people, count(team_id) AS teams
 FROM role_grants WHERE workspace_id = $1
 GROUP BY role_id;
+
+-- name: RolesOf :many
+-- The roles a user holds in a workspace and optionally on one project,
+-- directly or through a team. Suspended members hold none.
+SELECT DISTINCT g.role_id
+FROM role_grants g
+JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.user_id = sqlc.arg(user_id)::uuid AND m.status = 'active'
+WHERE g.workspace_id = sqlc.arg(workspace_id)
+  AND (g.project_id IS NULL OR g.project_id = sqlc.narg(project_id))
+  AND (g.user_id = sqlc.arg(user_id)::uuid
+       OR g.team_id IN (SELECT tm.team_id FROM team_members tm
+                        WHERE tm.workspace_id = sqlc.arg(workspace_id) AND tm.user_id = sqlc.arg(user_id)::uuid));

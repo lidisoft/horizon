@@ -40,6 +40,8 @@ type Issues interface {
 	// Relabel replaces label from with into on every issue carrying it,
 	// each recording the change in its history.
 	Relabel(ctx context.Context, tx pgx.Tx, actor uuid.NullUUID, from, into uuid.UUID) error
+	// ScrubField removes a deleted custom field's values from issues.
+	ScrubField(ctx context.Context, tx pgx.Tx, workspaceID, fieldID uuid.UUID) error
 }
 
 // NoIssues reports no issues anywhere.
@@ -77,6 +79,9 @@ func (NoIssues) CountByLabel(context.Context, db.DBTX, uuid.UUID) (map[uuid.UUID
 func (NoIssues) Relabel(context.Context, pgx.Tx, uuid.NullUUID, uuid.UUID, uuid.UUID) error {
 	return nil
 }
+
+// ScrubField implements Issues.
+func (NoIssues) ScrubField(context.Context, pgx.Tx, uuid.UUID, uuid.UUID) error { return nil }
 
 // Service manages the definitions.
 type Service struct {

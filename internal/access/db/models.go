@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type ApiToken struct {
@@ -79,6 +80,51 @@ type Invitation struct {
 	RevokedAt   *time.Time
 	Version     int32
 	RoleID      uuid.NullUUID
+}
+
+type Issue struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	ProjectID   uuid.UUID
+	Number      int64
+	TypeID      uuid.UUID
+	Title       string
+	Description string
+	StatusID    uuid.UUID
+	Priority    string
+	Rank        string
+	Estimate    *string
+	AssigneeID  uuid.NullUUID
+	ReporterID  uuid.NullUUID
+	ParentID    uuid.NullUUID
+	IterationID uuid.NullUUID
+	ReleaseID   uuid.NullUUID
+	StartDate   pgtype.Date
+	DueDate     pgtype.Date
+	Fields      json.RawMessage
+	StartedAt   *time.Time
+	ResolvedAt  *time.Time
+	ArchivedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
+type IssueLabel struct {
+	WorkspaceID uuid.UUID
+	IssueID     uuid.UUID
+	LabelID     uuid.UUID
+}
+
+type IssueLink struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	SourceID    uuid.UUID
+	TargetID    uuid.UUID
+	Type        string
+	LagDays     *int32
+	CreatedBy   uuid.NullUUID
+	CreatedAt   time.Time
 }
 
 type IssueType struct {

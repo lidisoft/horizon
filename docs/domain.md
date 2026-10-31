@@ -105,7 +105,7 @@ sequence counter.
 | `key` | `<PROJECT>-<n>`, `n` from the project's sequence, never reused |
 | `type` | Issue type, resolved from workspace/project configuration |
 | `title` | Required |
-| `description` | Block document (see [realtime.md](realtime.md)) |
+| `description` | Block document (see [realtime.md](realtime.md)); plain text until phase 5 |
 | `status` | Must be a status of the type's workflow |
 | `priority` | `none`, `urgent`, `high`, `medium`, `low` |
 | `rank` | Fractional index string for manual ordering |
@@ -126,6 +126,9 @@ sequence counter.
 - Changing the type requires mapping the current status into the new type's
   workflow.
 - Archived issues accept only *Unarchive* and *Delete*.
+- The type's parent rule holds: Epics take no parent, Sub-tasks need one of
+  the allowed parent types; required custom fields of the type are set at
+  creation.
 
 **Moving to another project**
 - Type, status, labels and custom fields are matched by name in the target

@@ -249,6 +249,9 @@ func (s *Service) DeleteField(ctx context.Context, t Target, id uuid.UUID) error
 		if err := s.dropFieldFromRules(ctx, tx, t.WorkspaceID, id.String()); err != nil {
 			return err
 		}
+		if err := s.issues.ScrubField(ctx, tx, t.WorkspaceID, id); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `DELETE FROM config_disables WHERE definition_type = $1 AND definition_id = $2`, TypeCustomField, id); err != nil {
 			return err
 		}

@@ -36,9 +36,9 @@ usable exists early.
 
 - [x] Configuration resolver; issue types, workflows (state machine, rules),
       custom fields, labels, estimation scales — with defaults
-- [ ] Issues: create, field edits, transition, assign, estimate, prioritise,
-      rank, parent/child, links, move between projects, archive, hard delete
-      with scrubbing
+- [x] Issues: create, field edits, transition, assign, estimate, prioritise,
+      rank, parent/child, links, archive
+- [ ] Issues: move between projects, hard delete with scrubbing
 - [ ] Comments (plain text first), attachments via S3
 - [ ] Activity feed from `events`
 - [ ] WebSocket pushes for domain events (no collab yet)

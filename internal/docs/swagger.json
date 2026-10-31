@@ -2092,6 +2092,700 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/issues": {
+            "post": {
+                "description": "Needs issue.create on the project; in the initial status of the type's workflow, last in rank. Required custom fields of the type must be set.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Create an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Project key, type and title at least",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.CreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}": {
+            "get": {
+                "description": "A former project key resolves too; the response carries the current key.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Get an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    },
+                    "404": {
+                        "description": "issue_not_found",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Needs issue.edit. \"\" clears dates and the parent; null removes a custom field value. A type whose workflow differs needs status_id in it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Update an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.UpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    },
+                    "409": {
+                        "description": "version_conflict, issue_archived",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/archive": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Archive an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue version",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/assign": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Assign an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Assignee, or null",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.AssignRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/children": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "List an issue's children",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.IssueList"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/estimate": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Estimate an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "A value of the project's scale",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.EstimateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/links": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "List an issue's links",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.LinkList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Needs issue.link. lag_days only for precedes and follows.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Link two issues",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Type and target",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.LinkRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Link"
+                        }
+                    },
+                    "409": {
+                        "description": "link_exists",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/links/{id}": {
+            "delete": {
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Unlink two issues",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Link id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/prioritize": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Prioritize an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Priority",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.PrioritizeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/rank": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Rank an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "The issue to come after",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.RankRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/transition": {
+            "post": {
+                "description": "Through an allowed transition of the workflow: 409 transition_not_allowed, children_open; 403 transition_forbidden (roles); 422 transition_requires_fields lists missing fields.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Transition an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Target status",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.TransitionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/transitions": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "List available transitions",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.TransitionList"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/unarchive": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Unarchive an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue version",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/members": {
             "get": {
                 "produces": [
@@ -2496,6 +3190,59 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/configdef.Label"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/issues": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "List a project's issues",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "next_cursor of the previous page",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, at most 500",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include archived issues",
+                        "name": "archived",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Page"
                         }
                     }
                 }
@@ -4267,6 +5014,358 @@
                 },
                 "version": {
                     "type": "integer"
+                }
+            }
+        },
+        "issue.AssignRequest": {
+            "type": "object",
+            "properties": {
+                "assignee_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.AvailableTransition": {
+            "type": "object",
+            "properties": {
+                "blocked": {
+                    "description": "Blocked names why it can't be taken now (forbidden, children_open,\nrequired:\u003cfield\u003e); empty when it can.",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "to_status_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.CreateRequest": {
+            "type": "object",
+            "properties": {
+                "assignee_id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "estimate": {
+                    "type": "string"
+                },
+                "fields": {
+                    "type": "object"
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "parent": {
+                    "type": "string",
+                    "example": "HZN-12"
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": [
+                        "none",
+                        "urgent",
+                        "high",
+                        "medium",
+                        "low"
+                    ]
+                },
+                "project": {
+                    "type": "string",
+                    "example": "HZN"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2026-11-02"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.EstimateRequest": {
+            "type": "object",
+            "properties": {
+                "estimate": {
+                    "type": "string",
+                    "example": "5"
+                }
+            }
+        },
+        "issue.Issue": {
+            "type": "object",
+            "properties": {
+                "archived_at": {
+                    "type": "string"
+                },
+                "assignee_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "type": "string",
+                    "example": "2026-11-13"
+                },
+                "estimate": {
+                    "type": "string"
+                },
+                "fields": {
+                    "type": "object"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "HZN-42"
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "number": {
+                    "type": "integer"
+                },
+                "parent_id": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": [
+                        "none",
+                        "urgent",
+                        "high",
+                        "medium",
+                        "low"
+                    ]
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "rank": {
+                    "type": "string"
+                },
+                "reporter_id": {
+                    "type": "string"
+                },
+                "resolved_at": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2026-11-02"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "issue.IssueList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.Issue"
+                    }
+                }
+            }
+        },
+        "issue.Link": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "issue_id": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "HZN-7"
+                },
+                "lag_days": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "Type is seen from the issue asked about: blocked_by when the other\nissue blocks it.",
+                    "type": "string",
+                    "enum": [
+                        "relates_to",
+                        "blocks",
+                        "blocked_by",
+                        "duplicates",
+                        "duplicated_by",
+                        "precedes",
+                        "follows"
+                    ]
+                }
+            }
+        },
+        "issue.LinkList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.Link"
+                    }
+                }
+            }
+        },
+        "issue.LinkRequest": {
+            "type": "object",
+            "properties": {
+                "lag_days": {
+                    "type": "integer"
+                },
+                "target": {
+                    "type": "string",
+                    "example": "HZN-7"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "relates_to",
+                        "blocks",
+                        "blocked_by",
+                        "duplicates",
+                        "duplicated_by",
+                        "precedes",
+                        "follows"
+                    ]
+                }
+            }
+        },
+        "issue.Page": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.Issue"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.PrioritizeRequest": {
+            "type": "object",
+            "properties": {
+                "priority": {
+                    "type": "string",
+                    "enum": [
+                        "none",
+                        "urgent",
+                        "high",
+                        "medium",
+                        "low"
+                    ]
+                }
+            }
+        },
+        "issue.RankRequest": {
+            "type": "object",
+            "properties": {
+                "after": {
+                    "type": "string",
+                    "example": "HZN-41"
+                }
+            }
+        },
+        "issue.TransitionList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.AvailableTransition"
+                    }
+                }
+            }
+        },
+        "issue.TransitionRequest": {
+            "type": "object",
+            "properties": {
+                "status_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.UpdateRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "fields": {
+                    "type": "object"
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "parent": {
+                    "type": "string",
+                    "example": "HZN-12"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type_id": {
+                    "type": "string"
                 }
             }
         },

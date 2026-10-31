@@ -220,6 +220,45 @@ func (q *Queries) RoleUsage(ctx context.Context, workspaceID uuid.UUID) ([]RoleU
 	return items, nil
 }
 
+const rolesOf = `-- name: RolesOf :many
+SELECT DISTINCT g.role_id
+FROM role_grants g
+JOIN workspace_members m ON m.workspace_id = g.workspace_id AND m.user_id = $1::uuid AND m.status = 'active'
+WHERE g.workspace_id = $2
+  AND (g.project_id IS NULL OR g.project_id = $3)
+  AND (g.user_id = $1::uuid
+       OR g.team_id IN (SELECT tm.team_id FROM team_members tm
+                        WHERE tm.workspace_id = $2 AND tm.user_id = $1::uuid))
+`
+
+type RolesOfParams struct {
+	UserID      uuid.UUID
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.NullUUID
+}
+
+// The roles a user holds in a workspace and optionally on one project,
+// directly or through a team. Suspended members hold none.
+func (q *Queries) RolesOf(ctx context.Context, arg RolesOfParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, rolesOf, arg.UserID, arg.WorkspaceID, arg.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var role_id uuid.UUID
+		if err := rows.Scan(&role_id); err != nil {
+			return nil, err
+		}
+		items = append(items, role_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const upsertGrant = `-- name: UpsertGrant :one
 INSERT INTO role_grants (workspace_id, id, role_id, user_id, team_id, project_id, granted_by, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

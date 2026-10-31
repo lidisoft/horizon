@@ -15,6 +15,7 @@ import (
 	"github.com/lidisoft/horizon/internal/config"
 	"github.com/lidisoft/horizon/internal/configdef"
 	"github.com/lidisoft/horizon/internal/identity"
+	"github.com/lidisoft/horizon/internal/issue"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/migrations"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
@@ -106,13 +107,15 @@ func (rt *runtime) api() func(api *gin.RouterGroup) {
 		OnCreate: []workspace.CreateHook{config.SeedDefaults},
 	}), auth)
 	roles := access.NewHTTP(acc)
-	projects := project.NewHTTP(project.New(rt.pool, acc, nil))
+	projectSvc := project.New(rt.pool, acc, nil)
+	projects := project.NewHTTP(projectSvc)
 	configHTTP := configdef.NewHTTP(config)
+	issues := issue.NewHTTP(issue.New(rt.pool, acc, config, projectSvc, nil), projectSvc)
 	return func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, func(ws *gin.RouterGroup) {
-			projects.Register(ws, configHTTP.RegisterProject)
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, func(ws *gin.RouterGroup) {
+			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject)
 		})
 	}
 }

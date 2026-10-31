@@ -67,10 +67,13 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
     /config/…                              project overrides (same shape), plus …/{id}/disable|enable and issue-types/{id}/copy
     /iterations  /iterations/{id}/start|complete|archive
     /releases  /milestones
-  /issues                                  filter via view query (POST /issues/query)
-  /issues/{key}
-    /transition  /assign  /estimate  /prioritize  /rank  /move  /archive  /unarchive
-    /links  /children  /comments  /attachments  /activity  /subscription
+  /projects/{key}/issues                   GET in rank order (?cursor, ?limit, ?archived=true)
+  /issues                                  POST {project, type_id, title, …}; filter via view query (POST /issues/query)
+  /issues/{key}                            GET (former keys resolve) | PATCH (If-Match: version)
+    /transitions                           GET those available from the current status ("blocked" when not allowed)
+    /transition  /assign  /estimate  /prioritize  /rank  /archive  /unarchive   POST (If-Match optional)
+    /links  /links/{id}                    GET | POST {type, target, lag_days?} | DELETE; seen from the issue (blocks / blocked_by …)
+    /children  /move  /comments  /attachments  /activity  /subscription
   /views  /milestones  /search
   /reports/{report}                        report data (see reports.md)
   /projects/{key}/overview                 project overview blocks

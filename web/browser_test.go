@@ -31,6 +31,7 @@ import (
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/configdef"
 	"github.com/lidisoft/horizon/internal/identity"
+	"github.com/lidisoft/horizon/internal/issue"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
 	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/server"
@@ -254,15 +255,17 @@ func appServer(t *testing.T) app {
 		OnCreate: []workspace.CreateHook{config.SeedDefaults},
 	}), auth)
 	roles := access.NewHTTP(acc)
-	projects := project.NewHTTP(project.New(pool, acc, nil))
+	projectSvc := project.New(pool, acc, nil)
+	projects := project.NewHTTP(projectSvc)
 	configHTTP := configdef.NewHTTP(config)
+	issues := issue.NewHTTP(issue.New(pool, acc, config, projectSvc, nil), projectSvc)
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
 	ln.Serve(server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, func(ws *gin.RouterGroup) {
-			projects.Register(ws, configHTTP.RegisterProject)
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, func(ws *gin.RouterGroup) {
+			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject)
 		})
 	}}))
 	return a

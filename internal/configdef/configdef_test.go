@@ -42,6 +42,8 @@ func (f *fakeIssues) CountByLabel(context.Context, configdefdb.DBTX, uuid.UUID) 
 	return f.byLabel, nil
 }
 
+func (f *fakeIssues) ScrubField(context.Context, pgx.Tx, uuid.UUID, uuid.UUID) error { return nil }
+
 func (f *fakeIssues) Relabel(_ context.Context, _ pgx.Tx, _ uuid.NullUUID, from, into uuid.UUID) error {
 	f.relabeled[from] = into
 	f.byLabel[into] += f.byLabel[from]

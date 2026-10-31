@@ -74,6 +74,25 @@ func (s *Service) permissions(ctx context.Context, p identity.Principal, scope S
 	return db.New(s.pool).Permissions(ctx, db.PermissionsParams{UserID: p.User.ID, WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID})
 }
 
+// HoldsRole reports whether p holds one of roles in scope (workflow
+// transition conditions). Instance admins satisfy any role condition, as
+// they hold every permission.
+func (s *Service) HoldsRole(ctx context.Context, p identity.Principal, scope Scope, roles []uuid.UUID) (bool, error) {
+	if len(roles) == 0 || p.User.IsInstanceAdmin {
+		return true, nil
+	}
+	held, err := db.New(s.pool).RolesOf(ctx, db.RolesOfParams{UserID: p.User.ID, WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID})
+	if err != nil {
+		return false, err
+	}
+	for _, r := range roles {
+		if slices.Contains(held, r) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // SeesWorkspace reports whether p may see the workspace-wide lists (members,
 // teams): instance admins and holders of a workspace-scope grant. Guests,
 // granted on projects only, can't.
