@@ -1,0 +1,144 @@
+# Horizon tasks (ADR-0019). `task --list` is the reference.
+version: "3"
+
+vars:
+  # Host-side commands talk to the Compose stack through its published ports.
+  DATABASE_URL: '{{.HORIZON_DATABASE_URL | default "postgres://horizon:horizon@localhost:5433/horizon?sslmode=disable"}}'
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
+  LDFLAGS: >-
+    -X github.com/lidisoft/horizon/internal/version.Version={{.VERSION}}
+    -X github.com/lidisoft/horizon/internal/version.Commit={{.COMMIT}}
+
+tasks:
+  # --- Development environment -------------------------------------------
+
+  up:
+    desc: Start the development stack (app under Air, PostgreSQL, NATS, RustFS, Mailpit)
+    cmds:
+      - docker compose up --build
+
+  down:
+    desc: Stop the development stack
+    cmds:
+      - docker compose down
+
+  logs:
+    desc: Follow the development stack's logs
+    cmds:
+      - docker compose logs -f
+
+  ps:
+    desc: List the development stack's containers
+    cmds:
+      - docker compose ps
+
+  rebuild:
+    desc: Rebuild and recreate every container
+    cmds:
+      - docker compose up --build --force-recreate
+
+  # --- Build ---------------------------------------------------------------
+
+  build:
+    desc: Build bin/horizon with version information
+    cmds:
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o bin/horizon ./cmd/horizon
+
+  image:
+    desc: Build the release image locally (horizon:dev)
+    cmds:
+      - docker build --build-arg VERSION={{.VERSION}} --build-arg COMMIT={{.COMMIT}} -t horizon:dev .
+
+  # --- Quality -------------------------------------------------------------
+
+  test:
+    desc: Run every test, including integration tests (needs Docker)
+    cmds:
+      - go test -race ./...
+
+  test:unit:
+    desc: Run unit tests only, no containers
+    cmds:
+      - go test -short ./...
+
+  fmt:
+    desc: Format Go code
+    cmds:
+      - gofmt -w -s .
+
+  fmt:check:
+    desc: Fail if Go code is not formatted
+    cmds:
+      - |
+        files=$(gofmt -l -s .)
+        if [ -n "$files" ]; then echo "not gofmt'ed:"; echo "$files"; exit 1; fi
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  gen:check:
+    desc: Fail if generated code is stale
+    cmds:
+      - rm -rf tmp/gen-check && mkdir -p tmp/gen-check
+      - go tool swag init -q -g internal/server/server.go -o tmp/gen-check/docs --outputTypes go,json --parseInternal
+      - |
+        diff -r internal/docs tmp/gen-check/docs || { echo "generated code is stale; run task gen" >&2; exit 1; }
+
+  check:
+    desc: Everything CI runs - run before finishing
+    cmds:
+      - task: fmt:check
+      - task: vet
+      - task: gen:check
+      - task: test
+
+  # --- Code generation -----------------------------------------------------
+
+  gen:
+    desc: Run all code generation
+    cmds:
+      - task: gen:swagger
+
+  gen:swagger:
+    desc: Generate the OpenAPI spec into internal/docs
+    cmds:
+      - go tool swag init -q -g internal/server/server.go -o internal/docs --outputTypes go,json --parseInternal
+
+  # --- Migrations ----------------------------------------------------------
+
+  migrate:up:
+    desc: Apply pending migrations
+    env: { HORIZON_DATABASE_URL: "{{.DATABASE_URL}}" }
+    cmds:
+      - go run ./cmd/horizon migrate up
+
+  migrate:down:
+    desc: Roll back the most recent migration
+    env: { HORIZON_DATABASE_URL: "{{.DATABASE_URL}}" }
+    cmds:
+      - go run ./cmd/horizon migrate down
+
+  migrate:status:
+    desc: List migrations and whether they are applied
+    env: { HORIZON_DATABASE_URL: "{{.DATABASE_URL}}" }
+    cmds:
+      - go run ./cmd/horizon migrate status
+
+  migrate:create:
+    desc: "Create the next numbered migration: task migrate:create -- add_users"
+    requires:
+      vars: [CLI_ARGS]
+    cmds:
+      - |
+        name="{{.CLI_ARGS}}"
+        case "$name" in *[!a-z0-9_]*|"") echo "name must be snake_case: a-z, 0-9, _" >&2; exit 1;; esac
+        last=$(ls internal/migrations/*.sql 2>/dev/null | sed -E 's|.*/0*([0-9]+)_.*|\1|' | sort -n | tail -1)
+        next=$(printf '%05d' $(( ${last:-0} + 1 )))
+        file="internal/migrations/${next}_${name}.sql"
+        printf '%s\n' '-- +goose Up' '' '-- +goose Down' '' > "$file"
+        echo "created $file"

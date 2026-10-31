@@ -1,0 +1,10 @@
+.git
+.env
+tmp
+bin
+dist
+docs
+*.md
+docker-compose.yml
+Dockerfile.dev
+.air.toml

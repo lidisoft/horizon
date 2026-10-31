@@ -22,19 +22,20 @@ disposable.
 ## Configuration
 
 Environment variables only, prefixed `HORIZON_`. Startup fails fast, listing
-every missing or invalid variable.
+every missing or invalid variable. `migrate` needs only `DATABASE_URL`; `serve`
+and `worker` need the rest.
 
 | Variable | Notes |
 |----------|-------|
 | `DATABASE_URL` | PostgreSQL DSN |
 | `NATS_URL` | NATS URL, with credentials if any |
-| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Object storage |
+| `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Object storage. `S3_ENDPOINT` is a URL (`https://` enables TLS); `S3_REGION` defaults to `us-east-1`. The bucket must exist |
 | `SMTP_URL` | `smtp://user:pass@host:port`, plus `SMTP_FROM` |
 | `BASE_URL` | Public URL; used in emails, OIDC redirects, webhooks |
-| `SECRET_KEY` | Encrypts secrets at rest. `SECRET_KEY_PREVIOUS` (comma-separated) allows rotation: old keys decrypt, the current key re-encrypts |
-| `SESSION_SECRET` | Signs CSRF tokens |
+| `SECRET_KEY` | Encrypts secrets at rest: 32 random bytes, base64 (`openssl rand -base64 32`). `SECRET_KEY_PREVIOUS` (comma-separated, same format) allows rotation: old keys decrypt, the current key re-encrypts |
+| `SESSION_SECRET` | Signs CSRF tokens; at least 32 characters |
 | `EVENTS_RETENTION` | JetStream retention, Go duration, default `168h` (7 days) |
-| `LOG_LEVEL`, `LOG_FORMAT` | `info`, `json` by default |
+| `LOG_LEVEL`, `LOG_FORMAT` | `info` and `json` by default; `LOG_FORMAT=console` for humans |
 | `HTTP_ADDR`, `METRICS_ADDR` | Default `:8080`, `:9090` |
 
 ## Lifecycle

@@ -1,0 +1,7 @@
+# Local environment (copy from .env.example)
+.env
+
+# Build output
+tmp/
+bin/
+dist/

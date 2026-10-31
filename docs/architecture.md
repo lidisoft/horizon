@@ -35,7 +35,7 @@ One binary, `horizon`, with subcommands (urfave/cli, as in `tocsin`):
 
 | Concern | Choice |
 |---------|--------|
-| Language | Go (same version line as `tocsin`) |
+| Language | Go 1.26 (the `go` line in `go.mod`) |
 | HTTP | Gin |
 | Database driver | pgx v5 |
 | Queries | sqlc (SQL in `internal/<module>/queries/*.sql`) |

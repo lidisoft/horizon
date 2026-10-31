@@ -1,0 +1,10 @@
+# Development image: the source is bind-mounted and rebuilt by Air on change.
+FROM golang:1.26
+
+RUN go install github.com/air-verse/air@v1.67.4
+
+WORKDIR /app
+
+EXPOSE 8080 9090
+
+CMD ["air", "-c", ".air.toml"]

@@ -15,7 +15,20 @@ releases, boards, tables, Gantt timelines and calendars.
 
 ## Status
 
-Design phase. The documentation below is the specification; no code exists yet.
+Phase 1, the skeleton, is in progress ([roadmap](docs/roadmap.md)). The
+documentation below is the specification.
+
+## Getting started
+
+With Go, [Task](https://taskfile.dev) and Docker installed:
+
+```bash
+task up                       # the whole stack; the app answers on http://localhost:8090
+curl localhost:8090/readyz    # PostgreSQL, NATS, S3 and schema checks
+task check                    # what CI runs
+```
+
+[docs/development.md](docs/development.md) has the ports and every task.
 
 ## Documentation
 

@@ -7,7 +7,28 @@ conventions. The environment itself is described in
 ## Prerequisites
 
 Go (version from `go.mod`), [Task](https://taskfile.dev), Docker (Compose and
-testcontainers), and a Chromium for headless browser tests.
+testcontainers), and a Chromium for headless browser tests. Code generators
+(swag, and sqlc later) are Go tool dependencies run with `go tool`, so there is
+nothing else to install.
+
+## Development stack
+
+`task up` builds and starts the stack: PostgreSQL, NATS (JetStream), RustFS,
+Mailpit, a one-shot `migrate`, a one-shot bucket creation, and the app under
+Air (`serve --with-worker`, rebuilt on change). Host ports avoid `tocsin`'s so
+both stacks can run at once; change them in `.env` (see `.env.example`).
+
+| Service | Host port | Notes |
+|---------|-----------|-------|
+| App | 8090 | API, `/healthz`, `/readyz`, `/swagger/` |
+| Metrics | 9091 | `/metrics` |
+| PostgreSQL | 5433 | `horizon` / `horizon`, database `horizon` |
+| NATS | 4223, monitoring 8223 | JetStream on |
+| RustFS | 9100, console 9101 | `horizon` / `horizon-dev-secret`, bucket `horizon` |
+| Mailpit | 8025 (UI), 1025 (SMTP) | Catches every email |
+
+Host-side tasks (`task migrate:*`) reach PostgreSQL on 5433; override with
+`HORIZON_DATABASE_URL`.
 
 ## Tests
 
