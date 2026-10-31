@@ -308,7 +308,7 @@ func (s *Service) UpdateProfile(ctx context.Context, userID uuid.UUID, version i
 }
 
 // SetDeactivated deactivates (true) or reactivates an account instance-wide.
-// Deactivation revokes every session.
+// Deactivation revokes every session and API token.
 func (s *Service) SetDeactivated(ctx context.Context, actor uuid.NullUUID, userID uuid.UUID, deactivated bool) (User, error) {
 	var updated db.User
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
@@ -331,6 +331,9 @@ func (s *Service) SetDeactivated(ctx context.Context, actor uuid.NullUUID, userI
 			at = &now
 			typ = "UserDeactivated"
 			if _, err := q.DeleteUserSessions(ctx, db.DeleteUserSessionsParams{UserID: u.ID, Keep: uuid.Nil}); err != nil {
+				return err
+			}
+			if _, err := q.DeleteUserAPITokens(ctx, u.ID); err != nil {
 				return err
 			}
 		}
@@ -463,10 +466,14 @@ func (s *Service) openSession(ctx context.Context, q *db.Queries, u db.User, cli
 	}, nil
 }
 
-// Principal is the authenticated caller of a request.
+// Principal is the authenticated caller of a request: a session or an API
+// token.
 type Principal struct {
 	User      User
 	SessionID uuid.UUID // uuid.Nil for API tokens
+	TokenID   uuid.UUID // uuid.Nil for sessions
+	// Scope bounds what the caller may do; sessions have ScopeAdmin.
+	Scope Scope
 	// tokenHash of the session, for the CSRF check.
 	tokenHash []byte
 	// renewed is set when the session's expiry slid, so the cookie's should.
@@ -497,7 +504,7 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Principal, er
 			return Principal{}, err
 		}
 	}
-	return Principal{User: userFrom(row.User), SessionID: row.Session.ID, tokenHash: hash, renewed: renewed}, nil
+	return Principal{User: userFrom(row.User), SessionID: row.Session.ID, Scope: ScopeAdmin, tokenHash: hash, renewed: renewed}, nil
 }
 
 // CSRFToken is the token the SPA sends back in X-CSRF-Token.

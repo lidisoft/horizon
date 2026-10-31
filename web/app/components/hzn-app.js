@@ -35,7 +35,9 @@ const styles = sheet(`
   .frame[data-layout="public"] lds-nav { display: none; }
   lds-nav { flex: none; }
   .footer { display: grid; gap: var(--lds-space-1); }
-  main { flex: 1; min-width: 0; overflow: auto; }
+  /* position: relative keeps absolutely positioned descendants (visually
+     hidden labels) inside the scrolling area instead of stretching the page. */
+  main { flex: 1; min-width: 0; overflow: auto; position: relative; }
   .brand {
     font-family: var(--lds-font-family-display);
     font-weight: var(--lds-font-weight-semibold);

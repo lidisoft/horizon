@@ -1,4 +1,5 @@
-// <hzn-account>: the signed-in user's profile, password and sessions.
+// <hzn-account>: the signed-in user's profile, password, sessions and API
+// tokens.
 
 import { requestContext } from "horizon/core/context.js";
 import { html, ldsLightSheet, sheet } from "horizon/core/dom.js";
@@ -81,6 +82,12 @@ class HznAccount extends HTMLElement {
             <lds-button data-action="revoke-others" variant="secondary">${t("account.revokeOthers")}</lds-button>
             <lds-button data-action="sign-out" variant="ghost">${t("account.signOut")}</lds-button>
           </div>
+        </section>
+
+        <section aria-labelledby="tokens-title">
+          <h2 id="tokens-title">${t("tokens.title")}</h2>
+          <p class="lead">${t("tokens.lead")}</p>
+          <hzn-api-tokens></hzn-api-tokens>
         </section>
       </div>
     `);

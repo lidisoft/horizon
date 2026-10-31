@@ -11,7 +11,9 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   state-changing requests) or `Authorization: Bearer <api token>`
   ([security.md](security.md#authentication-methods)). Anonymous requests to
   protected endpoints get `401 unauthenticated`; a missing or stale CSRF
-  token gets `403 csrf_invalid`.
+  token gets `403 csrf_invalid`; a token whose scope is too narrow gets
+  `403 insufficient_scope`, and credential endpoints called with a token
+  `403 session_required`.
 - API responses are `Cache-Control: no-store`.
 - Workspace in the path: `/api/v1/w/{workspace}/…` (slug).
 - Issues are addressable by key: `/api/v1/w/{ws}/issues/HZN-42`.
@@ -42,7 +44,8 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
 /auth/magic-link | /auth/oidc/{provider}/…
 /me                                        GET (user + CSRF token) | PATCH profile
 /me/password | /me/sessions | /me/sessions/{id} | /me/sessions/revoke-others
-/me/tokens | /me/inbox
+/me/tokens | /me/tokens/{id}                GET, POST (secret shown once) | DELETE; session only
+/me/inbox
 /w                                         workspaces of the current user
 /w/{ws}
   /members  /teams  /roles  /grants

@@ -23,7 +23,7 @@ PostgreSQL schema outline. Authoritative definitions live in
 | `magic_links` | user_id, token_hash, expires_at, used_at |
 | `oidc_providers` | workspace_id (nullable = instance-wide), issuer, client_id, client_secret (encrypted), domain allowlist |
 | `user_identities` | user_id, provider_id, subject |
-| `api_tokens` | user_id, name, token_hash, scopes, last_used_at, expires_at |
+| `api_tokens` | user_id, name, token_hash (SHA-256), hint, scope (`read` < `write` < `admin`), last_used_at, expires_at (nullable = never) |
 | `workspaces` | slug (unique), name, settings JSONB |
 | `workspace_members` | workspace_id, user_id, status (invited, active, suspended) |
 | `teams` / `team_members` | workspace_id, name / team_id, user_id |

@@ -4,6 +4,7 @@
 // Modules import each other through "horizon/…" specifiers only, never
 // relative paths: the import map points each one at a content-hashed URL.
 
+import "horizon/components/hzn-api-tokens.js";
 import { HznApp, applyStoredTheme } from "horizon/components/hzn-app.js";
 import "horizon/views/hzn-account.js";
 import "horizon/views/hzn-forgot-password.js";

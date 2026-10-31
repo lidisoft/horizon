@@ -12,6 +12,18 @@ import (
 	"github.com/google/uuid"
 )
 
+type ApiToken struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	Name       string
+	TokenHash  []byte
+	Hint       string
+	Scope      string
+	CreatedAt  time.Time
+	LastUsedAt *time.Time
+	ExpiresAt  *time.Time
+}
+
 type AuthThrottle struct {
 	Key         string
 	Failures    int32

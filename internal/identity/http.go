@@ -3,6 +3,8 @@ package identity
 import (
 	"net/http"
 	"net/netip"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -58,8 +60,16 @@ func (h *HTTP) clearCookie(c *gin.Context) { h.setCookie(c, "", -1) }
 // handlers. It never rejects by itself: RequireUser does. A state-changing
 // request whose CSRF token doesn't match is treated as anonymous and flagged,
 // so RequireUser answers csrf_invalid.
+//
+// An Authorization header takes precedence over the cookie and must be a
+// valid "Bearer hzn_…" token, else the request is rejected outright. A token
+// without the write scope can only make safe requests.
 func (h *HTTP) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if header := c.GetHeader("Authorization"); header != "" {
+			h.authenticateBearer(c, header)
+			return
+		}
 		token, err := c.Cookie(h.cookieName())
 		if err != nil || token == "" {
 			c.Next()
@@ -79,6 +89,56 @@ func (h *HTTP) Authenticate() gin.HandlerFunc {
 				h.setCookie(c, token, int(SessionIdleTimeout.Seconds()))
 			}
 			c.Set(principalKey, p)
+		}
+		c.Next()
+	}
+}
+
+func (h *HTTP) authenticateBearer(c *gin.Context, header string) {
+	scheme, token, _ := strings.Cut(header, " ")
+	if !strings.EqualFold(scheme, "Bearer") {
+		bearerChallenge(c, apperr.Unauthorized("unauthenticated"))
+		return
+	}
+	p, err := h.svc.AuthenticateToken(c, strings.TrimSpace(token))
+	if err != nil {
+		bearerChallenge(c, err)
+		return
+	}
+	if !safeMethod(c.Request.Method) && !p.Scope.Includes(ScopeWrite) {
+		server.WriteError(c, apperr.Forbidden("insufficient_scope"))
+		return
+	}
+	c.Set(principalKey, p)
+	c.Next()
+}
+
+// bearerChallenge answers a failed bearer authentication (RFC 6750).
+func bearerChallenge(c *gin.Context, err error) {
+	if apperr.Is(err, "unauthenticated") {
+		c.Header("WWW-Authenticate", `Bearer realm="horizon", error="invalid_token"`)
+	}
+	server.WriteError(c, err)
+}
+
+// RequireSession rejects API tokens: managing credentials (password,
+// sessions, tokens) needs a signed-in browser.
+func RequireSession() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if p, ok := CurrentPrincipal(c); ok && p.SessionID == uuid.Nil {
+			server.WriteError(c, apperr.Forbidden("session_required"))
+			return
+		}
+		c.Next()
+	}
+}
+
+// RequireScope rejects tokens without need; sessions have every scope.
+func RequireScope(need Scope) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if p, ok := CurrentPrincipal(c); ok && !p.Scope.Includes(need) {
+			server.WriteError(c, apperr.Forbidden("insufficient_scope"))
+			return
 		}
 		c.Next()
 	}
@@ -126,17 +186,22 @@ func safeMethod(m string) bool {
 func (h *HTTP) Register(api *gin.RouterGroup) {
 	auth := api.Group("/auth")
 	auth.POST("/login", h.login)
-	auth.POST("/logout", RequireUser(), h.logout)
+	auth.POST("/logout", RequireUser(), RequireSession(), h.logout)
 	auth.POST("/password/forgot", h.forgotPassword)
 	auth.POST("/password/reset", h.resetPassword)
 
 	me := api.Group("/me", RequireUser())
 	me.GET("", h.me)
 	me.PATCH("", h.updateMe)
-	me.POST("/password", h.changePassword)
-	me.GET("/sessions", h.sessions)
-	me.POST("/sessions/revoke-others", h.revokeOtherSessions)
-	me.DELETE("/sessions/:id", h.revokeSession)
+
+	credentials := me.Group("", RequireSession())
+	credentials.POST("/password", h.changePassword)
+	credentials.GET("/sessions", h.sessions)
+	credentials.POST("/sessions/revoke-others", h.revokeOtherSessions)
+	credentials.DELETE("/sessions/:id", h.revokeSession)
+	credentials.GET("/tokens", h.tokens)
+	credentials.POST("/tokens", h.createToken)
+	credentials.DELETE("/tokens/:id", h.revokeToken)
 }
 
 // LoginRequest is the body of POST /auth/login.
@@ -405,6 +470,83 @@ func (h *HTTP) revokeSession(c *gin.Context) {
 	}
 	if id == p.SessionID {
 		h.clearCookie(c)
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// TokenList is the body of GET /me/tokens.
+type TokenList struct {
+	Items []APIToken `json:"items"`
+}
+
+// tokens lists the user's API tokens.
+//
+//	@Summary		List the current user's API tokens
+//	@Description	Needs a browser session, not a token.
+//	@Tags			me
+//	@Produce		json
+//	@Success		200	{object}	TokenList
+//	@Failure		403	{object}	server.Problem	"session_required"
+//	@Router			/api/v1/me/tokens [get]
+func (h *HTTP) tokens(c *gin.Context) {
+	list, err := h.svc.APITokens(c, mustPrincipal(c))
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, TokenList{Items: list})
+}
+
+// CreateTokenRequest is the body of POST /me/tokens.
+type CreateTokenRequest struct {
+	Name      string     `json:"name" example:"CI pipeline"`
+	Scope     Scope      `json:"scope" enums:"read,write,admin"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+// createToken issues an API token.
+//
+//	@Summary		Create an API token
+//	@Description	The response is the only time the token is shown. Needs a browser session.
+//	@Tags			me
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		CreateTokenRequest	true	"Name, scope and optional expiry"
+//	@Success		201		{object}	CreatedAPIToken
+//	@Failure		409		{object}	server.Problem	"too_many_tokens"
+//	@Failure		422		{object}	server.Problem
+//	@Router			/api/v1/me/tokens [post]
+func (h *HTTP) createToken(c *gin.Context) {
+	var req CreateTokenRequest
+	if err := server.BindJSON(c, &req); err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	t, err := h.svc.CreateAPIToken(c, mustPrincipal(c), NewAPIToken(req))
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, t)
+}
+
+// revokeToken deletes an API token.
+//
+//	@Summary	Revoke an API token
+//	@Tags		me
+//	@Param		id	path	string	true	"Token id"
+//	@Success	204
+//	@Failure	404	{object}	server.Problem	"token_not_found"
+//	@Router		/api/v1/me/tokens/{id} [delete]
+func (h *HTTP) revokeToken(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		server.WriteError(c, apperr.NotFound("token_not_found"))
+		return
+	}
+	if err := h.svc.RevokeAPIToken(c, mustPrincipal(c), id); err != nil {
+		server.WriteError(c, err)
+		return
 	}
 	c.Status(http.StatusNoContent)
 }

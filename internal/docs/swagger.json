@@ -322,6 +322,104 @@
                 }
             }
         },
+        "/api/v1/me/tokens": {
+            "get": {
+                "description": "Needs a browser session, not a token.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "List the current user's API tokens",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/identity.TokenList"
+                        }
+                    },
+                    "403": {
+                        "description": "session_required",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "The response is the only time the token is shown. Needs a browser session.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Create an API token",
+                "parameters": [
+                    {
+                        "description": "Name, scope and optional expiry",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/identity.CreateTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/identity.CreatedAPIToken"
+                        }
+                    },
+                    "409": {
+                        "description": "too_many_tokens",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/me/tokens/{id}": {
+            "delete": {
+                "tags": [
+                    "me"
+                ],
+                "summary": "Revoke an API token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Token id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "token_not_found",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
         "/healthz": {
             "get": {
                 "produces": [
@@ -380,6 +478,42 @@
                 }
             }
         },
+        "identity.APIToken": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "hint": {
+                    "type": "string",
+                    "example": "hzn_k3Xa"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_used_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "scope": {
+                    "enum": [
+                        "read",
+                        "write",
+                        "admin"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/identity.Scope"
+                        }
+                    ]
+                }
+            }
+        },
         "identity.ChangePasswordRequest": {
             "type": "object",
             "properties": {
@@ -388,6 +522,70 @@
                 },
                 "new_password": {
                     "type": "string"
+                }
+            }
+        },
+        "identity.CreateTokenRequest": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "CI pipeline"
+                },
+                "scope": {
+                    "enum": [
+                        "read",
+                        "write",
+                        "admin"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/identity.Scope"
+                        }
+                    ]
+                }
+            }
+        },
+        "identity.CreatedAPIToken": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "hint": {
+                    "type": "string",
+                    "example": "hzn_k3Xa"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_used_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "scope": {
+                    "enum": [
+                        "read",
+                        "write",
+                        "admin"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/identity.Scope"
+                        }
+                    ]
+                },
+                "token": {
+                    "type": "string",
+                    "example": "hzn_k3Xa…"
                 }
             }
         },
@@ -442,6 +640,19 @@
                 }
             }
         },
+        "identity.Scope": {
+            "type": "string",
+            "enum": [
+                "read",
+                "write",
+                "admin"
+            ],
+            "x-enum-varnames": [
+                "ScopeRead",
+                "ScopeWrite",
+                "ScopeAdmin"
+            ]
+        },
         "identity.Session": {
             "type": "object",
             "properties": {
@@ -475,6 +686,17 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/identity.Session"
+                    }
+                }
+            }
+        },
+        "identity.TokenList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/identity.APIToken"
                     }
                 }
             }

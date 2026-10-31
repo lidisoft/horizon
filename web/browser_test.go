@@ -310,6 +310,39 @@ func TestAppShell(t *testing.T) {
 		t.Errorf("sidebar user = %q", got)
 	}
 
+	tokens := account + `.querySelector("hzn-api-tokens").shadowRoot`
+
+	// Only the content area scrolls, never the page around the frame.
+	poll(tokens + `.querySelector("tbody, [data-list] p") && "listed"`)
+	if got := poll(`String(document.documentElement.scrollHeight - innerHeight)`); got != "0" {
+		t.Errorf("the page scrolls by %spx outside the frame", got)
+	}
+
+	// API tokens: created from the account page, shown once, usable as a
+	// Bearer token, revoked after confirmation.
+	poll(tokens + `.querySelector("[data-list] p")?.textContent.trim()`) // "No tokens yet."
+	eval(tokens + `.querySelector('[name="name"]').focus()`)
+	do(chromedp.KeyEvent("CI pipeline\r"))
+	token := poll(tokens + `.querySelector("lds-code")?.textContent.trim()`)
+	if !strings.HasPrefix(token, "hzn_") || len(token) != 47 {
+		t.Fatalf("shown token = %q", token)
+	}
+	row := text(poll(`[...(` + tokens + `.querySelector("tbody tr")?.cells ?? [])].map((c) => c.textContent.replace(/\s+/g, " ").trim()).join(" | ")`))
+	if want := "CI pipeline " + token[:8] + "… | Read | Never | "; !strings.HasPrefix(row, want) {
+		t.Errorf("token row = %q, want prefix %q", row, want)
+	}
+	whoami := `fetch("/api/v1/me", { headers: { Authorization: "Bearer ` + token + `" }, credentials: "omit" }).then((r) => r.ok ? r.json().then((b) => b.user.email) : String(r.status))`
+	if got, err := chromedp.Run(ctx, chromedp.Evaluate[string](whoami, chromedp.EvalAwaitPromise)); err != nil || got != "ada@example.com" {
+		t.Errorf("GET /me with the token = %q, %v", got, err)
+	}
+	eval(tokens + `.querySelector("[data-revoke]").click()`)
+	poll(tokens + `.querySelector("[data-confirm]").hasAttribute("open") && "confirming"`)
+	eval(tokens + `.querySelector("[data-confirm-ok]").click()`)
+	poll(`!` + tokens + `.querySelector("tbody") && !` + tokens + `.querySelector("lds-code") && "revoked"`)
+	if got, err := chromedp.Run(ctx, chromedp.Evaluate[string](whoami, chromedp.EvalAwaitPromise)); err != nil || got != "401" {
+		t.Errorf("GET /me with the revoked token = %q, %v", got, err)
+	}
+
 	// The home view renders inside the frame and shows the readiness checks.
 	do(chromedp.Navigate(base + "/"))
 	got := items(app + `.querySelector("hzn-home")?.shadowRoot?.querySelector("dl.checks")`)

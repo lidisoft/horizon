@@ -26,7 +26,7 @@ link to choose one.
 | Email + password | argon2id (`golang.org/x/crypto/argon2`, OWASP baseline: 19 MiB, 2 passes; parameters stored with each hash), 12 to 256 characters. Sign-in failures are throttled per email (10) and per client IP (100) in 15-minute windows shared by every replica, and all answer `invalid_credentials`, taking the same time whether or not the account exists. Password reset links are single use, valid one hour, carry the token in the URL fragment (never logged), and sign out every session. A breached-password check may come later |
 | Magic link | One-time token emailed, valid 15 min, single use, bound to the requesting browser via a cookie nonce |
 | OIDC / SSO | Generic OpenID Connect (authorization code + PKCE). Providers configured instance-wide or per workspace; optional email-domain allowlist and just-in-time provisioning into a workspace with a default role. A workspace can **enforce** SSO, which disables password and magic-link logins for its members |
-| API tokens | Personal access tokens with scopes (`read`, `write`, `admin`) and optional expiry. Stored hashed (SHA-256); shown once |
+| API tokens | Personal access tokens, `Authorization: Bearer hzn_…` (the prefix lets secret scanners spot leaks). One scope each, cumulative: `read` (safe methods only), `write` (changes within the user's permissions), `admin` (also the `workspace.*` permissions and instance administration; sessions always have it). Optional expiry; at most 50 per user. Stored hashed (SHA-256) with a short hint to tell them apart; shown once. Managing credentials (password, sessions, tokens) needs a browser session: a token can't mint tokens. Deactivating the account deletes its tokens; changing the password keeps them |
 
 Sessions: opaque random token (256 bits) in an `HttpOnly; SameSite=Lax`
 cookie, stored hashed (SHA-256) in `sessions`, sliding expiry (30 days idle).
@@ -39,6 +39,8 @@ CSRF: state-changing requests made with the session cookie carry
 gets it from `POST /auth/login` and `GET /me`; a cookie planted by a sibling
 origin can't produce it. Requests a browser marks `Sec-Fetch-Site: cross-site`
 are refused before any handler runs. API tokens (Bearer) need no CSRF token.
+An `Authorization` header takes precedence over the cookie; an invalid one is
+rejected (`401`, `WWW-Authenticate: Bearer`) rather than ignored.
 
 Changing the password signs out the user's other sessions. Logging out revokes
 the session server-side; users can list and revoke their sessions.

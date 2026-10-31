@@ -27,7 +27,7 @@ usable exists early.
 ## Phase 2 — Identity and organisation
 
 - [x] Users, email + password, sessions, CSRF
-- [ ] API tokens
+- [x] API tokens
 - [ ] Workspaces, members, invitations, teams
 - [ ] Roles, permission sets, grants; enforcement middleware
 - [ ] Projects with keys and aliases
