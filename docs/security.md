@@ -17,7 +17,15 @@ link to choose one.
 - **Suspending** a member is per workspace: it removes access to that
   workspace only, keeping grants and history, and closes live connections to
   it. The account and its other workspaces are untouched.
-- **Invitations** expire after 7 days and can be resent.
+- **Invitations** expire after 7 days and can be resent (a new link; the old
+  one stops working). Inviting an email with a pending invitation renews it.
+  The link carries the token in its fragment, and the API takes it in request
+  bodies, so it never reaches server logs. Accepting signed in needs the
+  invited email; signed out, it creates the account (the email is proven) or,
+  if one exists, asks to sign in first.
+- Only **instance admins create workspaces**; the creator joins as first
+  member. People who aren't active members of a workspace get `404
+  workspace_not_found` for it, the same as for one that doesn't exist.
 
 ## Authentication methods
 
@@ -63,7 +71,10 @@ the request comes through a proxy listed in `HORIZON_TRUSTED_PROXIES`.
 - Project **visibility**: `workspace` (every member may view) or `private`
   (only users with a grant on it).
 
-Code checks **permission keys only**, never role names.
+Code checks **permission keys only**, never role names, through
+`internal/access`. Until roles and grants land (the next step of phase 2),
+an interim checker gives instance admins every permission and members none:
+members see their workspace, its members and teams, and administer nothing.
 
 ### Default roles
 

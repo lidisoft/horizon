@@ -56,6 +56,12 @@ func (h *HTTP) setCookie(c *gin.Context, token string, maxAge int) {
 
 func (h *HTTP) clearCookie(c *gin.Context) { h.setCookie(c, "", -1) }
 
+// SetSession sets the session cookie of a sign-in made outside this
+// package (accepting an invitation).
+func (h *HTTP) SetSession(c *gin.Context, in SignedIn) {
+	h.setCookie(c, in.Token, int(SessionIdleTimeout.Seconds()))
+}
+
 // Authenticate resolves the session cookie into a Principal for the
 // handlers. It never rejects by itself: RequireUser does. A state-changing
 // request whose CSRF token doesn't match is treated as anonymous and flagged,

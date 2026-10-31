@@ -132,6 +132,9 @@ func New(o Options) *Service {
 	}
 }
 
+// BaseURL is the instance's public URL, nil when not configured.
+func (s *Service) BaseURL() *url.URL { return s.baseURL }
+
 // --- Users ------------------------------------------------------------------
 
 // NewUser is the input of CreateUser.
@@ -154,6 +157,19 @@ func normalizeEmail(email string) (string, bool) {
 
 // CreateUser creates an account. actor is the admin or inviter, if any.
 func (s *Service) CreateUser(ctx context.Context, actor uuid.NullUUID, in NewUser) (User, error) {
+	var u User
+	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		u, err = s.CreateUserInTx(ctx, tx, actor, in)
+		return err
+	})
+	return u, err
+}
+
+// CreateUserInTx creates an account within the caller's transaction, for
+// commands that create one along with something else (accepting an
+// invitation).
+func (s *Service) CreateUserInTx(ctx context.Context, tx pgx.Tx, actor uuid.NullUUID, in NewUser) (User, error) {
 	var fields apperr.Fields
 	email, ok := normalizeEmail(in.Email)
 	if !ok {
@@ -182,30 +198,40 @@ func (s *Service) CreateUser(ctx context.Context, actor uuid.NullUUID, in NewUse
 		hash = &h
 	}
 
-	var created db.User
-	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
-		var err error
-		created, err = db.New(tx).CreateUser(ctx, db.CreateUserParams{
-			ID:              uuid.Must(uuid.NewV7()),
-			Email:           email,
-			Name:            name,
-			PasswordHash:    hash,
-			IsInstanceAdmin: in.InstanceAdmin,
-			CreatedAt:       s.now(),
-		})
-		if isUniqueViolation(err) {
-			return apperr.Invalid(apperr.Field{Field: "email", Code: "taken"})
-		}
-		if err != nil {
-			return err
-		}
-		return eventlog.Append(ctx, tx, s.event(actor, created, "UserCreated",
-			map[string]any{"instance_admin": created.IsInstanceAdmin}))
+	created, err := db.New(tx).CreateUser(ctx, db.CreateUserParams{
+		ID:              uuid.Must(uuid.NewV7()),
+		Email:           email,
+		Name:            name,
+		PasswordHash:    hash,
+		IsInstanceAdmin: in.InstanceAdmin,
+		CreatedAt:       s.now(),
 	})
+	if isUniqueViolation(err) {
+		return User{}, apperr.Invalid(apperr.Field{Field: "email", Code: "taken"})
+	}
+	if err != nil {
+		return User{}, err
+	}
+	err = eventlog.Append(ctx, tx, s.event(actor, created, "UserCreated",
+		map[string]any{"instance_admin": created.IsInstanceAdmin}))
 	if err != nil {
 		return User{}, err
 	}
 	return userFrom(created), nil
+}
+
+// OpenSessionInTx signs a user in within the caller's transaction, after
+// they proved who they are some other way (accepting an invitation).
+func (s *Service) OpenSessionInTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID, client Client) (SignedIn, error) {
+	q := db.New(tx)
+	u, err := q.GetUser(ctx, userID)
+	if err != nil {
+		return SignedIn{}, err
+	}
+	if u.DeactivatedAt != nil {
+		return SignedIn{}, apperr.Unauthorized("invalid_credentials")
+	}
+	return s.openSession(ctx, q, u, client)
 }
 
 // User returns an account by id.

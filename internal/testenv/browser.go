@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	goruntime "runtime"
+	"sync"
 	"testing"
 
 	"github.com/chromedp/chromedp"
@@ -29,8 +30,13 @@ const containerHost = "host.docker.internal"
 type browserEnv struct {
 	alloc  context.Context
 	cancel context.CancelFunc
-	host   string // host name pages use to reach test servers
-	bind   string // listen address of test servers
+	// root is a tab started once, so later tabs can open their own browser
+	// contexts (separate cookies and storage).
+	rootOnce sync.Once
+	root     context.Context
+	rootErr  error
+	host     string // host name pages use to reach test servers
+	bind     string // listen address of test servers
 }
 
 // startChrome starts the container (or prepares the local binary) and
@@ -119,11 +125,21 @@ func freePort() (int, error) {
 	return ln.Addr().(*net.TCPAddr).Port, nil
 }
 
-// Browser returns a chromedp context on a new tab, closed after the test.
+// Browser returns a chromedp context on a new tab in its own browser
+// context, like a separate incognito window: tabs share no cookies or
+// storage. It is closed after the test.
 func Browser(t testing.TB) context.Context {
 	t.Helper()
 	require(t, current != nil && current.browser != nil, "Chrome")
-	ctx, cancel := chromedp.NewContext(current.browser.alloc)
+	b := current.browser
+	b.rootOnce.Do(func() {
+		b.root, _ = chromedp.NewContext(b.alloc) // cancelled with the allocator
+		b.rootErr = chromedp.Do(b.root)
+	})
+	if b.rootErr != nil {
+		t.Fatalf("testenv: start browser: %v", b.rootErr)
+	}
+	ctx, cancel := chromedp.NewContext(b.root, chromedp.WithNewBrowserContext())
 	t.Cleanup(cancel)
 	return ctx
 }
@@ -132,17 +148,43 @@ func Browser(t testing.TB) context.Context {
 // in Browser reaches it at, e.g. http://host.docker.internal:41234.
 func Serve(t testing.TB, h http.Handler) string {
 	t.Helper()
+	ln := Listen(t)
+	ln.Serve(h)
+	return ln.URL
+}
+
+// Listener is an address reserved for a test server, for handlers that
+// need their own URL (links in emails) before they exist.
+type Listener struct {
+	// URL is the base URL a page in Browser reaches the server at.
+	URL string
+	t   testing.TB
+	ln  net.Listener
+}
+
+// Listen reserves an address reachable from Browser; call Serve on it.
+func Listen(t testing.TB) *Listener {
+	t.Helper()
 	require(t, current != nil && current.browser != nil, "Chrome")
 	ln, err := net.Listen("tcp", current.browser.bind)
 	if err != nil {
 		t.Fatalf("testenv: listen: %v", err)
 	}
+	t.Cleanup(func() { _ = ln.Close() })
+	return &Listener{
+		URL: fmt.Sprintf("http://%s:%d", current.browser.host, ln.Addr().(*net.TCPAddr).Port),
+		t:   t,
+		ln:  ln,
+	}
+}
+
+// Serve runs h on the reserved address until the test ends.
+func (l *Listener) Serve(h http.Handler) {
 	srv := &http.Server{Handler: h}
 	go func() {
-		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			t.Errorf("testenv: serve: %v", err)
+		if err := srv.Serve(l.ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			l.t.Errorf("testenv: serve: %v", err)
 		}
 	}()
-	t.Cleanup(func() { _ = srv.Close() })
-	return fmt.Sprintf("http://%s:%d", current.browser.host, ln.Addr().(*net.TCPAddr).Port)
+	l.t.Cleanup(func() { _ = srv.Close() })
 }

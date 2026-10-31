@@ -42,6 +42,10 @@ password resets, also land in Mailpit):
 task admin -- create-user --email you@example.com --name "Your Name" --instance-admin
 ```
 
+Signed in as an instance admin, the home page offers to create the first
+workspace (or use `task admin -- create-workspace --slug acme --name Acme
+--owner you@example.com`). Invitation emails land in Mailpit too.
+
 ## Tests
 
 | Layer | What | How |

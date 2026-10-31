@@ -3,7 +3,11 @@
 // outlet, the command palette (⌘K) and the shortcut help (?).
 //
 // It also guards routes: signed-out users land on /sign-in?next=…, and
-// public routes (sign-in, password reset) render without the sidebar.
+// public routes (sign-in, password reset, invitations) render without the
+// sidebar. Settings routes bring their own navigation instead of it.
+//
+// The sidebar's switcher lists the user's workspaces; the last one opened is
+// remembered, and "/" goes there.
 
 import { createApi } from "horizon/core/api.js";
 import { provideContext } from "horizon/core/context.js";
@@ -17,23 +21,51 @@ import catalog from "horizon/i18n/en.json" with { type: "json" };
 
 /**
  * Routes: name, URL pattern and the view element mounted for it. public
- * routes are for signed-out users and have no sidebar.
+ * routes work signed out and have no sidebar; settings routes have their own.
  */
 export const ROUTES = [
   { name: "home", path: "/", view: "hzn-home" },
   { name: "account", path: "/account", view: "hzn-account" },
+  { name: "workspace", path: "/w/:ws", view: "hzn-workspace-home" },
+  { name: "settings-general", path: "/w/:ws/settings/general", view: "hzn-settings-general", layout: "settings" },
+  { name: "settings-members", path: "/w/:ws/settings/members", view: "hzn-settings-members", layout: "settings" },
+  { name: "invitation", path: "/invitation", view: "hzn-invitation", public: true },
   { name: "sign-in", path: "/sign-in", view: "hzn-sign-in", public: true },
   { name: "forgot-password", path: "/forgot-password", view: "hzn-forgot-password", public: true },
   { name: "reset-password", path: "/reset-password", view: "hzn-reset-password", public: true },
 ];
 const NOT_FOUND_VIEW = "hzn-not-found";
 const THEME_KEY = "horizon.theme";
+const WORKSPACE_KEY = "horizon.workspace";
+
+/** The workspace the user opened last, if stored. */
+export function rememberedWorkspace() {
+  try {
+    return localStorage.getItem(WORKSPACE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function rememberWorkspace(slug) {
+  try {
+    localStorage.setItem(WORKSPACE_KEY, slug);
+  } catch {
+    // storage blocked: "/" picks the first workspace instead
+  }
+}
 
 const styles = sheet(`
   :host { display: block; height: 100vh; }
   .frame { display: flex; height: 100%; }
-  .frame[data-layout="public"] lds-nav { display: none; }
+  .frame:is([data-layout="public"], [data-layout="settings"]) lds-nav { display: none; }
+  .switcher { display: block; }
+  .switcher lds-button { max-width: 100%; }
+  .switcher [data-ws-name] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   lds-nav { flex: none; }
+  /* LDS v0.0.5 clips label descenders (g, p, y): overflow hidden with
+     line-height 1. Remove once LDS fixes lds-nav-item. */
+  lds-nav-item::part(label) { line-height: 1.25; }
   .footer { display: grid; gap: var(--lds-space-1); }
   /* position: relative keeps absolutely positioned descendants (visually
      hidden labels) inside the scrolling area instead of stretching the page. */
@@ -79,7 +111,12 @@ export class HznApp extends HTMLElement {
       onUnauthenticated: () => session.ended(),
       refreshCsrf: () => session.load().then(() => {}),
     });
-    this.context = { api, store: createStore(), router, i18n, shortcuts, session };
+    this.workspaces = [];
+    this.context = {
+      api, store: createStore(), router, i18n, shortcuts, session,
+      // Views call refresh after creating, renaming or joining a workspace.
+      workspaces: { list: () => this.workspaces, refresh: () => this.loadWorkspaces() },
+    };
     provideContext(this, this.context);
 
     const t = i18n.t;
@@ -88,8 +125,16 @@ export class HznApp extends HTMLElement {
     root.innerHTML = String(html`
       <div class="frame">
         <lds-nav aria-label="${t("nav.label")}">
-          <a slot="brand" class="brand" href="/">${t("app.name")}</a>
-          <lds-nav-item href="/" data-route="home"><lds-icon slot="start" name="layers"></lds-icon>${t("nav.home")}</lds-nav-item>
+          <div slot="brand" class="switcher">
+            <a class="brand" href="/" data-brand>${t("app.name")}</a>
+            <lds-menu placement="bottom-start" hidden data-switcher>
+              <lds-button slot="trigger" variant="ghost" size="sm" label="${t("nav.switchWorkspace")}">
+                <span data-ws-name></span><lds-icon slot="end" name="chevron-down"></lds-icon>
+              </lds-button>
+            </lds-menu>
+          </div>
+          <lds-nav-item href="/" data-route="workspace" data-nav="home"><lds-icon slot="start" name="layers"></lds-icon>${t("nav.home")}</lds-nav-item>
+          <lds-nav-item href="/" data-route="settings" data-nav="settings" hidden><lds-icon slot="start" name="settings"></lds-icon>${t("nav.settings")}</lds-nav-item>
           <div slot="footer" class="footer">
             <lds-nav-item href="/account" data-route="account"><lds-avatar slot="start" size="sm"></lds-avatar><span data-user></span></lds-nav-item>
             <lds-button variant="ghost" size="sm" data-action="theme">
@@ -124,7 +169,7 @@ export class HznApp extends HTMLElement {
     this.help = root.getElementById("help");
 
     const actions = {
-      home: () => router.navigate(router.href("home")),
+      home: () => router.navigate(this.currentSlug ? `/w/${this.currentSlug}` : "/"),
       account: () => router.navigate(router.href("account")),
       "sign-out": () => session.logout(),
       theme: () => this.toggleTheme(),
@@ -146,8 +191,11 @@ export class HznApp extends HTMLElement {
 
     this.renderTheme();
     router.subscribe((match) => this.show(match));
-    session.subscribe(() => {
+    session.subscribe(async (state) => {
       this.renderUser();
+      // The workspaces come first: "/" picks one of them.
+      if (state.status === "signed-in") await this.loadWorkspaces();
+      else this.workspaces = [];
       if (router.current) this.show(router.current);
     });
     shortcuts.start();
@@ -158,6 +206,7 @@ export class HznApp extends HTMLElement {
   async start() {
     try {
       await this.context.session.load();
+      if (this.context.session.status === "signed-in") await this.loadWorkspaces();
     } catch {
       // Server unreachable or failing: show the page anyway. Protected
       // routes send the user to sign-in, which reports errors as they occur.
@@ -185,7 +234,12 @@ export class HznApp extends HTMLElement {
       router.navigate(safeNext(match.query.get("next")), { replace: true });
       return;
     }
-    this.frame.dataset.layout = match.route?.public ? "public" : "app";
+    this.frame.dataset.layout = match.route?.public ? "public" : match.route?.layout || "app";
+    if (match.params.ws) {
+      this.currentSlug = match.params.ws;
+      rememberWorkspace(match.params.ws);
+      this.renderSwitcher();
+    }
     const tag = match.route ? match.route.view : NOT_FOUND_VIEW;
     const params = match.route ? match.params : { path: match.path };
     let view = this.outlet.firstElementChild;
@@ -196,9 +250,48 @@ export class HznApp extends HTMLElement {
     } else {
       for (const [k, v] of Object.entries(params)) view.setAttribute(k, v);
     }
+    const section = match.route?.name.startsWith("settings-") ? "settings" : match.route?.name;
     for (const item of this.shadowRoot.querySelectorAll("lds-nav-item[data-route]")) {
-      item.toggleAttribute("active", item.dataset.route === match.route?.name);
+      item.toggleAttribute("active", item.dataset.route === section);
     }
+  }
+
+  /** Reloads the user's workspaces for the switcher. */
+  async loadWorkspaces() {
+    try {
+      const { data } = await this.context.api.get("/w");
+      this.workspaces = data.items;
+    } catch {
+      this.workspaces = [];
+    }
+    this.renderSwitcher();
+    return this.workspaces;
+  }
+
+  renderSwitcher() {
+    const { t } = this.context.i18n;
+    const root = this.shadowRoot;
+    const slug = this.currentSlug && this.workspaces.some((w) => w.slug === this.currentSlug)
+      ? this.currentSlug
+      : this.workspaces[0]?.slug;
+    const current = this.workspaces.find((w) => w.slug === slug);
+    const menu = root.querySelector("[data-switcher]");
+    menu.hidden = !current;
+    root.querySelector("[data-brand]").hidden = !!current;
+    for (const item of menu.querySelectorAll("lds-menu-item, hr")) item.remove();
+    if (current) {
+      root.querySelector("[data-ws-name]").textContent = current.name;
+      menu.insertAdjacentHTML("beforeend", String(html`
+        ${this.workspaces.map((w) => html`<lds-menu-item href="/w/${w.slug}">${w.slug === current.slug ? html`<lds-icon slot="start" name="check"></lds-icon>` : ""}${w.name}</lds-menu-item>`)}
+        <hr>
+        <lds-menu-item href="/w/${current.slug}/settings/general"><lds-icon slot="start" name="settings"></lds-icon>${t("nav.workspaceSettings")}</lds-menu-item>
+      `));
+    }
+    const home = root.querySelector('[data-nav="home"]');
+    const settings = root.querySelector('[data-nav="settings"]');
+    home.setAttribute("href", current ? `/w/${current.slug}` : "/");
+    settings.hidden = !current;
+    if (current) settings.setAttribute("href", `/w/${current.slug}/settings/general`);
   }
 
   renderUser() {

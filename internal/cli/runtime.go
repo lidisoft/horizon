@@ -11,6 +11,7 @@ import (
 	natsgo "github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 
+	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/config"
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/logging"
@@ -22,6 +23,7 @@ import (
 	"github.com/lidisoft/horizon/internal/platform/s3"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/version"
+	"github.com/lidisoft/horizon/internal/workspace"
 )
 
 // runtime holds the connections shared by serve and worker.
@@ -68,16 +70,19 @@ func (rt *runtime) close() {
 	}
 }
 
+func (rt *runtime) mailer() platformmail.Sender {
+	if rt.cfg.SMTPURL == nil {
+		return nil
+	}
+	return platformmail.NewSMTP(rt.cfg.SMTPURL, rt.cfg.SMTPFrom)
+}
+
 // identity returns the identity service.
 func (rt *runtime) identity() *identity.Service {
-	var sender platformmail.Sender
-	if rt.cfg.SMTPURL != nil {
-		sender = platformmail.NewSMTP(rt.cfg.SMTPURL, rt.cfg.SMTPFrom)
-	}
 	return identity.New(identity.Options{
 		Pool:          rt.pool,
 		Log:           logging.WithSystem(rt.log, "identity"),
-		Mail:          sender,
+		Mail:          rt.mailer(),
 		BaseURL:       rt.cfg.BaseURL,
 		SessionSecret: rt.cfg.SessionSecret,
 	})
@@ -85,10 +90,20 @@ func (rt *runtime) identity() *identity.Service {
 
 // api registers every module's routes on /api/v1.
 func (rt *runtime) api() func(api *gin.RouterGroup) {
-	auth := identity.NewHTTP(rt.identity(), rt.cfg.BaseURL.Scheme == "https")
+	ids := rt.identity()
+	auth := identity.NewHTTP(ids, rt.cfg.BaseURL.Scheme == "https")
+	workspaces := workspace.NewHTTP(workspace.New(workspace.Options{
+		Pool:     rt.pool,
+		Log:      logging.WithSystem(rt.log, "workspace"),
+		Identity: ids,
+		Access:   access.Interim{},
+		Mail:     rt.mailer(),
+		BaseURL:  rt.cfg.BaseURL,
+	}), auth)
 	return func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
+		workspaces.Register(api)
 	}
 }
 

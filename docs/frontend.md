@@ -87,6 +87,13 @@ socket event ─▶ store.apply(event) ─▶ subscribed components re-render
 
 ## Sessions and routes
 
+Routes: `/` goes to the workspace opened last (remembered in local storage)
+or the first one; `/w/:ws` is the workspace, `/w/:ws/settings/…` its
+settings (with their own sidebar), `/invitation` accepts an invitation, and
+`/account` holds the user's profile, password, sessions and tokens. The
+sidebar's switcher lists the user's workspaces; views call
+`context.workspaces.refresh()` after creating, renaming or joining one.
+
 `hzn-app` asks `GET /api/v1/me` who is signed in before it starts routing.
 Routes marked `public` (sign-in, forgot and reset password) render without
 the sidebar; any other route sends a signed-out user to

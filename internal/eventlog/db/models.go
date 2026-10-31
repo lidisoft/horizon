@@ -43,6 +43,22 @@ type Event struct {
 	PublishedAt      *time.Time
 }
 
+type Invitation struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	Email       string
+	TokenHash   []byte
+	InvitedBy   uuid.NullUUID
+	TeamIds     []uuid.UUID
+	CreatedAt   time.Time
+	SentAt      time.Time
+	ExpiresAt   time.Time
+	AcceptedAt  *time.Time
+	AcceptedBy  uuid.NullUUID
+	RevokedAt   *time.Time
+	Version     int32
+}
+
 type PasswordReset struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
@@ -63,6 +79,23 @@ type Session struct {
 	Ip         *netip.Addr
 }
 
+type Team struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	Name        string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
+type TeamMember struct {
+	WorkspaceID uuid.UUID
+	TeamID      uuid.UUID
+	UserID      uuid.UUID
+	AddedAt     time.Time
+}
+
 type User struct {
 	ID              uuid.UUID
 	Email           string
@@ -75,4 +108,25 @@ type User struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	Version         int32
+}
+
+type Workspace struct {
+	ID        uuid.UUID
+	Slug      string
+	Name      string
+	TimeZone  string
+	Settings  json.RawMessage
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Version   int32
+}
+
+type WorkspaceMember struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	Status      string
+	JoinedAt    time.Time
+	SuspendedAt *time.Time
+	Version     int32
 }

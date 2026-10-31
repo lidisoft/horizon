@@ -74,9 +74,12 @@ export function errorMessage(err, i18n) {
   return code && i18n.has(`error.${code}`) ? i18n.t(`error.${code}`) : i18n.t("error.unexpected");
 }
 
-/** Toggles the loading state of a form's submit button while fn runs. */
-export async function busy(form, fn) {
-  const button = form.querySelector('lds-button[type="submit"]');
+/**
+ * Toggles the loading state of a form's submit button while fn runs. target
+ * is the form, or the button itself when it sits outside the form.
+ */
+export async function busy(target, fn) {
+  const button = target.localName === "lds-button" ? target : target.querySelector('lds-button[type="submit"]');
   button?.setAttribute("loading", "");
   try {
     return await fn();

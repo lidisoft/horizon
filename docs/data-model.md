@@ -24,9 +24,10 @@ PostgreSQL schema outline. Authoritative definitions live in
 | `oidc_providers` | workspace_id (nullable = instance-wide), issuer, client_id, client_secret (encrypted), domain allowlist |
 | `user_identities` | user_id, provider_id, subject |
 | `api_tokens` | user_id, name, token_hash (SHA-256), hint, scope (`read` < `write` < `admin`), last_used_at, expires_at (nullable = never) |
-| `workspaces` | slug (unique), name, settings JSONB |
-| `workspace_members` | workspace_id, user_id, status (invited, active, suspended) |
-| `teams` / `team_members` | workspace_id, name / team_id, user_id |
+| `workspaces` | slug (unique; lower-case letters, digits, single hyphens), name, time_zone, settings JSONB |
+| `workspace_members` | workspace_id, user_id, status (active, suspended), joined_at, suspended_at — people who joined |
+| `invitations` | workspace_id, email (citext), token_hash, invited_by, team_ids, sent_at, expires_at (7 days), accepted_at/by, revoked_at — people invited but not joined; at most one open per email |
+| `teams` / `team_members` | workspace_id, name (citext, unique per workspace), description / team_id, user_id (leaving the workspace leaves its teams) |
 | `roles` | workspace_id, name, permissions text[] |
 | `role_grants` | workspace_id, role_id, subject_type (user/team), subject_id, project_id (nullable = workspace scope) |
 

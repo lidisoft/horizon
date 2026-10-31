@@ -13,6 +13,7 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"regexp"
@@ -27,9 +28,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
+	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/identity"
+	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/testenv"
+	"github.com/lidisoft/horizon/internal/workspace"
 	"github.com/lidisoft/horizon/web"
 )
 
@@ -217,61 +221,112 @@ func TestWebUnits(t *testing.T) {
 	logs.failOnErrors(t)
 }
 
-// appServer serves the real app and API against a fresh database with one
-// account, ada@example.com.
-func appServer(t *testing.T) string {
+// app is the real app and API served against a fresh database, with one
+// account: ada@example.com, an instance admin without a workspace.
+type app struct {
+	base string
+	mail *platformmail.Memory
+}
+
+func appServer(t *testing.T) app {
 	t.Helper()
 	w, err := server.NewWeb(web.FS())
 	if err != nil {
 		t.Fatal(err)
 	}
-	ids := identity.New(identity.Options{
-		Pool:          testenv.DB(t),
-		Log:           zerolog.Nop(),
-		SessionSecret: "browser-test-session-secret-0123456789",
-	})
-	_, err = ids.CreateUser(context.Background(), uuid.NullUUID{}, identity.NewUser{Email: "ada@example.com", Name: "Ada Lovelace", Password: testPassword})
+	pool := testenv.DB(t)
+	a := app{mail: &platformmail.Memory{}}
+	ln := testenv.Listen(t)
+	a.base = ln.URL
+	baseURL, _ := url.Parse(a.base)
+	ids := identity.New(identity.Options{Pool: pool, Log: zerolog.Nop(), SessionSecret: "browser-test-session-secret-0123456789", BaseURL: baseURL})
+	_, err = ids.CreateUser(context.Background(), uuid.NullUUID{}, identity.NewUser{Email: "ada@example.com", Name: "Ada Lovelace", Password: testPassword, InstanceAdmin: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	auth := identity.NewHTTP(ids, false)
+	workspaces := workspace.NewHTTP(workspace.New(workspace.Options{
+		Pool: pool, Log: zerolog.Nop(), Identity: ids, Access: access.Interim{}, Mail: a.mail, BaseURL: baseURL,
+	}), auth)
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
-	return testenv.Serve(t, server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
+	ln.Serve(server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
+		workspaces.Register(api)
 	}}))
+	return a
 }
 
 const testPassword = "correct horse battery"
 
+// page drives one browser tab.
+type page struct {
+	t    *testing.T
+	ctx  context.Context
+	logs *console
+}
+
+func newPage(t *testing.T) *page {
+	ctx := testenv.Browser(t)
+	return &page{t: t, ctx: ctx, logs: watchConsole(ctx)}
+}
+
+// poll waits until expr is truthy and returns it as a string. An exception
+// (the view not mounted yet) counts as not yet.
+func (p *page) poll(expr string) string {
+	p.t.Helper()
+	safe := `(() => { try { return (` + expr + `); } catch { return false; } })()`
+	v, err := chromedp.Run(p.ctx, chromedp.Poll[string](safe, chromedp.WithPollingInterval(50*time.Millisecond), chromedp.WithPollingTimeout(10*time.Second)))
+	if err != nil {
+		p.logs.failOnErrors(p.t)
+		state, _ := chromedp.Run(p.ctx, chromedp.Evaluate[string](`location.href + " | " + (document.querySelector("hzn-app")?.shadowRoot?.getElementById("outlet")?.firstElementChild?.shadowRoot?.textContent ?? "").replace(/\s+/g, " ").slice(0, 300)`))
+		p.t.Fatalf("waiting for %s: %v\npage: %s", expr, err, state)
+	}
+	return v
+}
+
+func (p *page) do(actions ...chromedp.Action[chromedp.Void]) {
+	p.t.Helper()
+	if err := chromedp.Do(p.ctx, actions...); err != nil {
+		p.t.Fatal(err)
+	}
+}
+
+func (p *page) eval(expr string) {
+	p.t.Helper()
+	p.do(chromedp.Evaluate[chromedp.Void](expr))
+}
+
+// typeInto focuses a control and types text, as a user would.
+func (p *page) typeInto(selector, text string) {
+	p.t.Helper()
+	p.poll(selector + ` && "found"`)
+	p.eval(selector + `.focus()`)
+	p.do(chromedp.KeyEvent(text))
+}
+
+const appRoot = `document.querySelector("hzn-app").shadowRoot`
+
+// view is the shadow root of the routed view.
+const view = appRoot + `.getElementById("outlet").firstElementChild.shadowRoot`
+
+// signIn signs in from wherever the app sent a signed-out user.
+func (p *page) signIn(email, password string) {
+	p.t.Helper()
+	signIn := appRoot + `.querySelector("hzn-sign-in")?.shadowRoot`
+	p.typeInto(signIn+`?.querySelector('[name="email"]')`, email)
+	p.typeInto(signIn+`.querySelector('[name="password"]')`, password+"\r")
+	p.poll(`location.pathname !== "/sign-in" && "signed in"`)
+}
+
 // TestAppShell signs in through the real page and drives it with the keyboard.
 func TestAppShell(t *testing.T) {
-	ctx := testenv.Browser(t)
-	base := appServer(t)
-	logs := watchConsole(ctx)
-
-	const app = `document.querySelector("hzn-app").shadowRoot`
-	poll := func(expr string) string {
-		t.Helper()
-		v, err := chromedp.Run(ctx, chromedp.Poll[string](expr, chromedp.WithPollingInterval(50*time.Millisecond), chromedp.WithPollingTimeout(10*time.Second)))
-		if err != nil {
-			logs.failOnErrors(t)
-			state, _ := chromedp.Run(ctx, chromedp.Evaluate[string](`location.href + " | " + (document.querySelector("hzn-app")?.shadowRoot?.getElementById("outlet")?.firstElementChild?.shadowRoot?.textContent ?? "").replace(/\s+/g, " ").slice(0, 300)`))
-			t.Fatalf("waiting for %s: %v\npage: %s", expr, err, state)
-		}
-		return v
-	}
-	do := func(actions ...chromedp.Action[chromedp.Void]) {
-		t.Helper()
-		if err := chromedp.Do(ctx, actions...); err != nil {
-			t.Fatal(err)
-		}
-	}
-	eval := func(expr string) {
-		t.Helper()
-		do(chromedp.Evaluate[chromedp.Void](expr))
-	}
+	a := appServer(t)
+	pg := newPage(t)
+	ctx, logs, base := pg.ctx, pg.logs, a.base
+	const app = appRoot
+	poll, do, eval := pg.poll, pg.do, pg.eval
 	text := func(s string) string { return strings.Join(strings.Fields(s), " ") }
 	// items lists the text of each dt and dd in a <dl>, in order.
 	items := func(dl string) string {
@@ -349,7 +404,6 @@ func TestAppShell(t *testing.T) {
 	if got != "PostgreSQL | OK | NATS | OK | Object storage | OK | Database schema | OK" {
 		t.Errorf("checks = %q", got)
 	}
-	poll(app + `.querySelector('lds-nav-item[data-route="home"][active]') && "active"`)
 
 	// "?" opens the shortcut help, generated from the registry.
 	do(chromedp.KeyEvent("?"))
@@ -381,6 +435,95 @@ func TestAppShell(t *testing.T) {
 	poll(`location.pathname === "/sign-in" && "still signed out"`)
 
 	logs.failOnErrors(t)
+}
+
+// TestWorkspaces walks through phase 2's organisation flow in the browser:
+// an instance admin creates a workspace, invites someone who creates their
+// account from the emailed link, and builds a team.
+func TestWorkspaces(t *testing.T) {
+	a := appServer(t)
+	admin := newPage(t)
+
+	// Without a workspace, an instance admin is offered to create one; the
+	// URL follows the name.
+	admin.do(chromedp.Navigate(a.base + "/"))
+	admin.signIn("ada@example.com", testPassword)
+	admin.typeInto(view+`.querySelector('[name="name"]')`, "Acme Corp")
+	if got := admin.poll(view + `.querySelector('[name="slug"]').getAttribute("value")`); got != "acme-corp" {
+		t.Errorf("suggested slug = %q", got)
+	}
+	admin.eval(view + `.querySelector("form").requestSubmit()`)
+	admin.poll(`location.pathname === "/w/acme-corp" && "created"`)
+	if got := admin.poll(appRoot + `.querySelector("[data-ws-name]").textContent`); got != "Acme Corp" {
+		t.Errorf("switcher = %q", got)
+	}
+
+	// Members and teams: invite someone.
+	admin.do(chromedp.Navigate(a.base + "/w/acme-corp/settings/members"))
+	admin.poll(view + `.querySelector('[data-action="invite"]') && "ready"`)
+	if got := admin.poll(`getComputedStyle(` + appRoot + `.querySelector("lds-nav")).display`); got != "none" {
+		t.Errorf("app sidebar on a settings page: display %s", got)
+	}
+	admin.eval(view + `.querySelector('[data-action="invite"]').click()`)
+	admin.poll(view + `.querySelector('[data-dialog="invite"]').hasAttribute("open") && "open"`)
+	admin.typeInto(view+`.querySelector('[name="emails"]')`, "grace@example.com\r")
+	admin.eval(view + `.querySelector('[data-action="send-invites"]').click()`)
+	row := admin.poll(`[...` + view + `.querySelectorAll("tbody tr")].map((r) => r.textContent.replace(/\s+/g, " ").trim()).find((r) => r.includes("grace@example.com"))`)
+	if !strings.Contains(row, "Invited") {
+		t.Errorf("invitation row = %q", row)
+	}
+
+	// Signing in again lands in the workspace, not on the empty home.
+	admin.eval(appRoot + `.querySelector('[data-action="sign-out"]').click()`)
+	admin.poll(`location.pathname === "/sign-in" && "signed out"`)
+	admin.do(chromedp.Navigate(a.base + "/"))
+	admin.signIn("ada@example.com", testPassword)
+	admin.poll(`location.pathname === "/w/acme-corp" && "back in the workspace"`)
+
+	// Grace opens the link, creates her account and lands in the workspace.
+	var link string
+	for deadline := time.Now().Add(5 * time.Second); link == "" && time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if sent := a.mail.Sent(); len(sent) > 0 {
+			_, after, _ := strings.Cut(sent[0].Body, a.base+"/invitation#token=")
+			if f := strings.Fields(after); len(f) > 0 {
+				link = a.base + "/invitation#token=" + f[0]
+			}
+		}
+	}
+	if link == "" {
+		t.Fatal("no invitation email")
+	}
+	grace := newPage(t)
+	grace.do(chromedp.Navigate(link))
+	grace.poll(`location.hash === "" && "token hidden"`)
+	grace.typeInto(view+`.querySelector('[name="name"]')`, "Grace Hopper")
+	grace.typeInto(view+`.querySelector('[name="password"]')`, testPassword+"\r")
+	grace.poll(`location.pathname === "/w/acme-corp" && "joined"`)
+	if got := grace.poll(appRoot + `.querySelector("[data-user]").textContent`); got != "Grace Hopper" {
+		t.Errorf("signed in as %q", got)
+	}
+	// Members can read the member list but not manage it.
+	grace.do(chromedp.Navigate(a.base + "/w/acme-corp/settings/members"))
+	grace.poll(view + `.querySelector("tbody tr") && "listed"`)
+	if got := grace.poll(`String(!!` + view + `.querySelector('[data-action="invite"], lds-menu[data-kind]'))`); got != "false" {
+		t.Error("a member sees management actions")
+	}
+
+	// The admin creates a team with Grace in it.
+	admin.do(chromedp.Navigate(a.base + "/w/acme-corp/settings/members?view=teams"))
+	admin.poll(view + `.querySelector('[data-action="new-team"]') && "ready"`)
+	admin.eval(view + `.querySelector('[data-action="new-team"]').click()`)
+	admin.typeInto(view+`.querySelector('[data-dialog="team"] [name="name"]')`, "Core")
+	admin.eval(view + `.querySelector('[data-dialog="team"] [name="members"]').setAttribute("value", ` +
+		view + `.querySelector('[data-dialog="team"] lds-option[keywords="grace@example.com"]').getAttribute("value"))`)
+	admin.eval(view + `.querySelector('[data-action="save-team"]').click()`)
+	card := admin.poll(view + `.querySelector(".team")?.textContent.replace(/\s+/g, " ").trim()`)
+	if !strings.Contains(card, "Core") || !strings.Contains(card, "1 person") {
+		t.Errorf("team card = %q", card)
+	}
+
+	admin.logs.failOnErrors(t)
+	grace.logs.failOnErrors(t)
 }
 
 // serveForHumans serves the test page for a local browser:

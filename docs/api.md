@@ -46,9 +46,13 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
 /me/password | /me/sessions | /me/sessions/{id} | /me/sessions/revoke-others
 /me/tokens | /me/tokens/{id}                GET, POST (secret shown once) | DELETE; session only
 /me/inbox
-/w                                         workspaces of the current user
-/w/{ws}
-  /members  /teams  /roles  /grants
+/invitations/lookup | /invitations/accept  token in the body, never the URL
+/w                                         workspaces of the current user (?all=true: every one, instance admins); POST creates (instance admins)
+/w/{ws}                                    GET (with the caller's workspace permissions in "can") | PATCH name, slug, time zone
+  /members  /members/{user}                PATCH status (active, suspended) | DELETE
+  /invitations  /invitations/{id}/resend   POST {emails[], team_ids[]} | DELETE revokes
+  /teams  /teams/{id}  /teams/{id}/members/{user}
+  /roles  /grants
   /config/issue-types  /workflows  /fields  /labels  /settings
   /config/workflows/{id}/draft             GET | PUT | DELETE (discard)
   /config/workflows/{id}/publish           POST {status_mapping}; 409 lists unmapped statuses

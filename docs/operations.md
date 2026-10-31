@@ -103,7 +103,7 @@ position.
 | `horizon admin create-user` | Create a user (`--email`, `--name`, `--instance-admin`); prints a link to choose the password, or reads it with `--password-stdin` |
 | `horizon admin reset-password` | Print a single-use reset link for a user, valid one hour |
 | `horizon admin deactivate-user`, `reactivate-user` | Block or restore an account's sign-in instance-wide; deactivation revokes every session |
-| `horizon admin create-workspace` | Create a workspace with an owner |
+| `horizon admin create-workspace` | Create a workspace (`--slug`, `--name`, `--owner` email, `--time-zone`) with that account as first member |
 | `horizon admin reconcile` | Post-restore consistency (see above) |
 | `horizon admin rekey` | Re-encrypt secrets with the current `SECRET_KEY` |
 | `horizon admin rebuild-reports` | Replay `events` into the report projections |

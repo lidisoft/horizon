@@ -12,16 +12,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/urfave/cli/v3"
 
+	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/config"
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
+	"github.com/lidisoft/horizon/internal/workspace"
 )
 
 // adminCommand groups instance administration (docs/operations.md#admin-cli).
-// Workspaces arrive with their module; reconcile, rekey and rebuild-reports
-// later.
+// Reconcile, rekey and rebuild-reports arrive later.
 func adminCommand() *cli.Command {
 	email := &cli.StringFlag{Name: "email", Usage: "the account's email", Required: true}
 	return &cli.Command{
@@ -46,6 +47,17 @@ func adminCommand() *cli.Command {
 				Action: admin(resetPassword),
 			},
 			{
+				Name:  "create-workspace",
+				Usage: "Create a workspace with an existing account as its first member",
+				Flags: []cli.Flag{
+					&cli.StringFlag{Name: "slug", Usage: "URL name: lower-case letters, digits and hyphens", Required: true},
+					&cli.StringFlag{Name: "name", Usage: "display name", Required: true},
+					&cli.StringFlag{Name: "owner", Usage: "email of the first member", Required: true},
+					&cli.StringFlag{Name: "time-zone", Usage: "IANA time zone", Value: "UTC"},
+				},
+				Action: admin(createWorkspace),
+			},
+			{
 				Name:   "deactivate-user",
 				Usage:  "Block sign-in instance-wide and revoke every session",
 				Flags:  []cli.Flag{email},
@@ -61,7 +73,12 @@ func adminCommand() *cli.Command {
 	}
 }
 
-type adminFunc func(ctx context.Context, cmd *cli.Command, ids *identity.Service) error
+type adminFunc func(ctx context.Context, cmd *cli.Command, svc adminServices) error
+
+type adminServices struct {
+	ids        *identity.Service
+	workspaces *workspace.Service
+}
 
 // admin connects to PostgreSQL only: admin commands must work while NATS or
 // S3 are down. BASE_URL is read when set, for links.
@@ -78,7 +95,8 @@ func admin(fn adminFunc) cli.ActionFunc {
 		}
 		defer pool.Close()
 		ids := identity.New(identity.Options{Pool: pool, Log: log, BaseURL: cfg.BaseURL, SessionSecret: cfg.SessionSecret})
-		return describe(fn(ctx, cmd, ids))
+		ws := workspace.New(workspace.Options{Pool: pool, Log: log, Identity: ids, Access: access.Interim{}, BaseURL: cfg.BaseURL})
+		return describe(fn(ctx, cmd, adminServices{ids: ids, workspaces: ws}))
 	}
 }
 
@@ -98,7 +116,8 @@ func describe(err error) error {
 	return errors.New(strings.Join(parts, "; "))
 }
 
-func createUser(ctx context.Context, cmd *cli.Command, ids *identity.Service) error {
+func createUser(ctx context.Context, cmd *cli.Command, svc adminServices) error {
+	ids := svc.ids
 	email := cmd.String("email")
 	name := cmd.String("name")
 	if name == "" {
@@ -132,7 +151,8 @@ func createUser(ctx context.Context, cmd *cli.Command, ids *identity.Service) er
 	return nil
 }
 
-func resetPassword(ctx context.Context, cmd *cli.Command, ids *identity.Service) error {
+func resetPassword(ctx context.Context, cmd *cli.Command, svc adminServices) error {
+	ids := svc.ids
 	u, err := ids.UserByEmail(ctx, cmd.String("email"))
 	if err != nil {
 		return err
@@ -146,7 +166,8 @@ func resetPassword(ctx context.Context, cmd *cli.Command, ids *identity.Service)
 }
 
 func setDeactivated(deactivated bool) adminFunc {
-	return func(ctx context.Context, cmd *cli.Command, ids *identity.Service) error {
+	return func(ctx context.Context, cmd *cli.Command, svc adminServices) error {
+		ids := svc.ids
 		u, err := ids.UserByEmail(ctx, cmd.String("email"))
 		if err != nil {
 			return err
@@ -161,6 +182,25 @@ func setDeactivated(deactivated bool) adminFunc {
 		fmt.Fprintf(cmd.Writer, "%s %s\n", state, u.Email)
 		return nil
 	}
+}
+
+func createWorkspace(ctx context.Context, cmd *cli.Command, svc adminServices) error {
+	owner, err := svc.ids.UserByEmail(ctx, cmd.String("owner"))
+	if err != nil {
+		return fmt.Errorf("owner: %w", describe(err))
+	}
+	w, err := svc.workspaces.Create(ctx, uuid.NullUUID{}, workspace.NewWorkspace{
+		Slug: cmd.String("slug"), Name: cmd.String("name"), TimeZone: cmd.String("time-zone"), OwnerID: owner.ID,
+	})
+	if err != nil {
+		return err
+	}
+	link := "/w/" + w.Slug
+	if svc.ids.BaseURL() != nil {
+		link = svc.ids.BaseURL().JoinPath("w", w.Slug).String()
+	}
+	fmt.Fprintf(cmd.Writer, "created workspace %s (%s) with %s; open %s\n", w.Name, w.ID, owner.Email, link)
+	return nil
 }
 
 func readLine(r io.Reader) (string, error) {
