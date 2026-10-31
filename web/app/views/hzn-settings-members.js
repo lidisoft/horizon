@@ -62,9 +62,20 @@ class HznSettingsMembers extends HTMLElement {
     const { api, i18n } = this.context;
     const slug = encodeURIComponent(this.getAttribute("ws"));
     try {
-      const [ws, members, teams, roles] = await Promise.all([
+      const [ws, members, teams, roles, grants, projects] = await Promise.all([
         api.get(`/w/${slug}`), api.get(`/w/${slug}/members`), api.get(`/w/${slug}/teams`), api.get(`/w/${slug}/roles`),
+        api.get(`/w/${slug}/grants`), api.get(`/w/${slug}/projects`),
       ]);
+      const projectName = new Map(projects.data.items.map((p) => [p.id, p.name]));
+      // Project grants by user or team: "Horizon: Facilitator".
+      this.projectGrants = new Map();
+      for (const g of grants.data.items) {
+        if (!g.project_id) continue;
+        const subject = g.user_id || g.team_id;
+        const list = this.projectGrants.get(subject) ?? [];
+        list.push(`${projectName.get(g.project_id) ?? "?"}: ${g.role_name}`);
+        this.projectGrants.set(subject, list);
+      }
       this.ws = ws.data;
       this.members = members.data.items;
       this.teams = teams.data.items;
@@ -145,6 +156,7 @@ class HznSettingsMembers extends HTMLElement {
             <th scope="col">${t("members.member")}</th>
             <th scope="col">${t("members.statusColumn")}</th>
             <th scope="col">${t("members.role")}</th>
+            <th scope="col">${t("members.projectGrants")}</th>
             <th scope="col">${t("members.teams")}</th>
             <th scope="col">${t("members.lastActive")}</th>
             <th scope="col"><span class="lds-visually-hidden">${t("account.actions")}</span></th>
@@ -175,10 +187,11 @@ class HznSettingsMembers extends HTMLElement {
           ${r.deactivated ? html` <lds-badge size="sm" intent="danger">${t("members.deactivated")}</lds-badge>` : ""}
         </td>
         <td>${this.roleCell(r)}</td>
+        <td>${this.projectGrants.get(r.id)?.join(", ") ?? "—"}</td>
         <td>${r.teams.length ? r.teams.join(", ") : "—"}</td>
         <td>${r.kind === "invitation" ? html`${t("members.invitedOn")} ${when(r.sent)}` : r.last ? when(r.last) : t("tokens.never")}</td>
         <td class="end">${this.canManage && !r.self ? this.rowMenu(r) : ""}</td>
-      </tr>`) : html`<tr><td colspan="6" class="muted">${t("members.noMatch")}</td></tr>`}`);
+      </tr>`) : html`<tr><td colspan="7" class="muted">${t("members.noMatch")}</td></tr>`}`);
     for (const select of body.querySelectorAll("lds-select[data-grant-user]")) {
       select.addEventListener("lds-change", (e) => this.setRole({ user_id: select.dataset.grantUser }, select.dataset.grantId, e.detail.value));
     }
@@ -242,6 +255,7 @@ class HznSettingsMembers extends HTMLElement {
         </div>
         <p>${team.description || t("teams.noDescription")}</p>
         <p class="grant">${t("teams.workspaceRole")}: <strong>${team.role?.name ?? t("members.noRole")}</strong></p>
+        ${this.projectGrants.get(team.id) ? html`<p class="grant">${t("members.projectGrants")}: <strong>${this.projectGrants.get(team.id).join(", ")}</strong></p>` : ""}
         <div class="people">
           ${team.members.length ? html`<lds-avatar-group size="sm" max="5">${team.members.map((m) => html`<lds-avatar size="sm" name="${m.name}" title="${m.name}"></lds-avatar>`)}</lds-avatar-group>` : ""}
           ${t("teams.people", { count: team.members.length })}

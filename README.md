@@ -15,7 +15,7 @@ releases, boards, tables, Gantt timelines and calendars.
 
 ## Status
 
-Phase 2, identity and organisation, is in progress ([roadmap](docs/roadmap.md)). The
+Phase 2, identity and organisation, is done; phase 3, the issues core, is next ([roadmap](docs/roadmap.md)). The
 documentation below is the specification.
 
 ## Getting started

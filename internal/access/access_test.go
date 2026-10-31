@@ -9,12 +9,14 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/identity"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
+	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/testenv"
 	"github.com/lidisoft/horizon/internal/workspace"
 )
@@ -25,6 +27,7 @@ const password = "correct horse battery"
 
 type fixture struct {
 	t     *testing.T
+	pool  *pgxpool.Pool
 	ids   *identity.Service
 	acc   *access.Service
 	ws    *workspace.Service
@@ -37,7 +40,7 @@ func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	pool := testenv.DB(t)
 	base := &url.URL{Scheme: "https", Host: "horizon.example.com"}
-	f := &fixture{t: t}
+	f := &fixture{t: t, pool: pool}
 	f.ids = identity.New(identity.Options{Pool: pool, Log: zerolog.Nop(), BaseURL: base, SessionSecret: "test-session-secret-at-least-32-chars"})
 	f.acc = access.New(pool, nil)
 	f.ws = workspace.New(workspace.Options{Pool: pool, Log: zerolog.Nop(), Identity: f.ids, Access: f.acc, Mail: &platformmail.Memory{}, BaseURL: base})
@@ -169,8 +172,16 @@ func TestTeamAndProjectGrants(t *testing.T) {
 	}
 
 	// A project grant applies to that project only.
-	project := uuid.Must(uuid.NewV7())
-	onProject := access.Scope{WorkspaceID: f.acme.ID, ProjectID: some(project)}
+	projects := project.New(f.pool, f.acc, nil)
+	newProject := func(key string) uuid.UUID {
+		p, err := projects.Create(ctx, wc, project.Input{Key: &key, Name: &key})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p.ID
+	}
+	secret, other := newProject("SEC"), newProject("OTH")
+	onProject := access.Scope{WorkspaceID: f.acme.ID, ProjectID: some(secret)}
 	grace := f.principal("grace@example.com")
 	if err := f.ws.AddMember(ctx, f.acme.ID, grace.User.ID); err != nil {
 		t.Fatal(err)
@@ -183,11 +194,11 @@ func TestTeamAndProjectGrants(t *testing.T) {
 			}
 		}
 	}
-	f.grant("guest", some(grace.User.ID), uuid.NullUUID{}, some(project))
+	f.grant("guest", some(grace.User.ID), uuid.NullUUID{}, some(secret))
 	if !f.can(grace, onProject, access.IssueView) || f.can(grace, f.scope(), access.IssueView) {
 		t.Error("project grant leaks to the workspace, or doesn't apply")
 	}
-	if f.can(grace, access.Scope{WorkspaceID: f.acme.ID, ProjectID: some(uuid.Must(uuid.NewV7()))}, access.IssueView) {
+	if f.can(grace, access.Scope{WorkspaceID: f.acme.ID, ProjectID: some(other)}, access.IssueView) {
 		t.Error("project grant applies to another project")
 	}
 

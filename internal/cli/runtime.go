@@ -21,6 +21,7 @@ import (
 	"github.com/lidisoft/horizon/internal/platform/nats"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
 	"github.com/lidisoft/horizon/internal/platform/s3"
+	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/version"
 	"github.com/lidisoft/horizon/internal/workspace"
@@ -102,10 +103,11 @@ func (rt *runtime) api() func(api *gin.RouterGroup) {
 		BaseURL:  rt.cfg.BaseURL,
 	}), auth)
 	roles := access.NewHTTP(acc)
+	projects := project.NewHTTP(project.New(rt.pool, acc, nil))
 	return func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
-		workspaces.Register(api, roles.Register)
+		workspaces.Register(api, roles.Register, projects.Register)
 	}
 }
 

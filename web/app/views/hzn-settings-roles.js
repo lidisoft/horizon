@@ -64,7 +64,10 @@ class HznSettingsRoles extends HTMLElement {
     const { api, i18n } = this.context;
     const slug = encodeURIComponent(this.getAttribute("ws"));
     try {
-      const [ws, roles, grants] = await Promise.all([api.get(`/w/${slug}`), api.get(`/w/${slug}/roles`), api.get(`/w/${slug}/grants`)]);
+      const [ws, roles, grants, projects] = await Promise.all([
+        api.get(`/w/${slug}`), api.get(`/w/${slug}/roles`), api.get(`/w/${slug}/grants`), api.get(`/w/${slug}/projects`),
+      ]);
+      this.projects = projects.data.items;
       this.ws = ws.data;
       this.roles = roles.data.items;
       this.catalogue = roles.data.catalogue;
@@ -188,7 +191,7 @@ class HznSettingsRoles extends HTMLElement {
             <tr>
               <td>${g.team_id ? html`<lds-icon name="users"></lds-icon> ` : ""}${g.subject_name}${g.subject_email ? html` <span class="muted">${g.subject_email}</span>` : ""}</td>
               <td>${g.role_name}</td>
-              <td>${g.project_id ? t("grants.project") : t("grants.workspace")}</td>
+              <td>${g.project_id ? t("grants.onProject", { name: this.projects.find((p) => p.id === g.project_id)?.name ?? "?" }) : t("grants.workspace")}</td>
               <td class="end">${this.canManage ? html`<lds-button size="sm" variant="ghost" data-remove-grant="${g.id}" data-name="${g.subject_name}">${t("grants.remove")}</lds-button>` : ""}</td>
             </tr>`)}</tbody>
         </table>
@@ -231,7 +234,12 @@ class HznSettingsRoles extends HTMLElement {
               ${this.roles.map((r) => html`<option value="${r.id}">${r.name}</option>`)}
             </lds-select>
           </lds-field>
-          <p class="muted">${t("grants.workspaceOnly")}</p>
+          <lds-field label="${t("grants.scope")}">
+            <lds-select name="project_id" value="">
+              <option value="">${t("grants.workspace")}</option>
+              ${this.projects.filter((p) => !p.archived_at).map((p) => html`<option value="${p.id}">${t("grants.onProject", { name: p.name })}</option>`)}
+            </lds-select>
+          </lds-field>
         </form>
         <div slot="footer" class="actions">
           <lds-button variant="ghost" data-close>${t("tokens.cancel")}</lds-button>
@@ -395,7 +403,8 @@ class HznSettingsRoles extends HTMLElement {
       showFieldErrors(form, [{ field: "subject", code: "required" }], i18n.t, i18n.has);
       return;
     }
-    const body = { role_id: formValues(form).role_id, [kind === "team" ? "team_id" : "user_id"]: id };
+    const { role_id: roleId, project_id: projectId } = formValues(form);
+    const body = { role_id: roleId, [kind === "team" ? "team_id" : "user_id"]: id, project_id: projectId || undefined };
     try {
       await busy(modal.querySelector('[data-action="save-grant"]'), () => api.put(`${this.base}/grants`, { body }));
     } catch (err) {

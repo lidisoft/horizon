@@ -92,7 +92,12 @@ sequence counter.
 **Invariants**
 - The key is unique within the workspace, 2–10 uppercase letters or digits,
   starting with a letter.
-- Renaming the key keeps old keys as aliases, so `OLD-12` still resolves.
+- Renaming the key keeps old keys as aliases, so `OLD-12` still resolves. No
+  other project can take a current or former key; a project can take one of
+  its own former keys back.
+- Archiving makes a project read-only and hides it from the sidebar; it can
+  be restored. Deleting a project waits for the issue deletion rules
+  (phase 3).
 
 ### Issue
 | Field | Notes |

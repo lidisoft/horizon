@@ -68,8 +68,11 @@ the request comes through a proxy listed in `HORIZON_TRUSTED_PROXIES`.
   to all projects) or **project** scope.
 - Effective permissions on a project = union of all grants on that project and
   at workspace scope, for the user and their teams.
-- Project **visibility**: `workspace` (every member may view) or `private`
-  (only users with a grant on it).
+- Project **visibility**: `workspace` (every member holding `project.view`
+  may view) or `private` (only users with a grant on it, directly or through
+  a team, plus holders of `project.manage` on the whole workspace, so admins
+  can administer it). Projects the caller can't see are `404
+  project_not_found`.
 
 Code checks **permission keys only**, never role names, through
 `internal/access`:

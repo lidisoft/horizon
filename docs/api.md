@@ -57,8 +57,8 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   /config/issue-types  /workflows  /fields  /labels  /settings
   /config/workflows/{id}/draft             GET | PUT | DELETE (discard)
   /config/workflows/{id}/publish           POST {status_mapping}; 409 lists unmapped statuses
-  /projects
-  /projects/{key}
+  /projects                                 GET (visible ones) | POST (project.create)
+  /projects/{key}                          GET (current or former key; "can" lists the caller's permissions) | PATCH | /archive | /unarchive
     /config/…                              project overrides (same shape)
     /iterations  /iterations/{id}/start|complete|archive
     /releases  /milestones

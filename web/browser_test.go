@@ -31,6 +31,7 @@ import (
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/identity"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
+	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/testenv"
 	"github.com/lidisoft/horizon/internal/workspace"
@@ -250,12 +251,13 @@ func appServer(t *testing.T) app {
 		Pool: pool, Log: zerolog.Nop(), Identity: ids, Access: acc, Mail: a.mail, BaseURL: baseURL,
 	}), auth)
 	roles := access.NewHTTP(acc)
+	projects := project.NewHTTP(project.New(pool, acc, nil))
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
 	ln.Serve(server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
-		workspaces.Register(api, roles.Register)
+		workspaces.Register(api, roles.Register, projects.Register)
 	}}))
 	return a
 }
@@ -550,6 +552,8 @@ func TestWorkspaces(t *testing.T) {
 		const viewer = [...s.querySelectorAll("option")].find((o) => o.textContent === "Viewer").value;
 		s.setAttribute("value", viewer);
 		s.dispatchEvent(new CustomEvent("lds-change", { detail: { value: viewer }, bubbles: true, composed: true })); })()`)
+	// Wait for the change to land before leaving the page, which would cancel it.
+	admin.poll(`[...document.querySelectorAll("lds-toast")].some((t) => t.textContent.includes("Role updated.")) && "saved"`)
 	admin.do(chromedp.Navigate(a.base + "/w/acme-corp/settings/roles?view=grants"))
 	grant := admin.poll(`[...` + view + `.querySelectorAll("tbody tr")].map((r) => r.textContent.replace(/\s+/g, " ").trim()).find((r) => r.includes("Grace"))`)
 	if !strings.Contains(grant, "Viewer") || !strings.Contains(grant, "Whole workspace") {
@@ -565,6 +569,85 @@ func TestWorkspaces(t *testing.T) {
 	grace.poll(view + `.querySelector('input[type="checkbox"]') && "matrix"`)
 	if got := grace.poll(`String(` + view + `.querySelector('input[type="checkbox"]:not(:disabled)') === null && !` + view + `.querySelector('[data-action="save"]'))`); got != "true" {
 		t.Error("Grace can edit the matrix")
+	}
+
+	admin.logs.failOnErrors(t)
+	grace.logs.failOnErrors(t)
+}
+
+// TestProjects creates a project from the sidebar, renames its key (the old
+// key keeps working) and makes it private.
+func TestProjects(t *testing.T) {
+	a := appServer(t)
+	admin := newPage(t)
+	admin.do(chromedp.Navigate(a.base + "/"))
+	admin.signIn("ada@example.com", testPassword)
+	admin.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	admin.eval(view + `.querySelector("form").requestSubmit()`)
+	admin.poll(`location.pathname === "/w/acme" && "workspace"`)
+
+	// The sidebar's + opens the new project dialog; the key follows the name.
+	admin.poll(appRoot + `.querySelector("[data-new-project]") && "loaded"`)
+	admin.eval(appRoot + `.querySelector("[data-new-project]").click()`)
+	admin.poll(view + `.querySelector('[data-dialog="new"]').hasAttribute("open") && "open"`)
+	admin.typeInto(view+`.querySelector('[data-dialog="new"] [name="name"]')`, "Design system")
+	if got := admin.poll(view + `.querySelector('[data-dialog="new"] [name="key"]').getAttribute("value")`); got != "DS" {
+		t.Errorf("suggested key = %q", got)
+	}
+	admin.eval(view + `.querySelector('[data-action="create"]').click()`)
+	admin.poll(`location.pathname === "/w/acme/p/DS" && "created"`)
+	item := appRoot + `.querySelector('lds-nav-item[data-project="DS"]')`
+	if got := admin.poll(item + `?.textContent.trim() + " | " + ` + item + `?.querySelector(".project-key")?.textContent`); got != "Design systemDS | DS" {
+		t.Errorf("sidebar item = %q", got)
+	}
+
+	// Renaming the key keeps the old one working.
+	admin.do(chromedp.Navigate(a.base + "/w/acme/settings/projects/DS"))
+	admin.poll(view + `.querySelector('[name="key"]') && "form"`)
+	admin.eval(view + `.querySelector('[name="key"]').setAttribute("value", "")`)
+	admin.typeInto(view+`.querySelector('[name="key"]')`, "LDS")
+	admin.poll(`!` + view + `.querySelector("[data-key-note]").hidden && "noted"`)
+	admin.eval(view + `.querySelector('[data-action="save"]').click()`)
+	admin.poll(`location.pathname === "/w/acme/settings/projects/LDS" && "renamed"`)
+	admin.do(chromedp.Navigate(a.base + "/w/acme/p/DS"))
+	admin.poll(`location.pathname === "/w/acme/p/LDS" && "redirected"`)
+
+	// Invite Grace as Viewer: she sees the project until it turns private.
+	admin.do(chromedp.Navigate(a.base + "/w/acme/settings/members"))
+	admin.poll(view + `.querySelector('[data-action="invite"]') && "ready"`)
+	admin.eval(view + `.querySelector('[data-action="invite"]').click()`)
+	admin.typeInto(view+`.querySelector('[name="emails"]')`, "grace@example.com\r")
+	admin.eval(`(() => { const s = ` + view + `.querySelector('[data-dialog="invite"] [name="role_id"]');
+		s.setAttribute("value", [...s.querySelectorAll("option")].find((o) => o.textContent === "Viewer").value); })()`)
+	admin.eval(view + `.querySelector('[data-action="send-invites"]').click()`)
+	admin.poll(`[...` + view + `.querySelectorAll("tbody tr")].some((r) => r.textContent.includes("grace@example.com")) && "invited"`)
+	var link string
+	for deadline := time.Now().Add(5 * time.Second); link == "" && time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if sent := a.mail.Sent(); len(sent) > 0 {
+			_, after, _ := strings.Cut(sent[0].Body, "#token=")
+			if f := strings.Fields(after); len(f) > 0 {
+				link = a.base + "/invitation#token=" + f[0]
+			}
+		}
+	}
+	grace := newPage(t)
+	grace.do(chromedp.Navigate(link))
+	grace.typeInto(view+`.querySelector('[name="name"]')`, "Grace Hopper")
+	grace.typeInto(view+`.querySelector('[name="password"]')`, testPassword+"\r")
+	grace.poll(`location.pathname === "/w/acme" && "joined"`)
+	grace.poll(appRoot + `.querySelector('lds-nav-item[data-project="LDS"]') && "sees it"`)
+
+	admin.do(chromedp.Navigate(a.base + "/w/acme/settings/projects/LDS"))
+	admin.poll(view + `.querySelector('lds-radio-group button[value="private"]') && "form"`)
+	admin.eval(view + `.querySelector('lds-radio-group button[value="private"]').click()`)
+	admin.eval(view + `.querySelector('[data-action="save"]').click()`)
+	admin.poll(view + `.querySelector("[data-saved]")?.textContent && "saved"`)
+	grace.do(chromedp.Navigate(a.base + "/w/acme/p/LDS"))
+	if got := grace.poll(view + `.querySelector("h2")?.textContent.trim()`); got != "This project doesn't exist, or you can't see it." {
+		t.Errorf("private project for a viewer: %q", got)
+	}
+	if got := grace.poll(`String(!!` + appRoot + `.querySelector('lds-nav-item[data-project="LDS"]'))`); got != "false" {
+		t.Error("the private project is still in Grace's sidebar")
 	}
 
 	admin.logs.failOnErrors(t)

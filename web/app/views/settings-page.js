@@ -28,10 +28,14 @@ const PAGES = [
   { name: "general", icon: "settings", label: "settings.general" },
   { name: "members", icon: "users", label: "settings.members" },
   { name: "roles", icon: "lock", label: "settings.roles" },
+  { name: "projects", icon: "layers", label: "settings.projects" },
 ];
 
-/** The settings frame around body; actions go to the header's end. */
-export function settingsPage(t, ws, active, body, actions = "") {
+/**
+ * The settings frame around body; actions go to the header's end. crumb
+ * adds a last breadcrumb step under the page (a project's name).
+ */
+export function settingsPage(t, ws, active, body, actions = "", crumb = "") {
   const title = t(PAGES.find((p) => p.name === active).label);
   return html`
     <nav class="settings" aria-label="${t("settings.title")}">
@@ -44,7 +48,9 @@ export function settingsPage(t, ws, active, body, actions = "") {
       <header class="bar">
         <lds-breadcrumb>
           <lds-breadcrumb-item href="/w/${ws.slug}/settings/general">${t("settings.title")}</lds-breadcrumb-item>
-          <lds-breadcrumb-item current>${title}</lds-breadcrumb-item>
+          ${crumb
+            ? html`<lds-breadcrumb-item href="/w/${ws.slug}/settings/${active}">${title}</lds-breadcrumb-item><lds-breadcrumb-item current>${crumb}</lds-breadcrumb-item>`
+            : html`<lds-breadcrumb-item current>${title}</lds-breadcrumb-item>`}
         </lds-breadcrumb>
         <lds-badge size="sm">${ws.name}</lds-badge>
         <div class="actions">${actions}</div>

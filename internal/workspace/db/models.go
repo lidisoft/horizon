@@ -69,6 +69,30 @@ type PasswordReset struct {
 	UsedAt    *time.Time
 }
 
+type Project struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	Key         string
+	Name        string
+	Description string
+	Colour      string
+	LeadID      uuid.NullUUID
+	Visibility  string
+	Settings    json.RawMessage
+	IssueSeq    int64
+	ArchivedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
+type ProjectKeyAlias struct {
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	OldKey      string
+	CreatedAt   time.Time
+}
+
 type Role struct {
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID

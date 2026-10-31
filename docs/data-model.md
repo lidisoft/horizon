@@ -35,8 +35,8 @@ PostgreSQL schema outline. Authoritative definitions live in
 
 | Table | Key columns |
 |-------|-------------|
-| `projects` | workspace_id, key, name, lead_id, visibility, settings JSONB (overrides), issue_seq bigint, archived_at |
-| `project_key_aliases` | workspace_id, project_id, old_key |
+| `projects` | workspace_id, key (unique per workspace, 2–10 upper-case letters or digits), name, description, colour (named swatch), lead_id, visibility (workspace, private), settings JSONB (overrides), issue_seq bigint, archived_at |
+| `project_key_aliases` | workspace_id, project_id, old_key — former keys; current keys and aliases share one namespace per workspace |
 | `issue_types` | workspace_id, project_id (nullable = workspace), name, icon, colour, workflow_id, allowed_parent_type_ids |
 | `workflows` | workspace_id, project_id (nullable), name, version, draft JSONB (nullable: statuses, transitions and rules being edited), draft_updated_by, draft_updated_at |
 | `status_categories` | workspace_id, project_id (nullable = workspace), name, colour, position, outcome (`unstarted`, `started`, `completed`, `abandoned`) |

@@ -30,7 +30,7 @@ usable exists early.
 - [x] API tokens
 - [x] Workspaces, members, invitations, teams
 - [x] Roles, permission sets, grants; enforcement middleware
-- [ ] Projects with keys and aliases
+- [x] Projects with keys and aliases
 
 ## Phase 3 — Issues core
 
