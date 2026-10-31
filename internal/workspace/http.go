@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/server"
@@ -27,8 +28,9 @@ func NewHTTP(svc *Service, auth *identity.HTTP) *HTTP {
 }
 
 // Register mounts the routes on the /api/v1 group, which must run
-// identity's Authenticate.
-func (h *HTTP) Register(api *gin.RouterGroup) {
+// identity's Authenticate. more registers other modules' routes under
+// /w/:ws, after the workspace is resolved.
+func (h *HTTP) Register(api *gin.RouterGroup, more ...func(ws *gin.RouterGroup)) {
 	inv := api.Group("/invitations")
 	inv.POST("/lookup", h.lookupInvitation)
 	inv.POST("/accept", h.acceptInvitation)
@@ -53,6 +55,9 @@ func (h *HTTP) Register(api *gin.RouterGroup) {
 	ws.DELETE("/teams/:id", h.deleteTeam)
 	ws.PUT("/teams/:id/members/:user", h.addTeamMember)
 	ws.DELETE("/teams/:id/members/:user", h.removeTeamMember)
+	for _, register := range more {
+		register(ws)
+	}
 }
 
 // enter resolves /w/:ws for the caller (404 when they may not see it).
@@ -64,6 +69,7 @@ func (h *HTTP) enter(c *gin.Context) {
 		return
 	}
 	c.Set(contextKey, wc)
+	access.SetScope(c, wc.Scope())
 	c.Next()
 }
 
@@ -338,6 +344,8 @@ func (h *HTTP) invitations(c *gin.Context) {
 type InviteRequest struct {
 	Emails  []string    `json:"emails"`
 	TeamIDs []uuid.UUID `json:"team_ids,omitempty"`
+	// RoleID defaults to Contributor; another role needs workspace.roles.manage.
+	RoleID *uuid.UUID `json:"role_id,omitempty"`
 }
 
 // invite sends invitations.
@@ -358,7 +366,11 @@ func (h *HTTP) invite(c *gin.Context) {
 		server.WriteError(c, err)
 		return
 	}
-	items, err := h.svc.InvitePeople(c, Current(c), Invite{Emails: req.Emails, TeamIDs: req.TeamIDs})
+	in := Invite{Emails: req.Emails, TeamIDs: req.TeamIDs}
+	if req.RoleID != nil {
+		in.RoleID = uuid.NullUUID{UUID: *req.RoleID, Valid: true}
+	}
+	items, err := h.svc.InvitePeople(c, Current(c), in)
 	if err != nil {
 		server.WriteError(c, err)
 		return

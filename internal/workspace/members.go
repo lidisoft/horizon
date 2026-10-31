@@ -33,7 +33,38 @@ type Member struct {
 	Deactivated bool       `json:"deactivated"`
 	LastSeenAt  *time.Time `json:"last_seen_at"`
 	Teams       []TeamRef  `json:"teams"`
-	Version     int32      `json:"version"`
+	// Role is the member's own workspace-scope role, if any (teams may give
+	// more).
+	Role    *RoleRef `json:"role"`
+	Version int32    `json:"version"`
+}
+
+// RoleRef names a role held through a grant.
+type RoleRef struct {
+	ID      uuid.UUID `json:"id"`
+	Name    string    `json:"name"`
+	GrantID uuid.UUID `json:"grant_id"`
+}
+
+// workspaceRoles maps users and teams to their workspace-scope role.
+func (s *Service) workspaceRoles(ctx context.Context, workspaceID uuid.UUID) (map[uuid.UUID]*RoleRef, error) {
+	grants, err := s.access.Grants(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	out := map[uuid.UUID]*RoleRef{}
+	for _, g := range grants {
+		if g.ProjectID.Valid {
+			continue
+		}
+		ref := &RoleRef{ID: g.RoleID, Name: g.RoleName, GrantID: g.ID}
+		if g.UserID.Valid {
+			out[g.UserID.UUID] = ref
+		} else {
+			out[g.TeamID.UUID] = ref
+		}
+	}
+	return out, nil
 }
 
 // TeamRef names a team.
@@ -59,17 +90,33 @@ func (s *Service) join(ctx context.Context, tx pgx.Tx, workspaceID, userID uuid.
 }
 
 // AddMember makes an existing account a member directly, without an
-// invitation (admin CLI).
+// invitation, with the role invitations give by default.
 func (s *Service) AddMember(ctx context.Context, workspaceID, userID uuid.UUID) error {
 	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
-		_, err := s.join(ctx, tx, workspaceID, userID, uuid.NullUUID{}, "admin")
+		if _, err := s.join(ctx, tx, workspaceID, userID, uuid.NullUUID{}, "admin"); err != nil {
+			return err
+		}
+		role, err := s.access.BuiltinRole(ctx, tx, workspaceID, access.DefaultRoleForInvites)
+		if err != nil {
+			return err
+		}
+		_, err = s.access.SetGrantInTx(ctx, tx, workspaceID, uuid.NullUUID{}, access.GrantInput{
+			RoleID: role, UserID: uuid.NullUUID{UUID: userID, Valid: true},
+		})
 		return err
 	})
 }
 
-// Members lists the workspace's members with their teams. Every member may
-// see the list (guests won't, once roles exist).
+// Members lists the workspace's members with their teams and workspace
+// role. Guests (no workspace-scope grant) can't see it.
 func (s *Service) Members(ctx context.Context, wc Context) ([]Member, error) {
+	if err := s.requireSees(ctx, wc); err != nil {
+		return nil, err
+	}
+	roles, err := s.workspaceRoles(ctx, wc.Workspace.ID)
+	if err != nil {
+		return nil, err
+	}
 	q := db.New(s.pool)
 	rows, err := q.ListMembers(ctx, wc.Workspace.ID)
 	if err != nil {
@@ -100,7 +147,7 @@ func (s *Service) Members(ctx context.Context, wc Context) ([]Member, error) {
 		out[i] = Member{
 			UserID: r.UserID, Name: r.Name, Email: r.Email, Status: r.Status, JoinedAt: r.JoinedAt,
 			SuspendedAt: r.SuspendedAt, Deactivated: r.DeactivatedAt != nil, LastSeenAt: lastSeen[r.UserID],
-			Teams: ts, Version: r.Version,
+			Teams: ts, Role: roles[r.UserID], Version: r.Version,
 		}
 	}
 	return out, nil

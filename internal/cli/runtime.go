@@ -92,18 +92,20 @@ func (rt *runtime) identity() *identity.Service {
 func (rt *runtime) api() func(api *gin.RouterGroup) {
 	ids := rt.identity()
 	auth := identity.NewHTTP(ids, rt.cfg.BaseURL.Scheme == "https")
+	acc := access.New(rt.pool, nil)
 	workspaces := workspace.NewHTTP(workspace.New(workspace.Options{
 		Pool:     rt.pool,
 		Log:      logging.WithSystem(rt.log, "workspace"),
 		Identity: ids,
-		Access:   access.Interim{},
+		Access:   acc,
 		Mail:     rt.mailer(),
 		BaseURL:  rt.cfg.BaseURL,
 	}), auth)
+	roles := access.NewHTTP(acc)
 	return func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
-		workspaces.Register(api)
+		workspaces.Register(api, roles.Register)
 	}
 }
 

@@ -27,6 +27,7 @@ export const settingsStyles = sheet(`
 const PAGES = [
   { name: "general", icon: "settings", label: "settings.general" },
   { name: "members", icon: "users", label: "settings.members" },
+  { name: "roles", icon: "lock", label: "settings.roles" },
 ];
 
 /** The settings frame around body; actions go to the header's end. */

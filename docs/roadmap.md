@@ -29,7 +29,7 @@ usable exists early.
 - [x] Users, email + password, sessions, CSRF
 - [x] API tokens
 - [x] Workspaces, members, invitations, teams
-- [ ] Roles, permission sets, grants; enforcement middleware
+- [x] Roles, permission sets, grants; enforcement middleware
 - [ ] Projects with keys and aliases
 
 ## Phase 3 — Issues core

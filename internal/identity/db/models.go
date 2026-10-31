@@ -57,6 +57,7 @@ type Invitation struct {
 	AcceptedBy  uuid.NullUUID
 	RevokedAt   *time.Time
 	Version     int32
+	RoleID      uuid.NullUUID
 }
 
 type PasswordReset struct {
@@ -66,6 +67,31 @@ type PasswordReset struct {
 	CreatedAt time.Time
 	ExpiresAt time.Time
 	UsedAt    *time.Time
+}
+
+type Role struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	Name        string
+	Description string
+	Builtin     *string
+	Permissions []string
+	Position    int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
+type RoleGrant struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	RoleID      uuid.UUID
+	UserID      uuid.NullUUID
+	TeamID      uuid.NullUUID
+	ProjectID   uuid.NullUUID
+	GrantedBy   uuid.NullUUID
+	CreatedAt   time.Time
+	Version     int32
 }
 
 type Session struct {

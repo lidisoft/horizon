@@ -1,6 +1,6 @@
 -- name: CreateInvitation :one
-INSERT INTO invitations (workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)
+INSERT INTO invitations (workspace_id, id, email, token_hash, invited_by, team_ids, role_id, created_at, sent_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
 RETURNING *;
 
 -- name: OpenInvitationByEmail :one
@@ -12,9 +12,9 @@ FOR UPDATE;
 SELECT * FROM invitations WHERE workspace_id = $1 AND id = $2 FOR UPDATE;
 
 -- name: RenewInvitation :one
--- A resend: new token, new expiry, teams replaced.
+-- A resend: new token, new expiry, teams and role replaced.
 UPDATE invitations
-SET token_hash = $3, invited_by = $4, team_ids = $5, sent_at = $6, expires_at = $7, version = version + 1
+SET token_hash = $3, invited_by = $4, team_ids = $5, role_id = $6, sent_at = $7, expires_at = $8, version = version + 1
 WHERE workspace_id = $1 AND id = $2
 RETURNING *;
 

@@ -245,15 +245,17 @@ func appServer(t *testing.T) app {
 		t.Fatal(err)
 	}
 	auth := identity.NewHTTP(ids, false)
+	acc := access.New(pool, nil)
 	workspaces := workspace.NewHTTP(workspace.New(workspace.Options{
-		Pool: pool, Log: zerolog.Nop(), Identity: ids, Access: access.Interim{}, Mail: a.mail, BaseURL: baseURL,
+		Pool: pool, Log: zerolog.Nop(), Identity: ids, Access: acc, Mail: a.mail, BaseURL: baseURL,
 	}), auth)
+	roles := access.NewHTTP(acc)
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
 	ln.Serve(server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
-		workspaces.Register(api)
+		workspaces.Register(api, roles.Register)
 	}}))
 	return a
 }
@@ -522,8 +524,55 @@ func TestWorkspaces(t *testing.T) {
 		t.Errorf("team card = %q", card)
 	}
 
+	// Roles: the admin gives Contributors issue.rank in the matrix.
+	admin.do(chromedp.Navigate(a.base + "/w/acme-corp/settings/roles"))
+	// Columns follow the role order: Admin, Facilitator, Contributor, …
+	contributor := `[...` + view + `.querySelectorAll('input[data-perm="issue.view"]')][2]?.dataset.role`
+	rank := view + `.querySelector('input[data-perm="issue.rank"][data-role="' + ` + contributor + ` + '"]')`
+	admin.poll(rank + ` && "matrix"`)
+	if admin.poll(`String(`+rank+`.checked)`) != "false" {
+		t.Fatal("contributors can already rank")
+	}
+	admin.eval(rank + `.click()`)
+	if got := admin.poll(view + `.querySelector('[data-action="save"]')?.textContent.trim()`); got != "Save 1 change" {
+		t.Errorf("save button = %q", got)
+	}
+	admin.eval(view + `.querySelector('[data-action="save"]').click()`)
+	admin.poll(`!` + view + `.querySelector("td.changed") && ` + rank + `?.checked && "saved"`)
+	admin.do(chromedp.Reload())
+	admin.poll(rank + `?.checked && "persisted"`)
+
+	// The admin makes Grace a Viewer from the member list.
+	admin.do(chromedp.Navigate(a.base + "/w/acme-corp/settings/members"))
+	graceRow := graceRowIn(view)
+	admin.poll(graceRow + `?.querySelector("lds-select") && "editable"`)
+	admin.eval(`(() => { const s = ` + graceRow + `.querySelector("lds-select");
+		const viewer = [...s.querySelectorAll("option")].find((o) => o.textContent === "Viewer").value;
+		s.setAttribute("value", viewer);
+		s.dispatchEvent(new CustomEvent("lds-change", { detail: { value: viewer }, bubbles: true, composed: true })); })()`)
+	admin.do(chromedp.Navigate(a.base + "/w/acme-corp/settings/roles?view=grants"))
+	grant := admin.poll(`[...` + view + `.querySelectorAll("tbody tr")].map((r) => r.textContent.replace(/\s+/g, " ").trim()).find((r) => r.includes("Grace"))`)
+	if !strings.Contains(grant, "Viewer") || !strings.Contains(grant, "Whole workspace") {
+		t.Errorf("Grace's grant = %q", grant)
+	}
+
+	// Grace sees roles but can't change them.
+	grace.do(chromedp.Navigate(a.base + "/w/acme-corp/settings/members"))
+	if got := grace.poll(graceRowIn(view) + `?.cells[2].textContent.trim()`); got != "Viewer" {
+		t.Errorf("Grace sees her role as %q", got)
+	}
+	grace.do(chromedp.Navigate(a.base + "/w/acme-corp/settings/roles"))
+	grace.poll(view + `.querySelector('input[type="checkbox"]') && "matrix"`)
+	if got := grace.poll(`String(` + view + `.querySelector('input[type="checkbox"]:not(:disabled)') === null && !` + view + `.querySelector('[data-action="save"]'))`); got != "true" {
+		t.Error("Grace can edit the matrix")
+	}
+
 	admin.logs.failOnErrors(t)
 	grace.logs.failOnErrors(t)
+}
+
+func graceRowIn(view string) string {
+	return `[...` + view + `.querySelectorAll("tbody tr")].find((r) => r.textContent.includes("grace@example.com"))`
 }
 
 // serveForHumans serves the test page for a local browser:

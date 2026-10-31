@@ -674,6 +674,120 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/grants": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "List grants",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/access.GrantList"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "One of user_id and team_id. Without project_id the grant covers the whole workspace. Removing the last workspace Admin is refused (409 last_admin).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "Set a grant",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Role, subject and scope",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/access.GrantRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/access.Grant"
+                        }
+                    },
+                    "409": {
+                        "description": "last_admin",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/grants/{id}": {
+            "delete": {
+                "tags": [
+                    "roles"
+                ],
+                "summary": "Remove a grant",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Grant id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "409": {
+                        "description": "last_admin",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/invitations": {
             "get": {
                 "produces": [
@@ -925,6 +1039,172 @@
                     },
                     "409": {
                         "description": "cannot_change_self",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/roles": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "List roles",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/access.RolesResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "Create a role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Name, description, permissions",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/access.RoleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/access.Role"
+                        }
+                    },
+                    "422": {
+                        "description": "name taken, permissions unknown",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/roles/{id}": {
+            "delete": {
+                "description": "Refused for the Admin role and for roles still granted (409 role_in_use).",
+                "tags": [
+                    "roles"
+                ],
+                "summary": "Delete a role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "The Admin role keeps workspace.roles.manage (409 admin_keeps_roles_manage).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "roles"
+                ],
+                "summary": "Update a role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Fields to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/access.RoleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/access.Role"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/server.Problem"
                         }
@@ -1195,6 +1475,219 @@
         }
     },
     "definitions": {
+        "access.Area": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "workspace"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/access.Permission"
+                    }
+                }
+            }
+        },
+        "access.Grant": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "role_id": {
+                    "type": "string"
+                },
+                "role_name": {
+                    "type": "string"
+                },
+                "subject_email": {
+                    "type": "string"
+                },
+                "subject_name": {
+                    "type": "string"
+                },
+                "team_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "access.GrantList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/access.Grant"
+                    }
+                }
+            }
+        },
+        "access.GrantRequest": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "string"
+                },
+                "role_id": {
+                    "type": "string"
+                },
+                "team_id": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "access.Permission": {
+            "type": "string",
+            "enum": [
+                "workspace.manage",
+                "workspace.members.manage",
+                "workspace.roles.manage",
+                "workspace.config.manage",
+                "workspace.webhooks.manage",
+                "workspace.integrations.manage",
+                "project.create",
+                "project.view",
+                "project.manage",
+                "project.config.manage",
+                "issue.view",
+                "issue.create",
+                "issue.edit",
+                "issue.transition",
+                "issue.assign",
+                "issue.estimate",
+                "issue.rank",
+                "issue.link",
+                "issue.move",
+                "issue.archive",
+                "issue.delete",
+                "issue.comment",
+                "issue.comment.moderate",
+                "issue.attach",
+                "iteration.manage",
+                "release.manage",
+                "milestone.manage",
+                "view.share"
+            ],
+            "x-enum-varnames": [
+                "WorkspaceManage",
+                "WorkspaceMembersManage",
+                "WorkspaceRolesManage",
+                "WorkspaceConfigManage",
+                "WorkspaceWebhooksManage",
+                "WorkspaceIntegrationsManage",
+                "ProjectCreate",
+                "ProjectView",
+                "ProjectManage",
+                "ProjectConfigManage",
+                "IssueView",
+                "IssueCreate",
+                "IssueEdit",
+                "IssueTransition",
+                "IssueAssign",
+                "IssueEstimate",
+                "IssueRank",
+                "IssueLink",
+                "IssueMove",
+                "IssueArchive",
+                "IssueDelete",
+                "IssueComment",
+                "IssueCommentModerate",
+                "IssueAttach",
+                "IterationManage",
+                "ReleaseManage",
+                "MilestoneManage",
+                "ViewShare"
+            ]
+        },
+        "access.Role": {
+            "type": "object",
+            "properties": {
+                "builtin": {
+                    "type": "string",
+                    "enum": [
+                        "admin",
+                        "facilitator",
+                        "contributor",
+                        "viewer",
+                        "guest"
+                    ]
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Contributor"
+                },
+                "people": {
+                    "type": "integer"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/access.Permission"
+                    }
+                },
+                "teams": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "access.RoleRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "QA"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/access.Permission"
+                    }
+                }
+            }
+        },
+        "access.RolesResponse": {
+            "type": "object",
+            "properties": {
+                "catalogue": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/access.Area"
+                    }
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/access.Role"
+                    }
+                }
+            }
+        },
         "apperr.Field": {
             "type": "object",
             "properties": {
@@ -1587,6 +2080,10 @@
                 "inviter_name": {
                     "type": "string"
                 },
+                "role_id": {
+                    "description": "RoleID is the workspace role given on acceptance.",
+                    "type": "string"
+                },
                 "sent_at": {
                     "type": "string"
                 },
@@ -1647,6 +2144,10 @@
                         "type": "string"
                     }
                 },
+                "role_id": {
+                    "description": "RoleID defaults to Contributor; another role needs workspace.roles.manage.",
+                    "type": "string"
+                },
                 "team_ids": {
                     "type": "array",
                     "items": {
@@ -1673,6 +2174,14 @@
                 },
                 "name": {
                     "type": "string"
+                },
+                "role": {
+                    "description": "Role is the member's own workspace-scope role, if any (teams may give\nmore).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/workspace.RoleRef"
+                        }
+                    ]
                 },
                 "status": {
                     "type": "string",
@@ -1709,6 +2218,20 @@
                 }
             }
         },
+        "workspace.RoleRef": {
+            "type": "object",
+            "properties": {
+                "grant_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "workspace.Team": {
             "type": "object",
             "properties": {
@@ -1727,6 +2250,14 @@
                 "name": {
                     "type": "string",
                     "example": "Core"
+                },
+                "role": {
+                    "description": "Role is the team's workspace-scope role, if any.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/workspace.RoleRef"
+                        }
+                    ]
                 },
                 "version": {
                     "type": "integer"

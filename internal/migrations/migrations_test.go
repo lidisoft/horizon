@@ -44,3 +44,49 @@ func TestDownAndUpAgain(t *testing.T) {
 		t.Fatalf("after up: version %d", got)
 	}
 }
+
+// Workspaces created before roles get the default roles, their first member
+// the Admin role and the others Contributor, so nobody loses access in the
+// upgrade.
+func TestRolesBackfill(t *testing.T) {
+	ctx := context.Background()
+	pool := testenv.DB(t)
+	db := stdlib.OpenDBFromPool(pool)
+	defer db.Close()
+	p, err := migrations.Provider(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.DownTo(ctx, 5); err != nil {
+		t.Fatal(err)
+	}
+	_, err = pool.Exec(ctx, `
+		INSERT INTO users (id, email, name, created_at, updated_at) VALUES
+			('01900000-0000-7000-8000-000000000001', 'first@example.com', 'First', now(), now()),
+			('01900000-0000-7000-8000-000000000002', 'second@example.com', 'Second', now(), now());
+		INSERT INTO workspaces (id, slug, name, created_at, updated_at)
+			VALUES ('01900000-0000-7000-8000-0000000000aa', 'old', 'Old', now(), now());
+		INSERT INTO workspace_members (workspace_id, id, user_id, joined_at) VALUES
+			('01900000-0000-7000-8000-0000000000aa', gen_random_uuid(), '01900000-0000-7000-8000-000000000001', now() - interval '1 day'),
+			('01900000-0000-7000-8000-0000000000aa', gen_random_uuid(), '01900000-0000-7000-8000-000000000002', now());`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var roles, adminPerms int
+	var admin, contributor string
+	err = pool.QueryRow(ctx, `
+		SELECT (SELECT count(*) FROM roles),
+		       (SELECT cardinality(permissions) FROM roles WHERE builtin = 'admin'),
+		       (SELECT u.email FROM role_grants g JOIN roles r ON r.id = g.role_id JOIN users u ON u.id = g.user_id WHERE r.builtin = 'admin'),
+		       (SELECT u.email FROM role_grants g JOIN roles r ON r.id = g.role_id JOIN users u ON u.id = g.user_id WHERE r.builtin = 'contributor')`).
+		Scan(&roles, &adminPerms, &admin, &contributor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if roles != 5 || adminPerms != 28 || admin != "first@example.com" || contributor != "second@example.com" {
+		t.Errorf("roles %d, admin permissions %d, admin %s, contributor %s", roles, adminPerms, admin, contributor)
+	}
+}

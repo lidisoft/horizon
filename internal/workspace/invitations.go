@@ -37,14 +37,16 @@ type Invitation struct {
 	Email       string      `json:"email"`
 	InviterName string      `json:"inviter_name"`
 	TeamIDs     []uuid.UUID `json:"team_ids"`
-	SentAt      time.Time   `json:"sent_at"`
-	ExpiresAt   time.Time   `json:"expires_at"`
-	Expired     bool        `json:"expired"`
+	// RoleID is the workspace role given on acceptance.
+	RoleID    uuid.NullUUID `json:"role_id" swaggertype:"string"`
+	SentAt    time.Time     `json:"sent_at"`
+	ExpiresAt time.Time     `json:"expires_at"`
+	Expired   bool          `json:"expired"`
 }
 
 func (s *Service) invitationFrom(i db.Invitation, inviter string) Invitation {
 	return Invitation{
-		ID: i.ID, Email: i.Email, InviterName: inviter, TeamIDs: nonNil(i.TeamIds),
+		ID: i.ID, Email: i.Email, InviterName: inviter, TeamIDs: nonNil(i.TeamIds), RoleID: i.RoleID,
 		SentAt: i.SentAt, ExpiresAt: i.ExpiresAt, Expired: !i.ExpiresAt.After(s.now()),
 	}
 }
@@ -74,6 +76,9 @@ func hashInvitationToken(token string) []byte {
 type Invite struct {
 	Emails  []string
 	TeamIDs []uuid.UUID
+	// RoleID is the workspace role to give; unset gives Contributor. Any
+	// other role needs workspace.roles.manage, so inviting can't escalate.
+	RoleID uuid.NullUUID
 }
 
 // pendingMail is an invitation email to send once the transaction commits.
@@ -124,6 +129,10 @@ func (s *Service) InvitePeople(ctx context.Context, wc Context, in Invite) ([]In
 		if err != nil {
 			return err
 		}
+		role, err := s.inviteRole(ctx, tx, wc, in.RoleID)
+		if err != nil {
+			return err
+		}
 		members, err := q.ListMembers(ctx, wc.Workspace.ID)
 		if err != nil {
 			return err
@@ -152,19 +161,19 @@ func (s *Service) InvitePeople(ctx context.Context, wc Context, in Invite) ([]In
 				typ = "InvitationSent"
 				inv, err = q.CreateInvitation(ctx, db.CreateInvitationParams{
 					WorkspaceID: wc.Workspace.ID, ID: uuid.Must(uuid.NewV7()), Email: e, TokenHash: hash,
-					InvitedBy: actorOf(wc.Principal), TeamIds: teams, CreatedAt: now, ExpiresAt: now.Add(InvitationLifetime),
+					InvitedBy: actorOf(wc.Principal), TeamIds: teams, RoleID: role, CreatedAt: now, ExpiresAt: now.Add(InvitationLifetime),
 				})
 			case err == nil:
 				inv, err = q.RenewInvitation(ctx, db.RenewInvitationParams{
 					WorkspaceID: inv.WorkspaceID, ID: inv.ID, TokenHash: hash, InvitedBy: actorOf(wc.Principal),
-					TeamIds: teams, SentAt: now, ExpiresAt: now.Add(InvitationLifetime),
+					TeamIds: teams, RoleID: role, SentAt: now, ExpiresAt: now.Add(InvitationLifetime),
 				})
 			}
 			if err != nil {
 				return err
 			}
 			ev := s.event(inv.WorkspaceID, actorOf(wc.Principal), "invitation", inv.ID, int64(inv.Version), typ,
-				map[string]any{"team_ids": nonNil(teams)})
+				map[string]any{"team_ids": nonNil(teams), "role_id": role})
 			if err := eventlog.Append(ctx, tx, ev); err != nil {
 				return err
 			}
@@ -197,7 +206,7 @@ func (s *Service) Resend(ctx context.Context, wc Context, id uuid.UUID) (Invitat
 		now := s.now()
 		inv, err = q.RenewInvitation(ctx, db.RenewInvitationParams{
 			WorkspaceID: inv.WorkspaceID, ID: inv.ID, TokenHash: hash, InvitedBy: actorOf(wc.Principal),
-			TeamIds: inv.TeamIds, SentAt: now, ExpiresAt: now.Add(InvitationLifetime),
+			TeamIds: inv.TeamIds, RoleID: inv.RoleID, SentAt: now, ExpiresAt: now.Add(InvitationLifetime),
 		})
 		if err != nil {
 			return err
@@ -248,7 +257,7 @@ func (s *Service) Invitations(ctx context.Context, wc Context) ([]Invitation, er
 	out := make([]Invitation, len(rows))
 	for i, r := range rows {
 		out[i] = s.invitationFrom(db.Invitation{
-			ID: r.ID, Email: r.Email, TeamIds: r.TeamIds, SentAt: r.SentAt, ExpiresAt: r.ExpiresAt,
+			ID: r.ID, Email: r.Email, TeamIds: r.TeamIds, RoleID: r.RoleID, SentAt: r.SentAt, ExpiresAt: r.ExpiresAt,
 		}, r.InviterName)
 	}
 	return out, nil
@@ -371,6 +380,18 @@ func (s *Service) Accept(ctx context.Context, in Acceptance) (Accepted, error) {
 			if _, err := s.join(ctx, tx, inv.WorkspaceID, userID, inv.InvitedBy, "invitation"); err != nil {
 				return err
 			}
+			role := inv.RoleID.UUID
+			if !inv.RoleID.Valid { // the chosen role was deleted since
+				if role, err = s.access.BuiltinRole(ctx, tx, inv.WorkspaceID, access.DefaultRoleForInvites); err != nil {
+					return err
+				}
+			}
+			_, err := s.access.SetGrantInTx(ctx, tx, inv.WorkspaceID, inv.InvitedBy, access.GrantInput{
+				RoleID: role, UserID: uuid.NullUUID{UUID: userID, Valid: true},
+			})
+			if err != nil {
+				return err
+			}
 		} else if err != nil {
 			return err
 		}
@@ -435,4 +456,29 @@ func inviterOr(name string) string {
 		return "An administrator"
 	}
 	return name
+}
+
+// inviteRole resolves the role an invitation gives: Contributor by default;
+// another role needs workspace.roles.manage.
+func (s *Service) inviteRole(ctx context.Context, tx pgx.Tx, wc Context, requested uuid.NullUUID) (uuid.NullUUID, error) {
+	def, err := s.access.BuiltinRole(ctx, tx, wc.Workspace.ID, access.DefaultRoleForInvites)
+	if err != nil {
+		return uuid.NullUUID{}, err
+	}
+	if !requested.Valid || requested.UUID == def {
+		return uuid.NullUUID{UUID: def, Valid: true}, nil
+	}
+	if err := s.Require(ctx, wc, access.WorkspaceRolesManage); err != nil {
+		return uuid.NullUUID{}, err
+	}
+	roles, err := s.access.Roles(ctx, wc.Workspace.ID)
+	if err != nil {
+		return uuid.NullUUID{}, err
+	}
+	for _, r := range roles {
+		if r.ID == requested.UUID {
+			return requested, nil
+		}
+	}
+	return uuid.NullUUID{}, apperr.Invalid(apperr.Field{Field: "role_id", Code: "unknown"})
 }

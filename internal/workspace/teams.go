@@ -21,7 +21,9 @@ type Team struct {
 	Name        string       `json:"name" example:"Core"`
 	Description string       `json:"description"`
 	Members     []TeamMember `json:"members"`
-	Version     int32        `json:"version"`
+	// Role is the team's workspace-scope role, if any.
+	Role    *RoleRef `json:"role"`
+	Version int32    `json:"version"`
 }
 
 // TeamMember is a member of a team.
@@ -31,9 +33,16 @@ type TeamMember struct {
 	Email  string    `json:"email"`
 }
 
-// Teams lists the workspace's teams with their members; every member may
-// see them.
+// Teams lists the workspace's teams with their members and workspace role;
+// guests can't see them.
 func (s *Service) Teams(ctx context.Context, wc Context) ([]Team, error) {
+	if err := s.requireSees(ctx, wc); err != nil {
+		return nil, err
+	}
+	roles, err := s.workspaceRoles(ctx, wc.Workspace.ID)
+	if err != nil {
+		return nil, err
+	}
 	q := db.New(s.pool)
 	rows, err := q.ListTeams(ctx, wc.Workspace.ID)
 	if err != nil {
@@ -53,7 +62,7 @@ func (s *Service) Teams(ctx context.Context, wc Context) ([]Team, error) {
 		if ms == nil {
 			ms = []TeamMember{}
 		}
-		out[i] = Team{ID: r.ID, Name: r.Name, Description: r.Description, Members: ms, Version: r.Version}
+		out[i] = Team{ID: r.ID, Name: r.Name, Description: r.Description, Members: ms, Role: roles[r.ID], Version: r.Version}
 	}
 	return out, nil
 }

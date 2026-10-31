@@ -61,7 +61,7 @@ func newFixture(t *testing.T) *fixture {
 	base := &url.URL{Scheme: "https", Host: "horizon.example.com"}
 	f.ids = identity.New(identity.Options{Pool: f.pool, Log: zerolog.Nop(), BaseURL: base, SessionSecret: "test-session-secret-at-least-32-chars", Now: f.clock.Now})
 	f.svc = workspace.New(workspace.Options{
-		Pool: f.pool, Log: zerolog.Nop(), Identity: f.ids, Access: access.Interim{}, Mail: f.mail, BaseURL: base, Now: f.clock.Now,
+		Pool: f.pool, Log: zerolog.Nop(), Identity: f.ids, Access: access.New(f.pool, f.clock.Now), Mail: f.mail, BaseURL: base, Now: f.clock.Now,
 	})
 	f.admin = f.principal("admin@example.com", true)
 	var err error

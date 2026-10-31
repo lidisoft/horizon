@@ -95,7 +95,7 @@ func admin(fn adminFunc) cli.ActionFunc {
 		}
 		defer pool.Close()
 		ids := identity.New(identity.Options{Pool: pool, Log: log, BaseURL: cfg.BaseURL, SessionSecret: cfg.SessionSecret})
-		ws := workspace.New(workspace.Options{Pool: pool, Log: log, Identity: ids, Access: access.Interim{}, BaseURL: cfg.BaseURL})
+		ws := workspace.New(workspace.Options{Pool: pool, Log: log, Identity: ids, Access: access.New(pool, nil), BaseURL: cfg.BaseURL})
 		return describe(fn(ctx, cmd, adminServices{ids: ids, workspaces: ws}))
 	}
 }

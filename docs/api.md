@@ -52,7 +52,8 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   /members  /members/{user}                PATCH status (active, suspended) | DELETE
   /invitations  /invitations/{id}/resend   POST {emails[], team_ids[]} | DELETE revokes
   /teams  /teams/{id}  /teams/{id}/members/{user}
-  /roles  /grants
+  /roles  /roles/{id}                      GET (with the permission catalogue) | POST | PATCH | DELETE (unused roles; never Admin)
+  /grants  /grants/{id}                    GET | PUT {role_id, user_id or team_id, project_id?} sets a subject's role in a scope | DELETE
   /config/issue-types  /workflows  /fields  /labels  /settings
   /config/workflows/{id}/draft             GET | PUT | DELETE (discard)
   /config/workflows/{id}/publish           POST {status_mapping}; 409 lists unmapped statuses

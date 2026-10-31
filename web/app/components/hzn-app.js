@@ -29,6 +29,7 @@ export const ROUTES = [
   { name: "workspace", path: "/w/:ws", view: "hzn-workspace-home" },
   { name: "settings-general", path: "/w/:ws/settings/general", view: "hzn-settings-general", layout: "settings" },
   { name: "settings-members", path: "/w/:ws/settings/members", view: "hzn-settings-members", layout: "settings" },
+  { name: "settings-roles", path: "/w/:ws/settings/roles", view: "hzn-settings-roles", layout: "settings" },
   { name: "invitation", path: "/invitation", view: "hzn-invitation", public: true },
   { name: "sign-in", path: "/sign-in", view: "hzn-sign-in", public: true },
   { name: "forgot-password", path: "/forgot-password", view: "hzn-forgot-password", public: true },

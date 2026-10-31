@@ -3,7 +3,8 @@
 // (wireframes: Members, views members / teams / invite). Managing needs
 // workspace.members.manage; everyone else reads.
 //
-// Roles and grants join this page with the next part of phase 2.
+// Each member's and team's workspace role is shown, and editable with
+// workspace.roles.manage; project grants are listed on the Roles page.
 
 import { requestContext } from "horizon/core/context.js";
 import { html, ldsLightSheet, sheet } from "horizon/core/dom.js";
@@ -21,6 +22,8 @@ const styles = sheet(`
   .team-head { display: flex; align-items: center; justify-content: space-between; }
   .team-head h3 { margin: 0; font-size: var(--lds-font-size-md); }
   .team p { margin: var(--lds-space-2) 0 var(--lds-space-4); color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
+  .grant { margin: 0 0 var(--lds-space-3); font-size: var(--lds-font-size-sm); color: var(--lds-color-fg-muted); }
+  .grant strong { color: var(--lds-color-fg-default); font-weight: var(--lds-font-weight-medium); }
   .people { display: flex; gap: var(--lds-space-3); align-items: center; font-size: var(--lds-font-size-sm); color: var(--lds-color-fg-muted); }
   lds-modal form { display: grid; gap: var(--lds-space-4); }
   .empty { padding: var(--lds-space-8) 0; }
@@ -59,11 +62,15 @@ class HznSettingsMembers extends HTMLElement {
     const { api, i18n } = this.context;
     const slug = encodeURIComponent(this.getAttribute("ws"));
     try {
-      const [ws, members, teams] = await Promise.all([api.get(`/w/${slug}`), api.get(`/w/${slug}/members`), api.get(`/w/${slug}/teams`)]);
+      const [ws, members, teams, roles] = await Promise.all([
+        api.get(`/w/${slug}`), api.get(`/w/${slug}/members`), api.get(`/w/${slug}/teams`), api.get(`/w/${slug}/roles`),
+      ]);
       this.ws = ws.data;
       this.members = members.data.items;
       this.teams = teams.data.items;
+      this.roles = roles.data.items;
       this.canManage = this.ws.can.includes("workspace.members.manage");
+      this.canGrant = this.ws.can.includes("workspace.roles.manage");
       this.invitations = this.canManage ? (await api.get(`/w/${slug}/invitations`)).data.items : [];
     } catch (err) {
       this.shadowRoot.innerHTML = String(html`<lds-alert intent="danger">${errorMessage(err, i18n)}</lds-alert>`);
@@ -75,10 +82,12 @@ class HznSettingsMembers extends HTMLElement {
   /** Members then invitations, as rows of one table. */
   rows() {
     const self = this.context.session.user?.id;
-    const people = this.members.map((m) => ({ kind: "member", id: m.user_id, name: m.name, email: m.email,
+    const people = this.members.map((m) => ({ kind: "member", id: m.user_id, name: m.name, email: m.email, role: m.role,
       status: m.status, teams: m.teams.map((t) => t.name), last: m.last_seen_at, deactivated: m.deactivated, self: m.user_id === self }));
     const teamName = new Map(this.teams.map((t) => [t.id, t.name]));
+    const roleName = new Map(this.roles.map((r) => [r.id, r.name]));
     const invited = this.invitations.map((i) => ({ kind: "invitation", id: i.id, name: "", email: i.email, status: "invited",
+      role: i.role_id ? { id: i.role_id, name: roleName.get(i.role_id) } : null,
       teams: i.team_ids.map((id) => teamName.get(id)).filter(Boolean), sent: i.sent_at, expired: i.expired }));
     return [...people, ...invited];
   }
@@ -135,6 +144,7 @@ class HznSettingsMembers extends HTMLElement {
           <thead><tr>
             <th scope="col">${t("members.member")}</th>
             <th scope="col">${t("members.statusColumn")}</th>
+            <th scope="col">${t("members.role")}</th>
             <th scope="col">${t("members.teams")}</th>
             <th scope="col">${t("members.lastActive")}</th>
             <th scope="col"><span class="lds-visually-hidden">${t("account.actions")}</span></th>
@@ -164,10 +174,39 @@ class HznSettingsMembers extends HTMLElement {
           <lds-badge size="sm" intent="${r.expired ? "warning" : STATUS_INTENT[r.status]}">${t(r.expired ? "members.expired" : `members.status.${r.status}`)}</lds-badge>
           ${r.deactivated ? html` <lds-badge size="sm" intent="danger">${t("members.deactivated")}</lds-badge>` : ""}
         </td>
+        <td>${this.roleCell(r)}</td>
         <td>${r.teams.length ? r.teams.join(", ") : "—"}</td>
         <td>${r.kind === "invitation" ? html`${t("members.invitedOn")} ${when(r.sent)}` : r.last ? when(r.last) : t("tokens.never")}</td>
         <td class="end">${this.canManage && !r.self ? this.rowMenu(r) : ""}</td>
-      </tr>`) : html`<tr><td colspan="5" class="muted">${t("members.noMatch")}</td></tr>`}`);
+      </tr>`) : html`<tr><td colspan="6" class="muted">${t("members.noMatch")}</td></tr>`}`);
+    for (const select of body.querySelectorAll("lds-select[data-grant-user]")) {
+      select.addEventListener("lds-change", (e) => this.setRole({ user_id: select.dataset.grantUser }, select.dataset.grantId, e.detail.value));
+    }
+  }
+
+  /** A member's workspace role: a select for those who may grant. */
+  roleCell(r) {
+    const { t } = this.context.i18n;
+    if (r.kind !== "member" || !this.canGrant) return r.role?.name ?? html`<span class="muted">${t("members.noRole")}</span>`;
+    return html`<lds-select size="sm" data-grant-user="${r.id}" data-grant-id="${r.role?.grant_id ?? ""}" value="${r.role?.id ?? ""}"
+        label="${t("members.roleFor", { name: r.name })}">
+      <option value="">${t("members.noRole")}</option>
+      ${this.roles.map((role) => html`<option value="${role.id}">${role.name}</option>`)}
+    </lds-select>`;
+  }
+
+  /** Sets (or, with no role, removes) a workspace-scope grant. */
+  async setRole(subject, grantId, roleId) {
+    const { api, i18n } = this.context;
+    const base = `/w/${encodeURIComponent(this.ws.slug)}/grants`;
+    try {
+      if (roleId) await api.put(base, { body: { role_id: roleId, ...subject } });
+      else if (grantId) await api.delete(`${base}/${grantId}`);
+      globalThis.LDS?.toast?.({ intent: "success", title: i18n.t("members.roleSaved") });
+    } catch (err) {
+      globalThis.LDS?.toast?.({ intent: "danger", title: errorMessage(err, i18n) });
+    }
+    this.load();
   }
 
   rowMenu(r) {
@@ -202,6 +241,7 @@ class HznSettingsMembers extends HTMLElement {
             </lds-menu>` : ""}
         </div>
         <p>${team.description || t("teams.noDescription")}</p>
+        <p class="grant">${t("teams.workspaceRole")}: <strong>${team.role?.name ?? t("members.noRole")}</strong></p>
         <div class="people">
           ${team.members.length ? html`<lds-avatar-group size="sm" max="5">${team.members.map((m) => html`<lds-avatar size="sm" name="${m.name}" title="${m.name}"></lds-avatar>`)}</lds-avatar-group>` : ""}
           ${t("teams.people", { count: team.members.length })}
@@ -221,6 +261,11 @@ class HznSettingsMembers extends HTMLElement {
             <lds-combobox name="emails" multiple creatable placeholder="${t("invite.emailsPlaceholder")}"></lds-combobox>
             <span slot="help">${t("invite.help")}</span>
           </lds-field>
+          ${this.canGrant ? html`<lds-field label="${t("invite.role")}">
+            <lds-select name="role_id" value="${this.roles.find((r) => r.builtin === "contributor")?.id ?? ""}">
+              ${this.roles.map((r) => html`<option value="${r.id}">${r.name}</option>`)}
+            </lds-select>
+          </lds-field>` : html`<p class="muted">${t("invite.defaultRole")}</p>`}
           ${this.teams.length ? html`<lds-field label="${t("invite.teams")}">
             <lds-combobox name="team_ids" multiple placeholder="${t("invite.teamsPlaceholder")}">${teamOptions}</lds-combobox>
           </lds-field>` : ""}
@@ -236,6 +281,12 @@ class HznSettingsMembers extends HTMLElement {
           <lds-alert intent="danger" role="alert"></lds-alert>
           <lds-field label="${t("teams.name")}" required><lds-input name="name" required maxlength="60"></lds-input></lds-field>
           <lds-field label="${t("teams.description")}"><lds-textarea name="description" maxlength="300" rows="2"></lds-textarea></lds-field>
+          ${this.canGrant ? html`<lds-field label="${t("teams.workspaceRole")}">
+            <lds-select name="role_id" value="">
+              <option value="">${t("members.noRole")}</option>
+              ${this.roles.map((r) => html`<option value="${r.id}">${r.name}</option>`)}
+            </lds-select>
+          </lds-field>` : ""}
           <lds-field label="${t("teams.members")}">
             <lds-combobox name="members" multiple placeholder="${t("teams.membersPlaceholder")}">
               ${this.members.map((m) => html`<lds-option value="${m.user_id}" keywords="${m.email}">${m.name}</lds-option>`)}
@@ -346,9 +397,10 @@ class HznSettingsMembers extends HTMLElement {
     const pending = emailsBox.shadowRoot?.querySelector("input")?.value.trim();
     const emails = [...split(emailsBox.getAttribute("value")), ...(pending ? [pending] : [])];
     const teamIds = split(form.querySelector('[name="team_ids"]')?.getAttribute("value"));
+    const roleId = form.querySelector('[name="role_id"]')?.getAttribute("value") || undefined;
     try {
       await busy(modal.querySelector('[data-action="send-invites"]'), () =>
-        api.post(`/w/${encodeURIComponent(this.ws.slug)}/invitations`, { body: { emails, team_ids: teamIds } }));
+        api.post(`/w/${encodeURIComponent(this.ws.slug)}/invitations`, { body: { emails, team_ids: teamIds, role_id: roleId } }));
     } catch (err) {
       const fields = (err.fields || []).map((f) => {
         const m = /^emails\[(\d+)\]$/.exec(f.field);
@@ -379,6 +431,7 @@ class HznSettingsMembers extends HTMLElement {
     form.querySelector('[name="name"]').setAttribute("value", team?.name ?? "");
     form.querySelector('[name="description"]').setAttribute("value", team?.description ?? "");
     form.querySelector('[name="members"]').setAttribute("value", (team?.members ?? []).map((m) => m.user_id).join(","));
+    form.querySelector('[name="role_id"]')?.setAttribute("value", team?.role?.id ?? "");
     modal.setAttribute("open", "");
   }
 
@@ -403,6 +456,12 @@ class HznSettingsMembers extends HTMLElement {
         const current = new Set(team.members.map((m) => m.user_id));
         for (const id of wanted) if (!current.has(id)) await api.put(`${base}/${team.id}/members/${id}`);
         for (const id of current) if (!wanted.has(id)) await api.delete(`${base}/${team.id}/members/${id}`);
+        const role = form.querySelector('[name="role_id"]');
+        if (role && (role.getAttribute("value") || "") !== (team.role?.id ?? "")) {
+          const grants = `/w/${encodeURIComponent(this.ws.slug)}/grants`;
+          if (role.getAttribute("value")) await api.put(grants, { body: { role_id: role.getAttribute("value"), team_id: team.id } });
+          else await api.delete(`${grants}/${team.role.grant_id}`);
+        }
       });
     } catch (err) {
       if (err.fields?.length) showFieldErrors(form, err.fields, i18n.t, i18n.has);

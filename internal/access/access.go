@@ -1,9 +1,8 @@
 // Package access decides what a caller may do (docs/security.md#authorisation).
 // Code checks permission keys, never role names.
 //
-// Roles, permission sets and grants arrive with the next part of phase 2;
-// until then Interim stands in: instance admins hold every permission, and
-// members can see their workspace but administer nothing.
+// Service is the Checker: roles are permission sets defined per workspace,
+// and grants give them to members or teams on the workspace or a project.
 package access
 
 import (
@@ -87,13 +86,4 @@ func Require(ctx context.Context, c Checker, p identity.Principal, scope Scope, 
 		return &apperr.Error{Status: 403, Code: "forbidden", Detail: "missing permission " + string(perm)}
 	}
 	return nil
-}
-
-// Interim grants every permission to instance admins and none to anyone
-// else, until roles and grants replace it.
-type Interim struct{}
-
-// Can implements Checker.
-func (Interim) Can(_ context.Context, p identity.Principal, _ Scope, _ Permission) (bool, error) {
-	return p.User.IsInstanceAdmin, nil
 }

@@ -45,7 +45,7 @@ type Options struct {
 	Pool     *pgxpool.Pool
 	Log      zerolog.Logger
 	Identity *identity.Service
-	Access   access.Checker
+	Access   *access.Service
 	// Mail sends invitations; nil makes inviting fail.
 	Mail    mail.Sender
 	BaseURL *url.URL
@@ -57,7 +57,7 @@ type Service struct {
 	pool     *pgxpool.Pool
 	log      zerolog.Logger
 	identity *identity.Service
-	access   access.Checker
+	access   *access.Service
 	mail     mail.Sender
 	baseURL  *url.URL
 	now      func() time.Time
@@ -141,7 +141,16 @@ func (s *Service) Create(ctx context.Context, actor uuid.NullUUID, in NewWorkspa
 		if err := eventlog.Append(ctx, tx, ev); err != nil {
 			return err
 		}
-		_, err = s.join(ctx, tx, created.ID, in.OwnerID, actor, "creation")
+		if _, err := s.join(ctx, tx, created.ID, in.OwnerID, actor, "creation"); err != nil {
+			return err
+		}
+		roles, err := s.access.SeedDefaults(ctx, tx, created.ID, actor)
+		if err != nil {
+			return err
+		}
+		_, err = s.access.SetGrantInTx(ctx, tx, created.ID, actor, access.GrantInput{
+			RoleID: roles[access.BuiltinAdmin], UserID: uuid.NullUUID{UUID: in.OwnerID, Valid: true},
+		})
 		return err
 	})
 	if err != nil {
@@ -207,6 +216,22 @@ func (s *Service) Enter(ctx context.Context, p identity.Principal, slug string) 
 		return Context{}, apperr.NotFound("workspace_not_found")
 	}
 	return Context{Workspace: workspaceFrom(w), Principal: p, Member: member}, nil
+}
+
+// Access returns the roles and grants service.
+func (s *Service) Access() *access.Service { return s.access }
+
+// requireSees refuses the workspace-wide lists to guests (granted on
+// projects only).
+func (s *Service) requireSees(ctx context.Context, wc Context) error {
+	ok, err := s.access.SeesWorkspace(ctx, wc.Principal, wc.Workspace.ID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return apperr.Forbidden("forbidden")
+	}
+	return nil
 }
 
 // Require checks a permission in the workspace.

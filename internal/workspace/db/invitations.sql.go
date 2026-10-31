@@ -15,7 +15,7 @@ import (
 const acceptInvitation = `-- name: AcceptInvitation :one
 UPDATE invitations SET accepted_at = $3, accepted_by = $4, version = version + 1
 WHERE workspace_id = $1 AND id = $2
-RETURNING workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version
+RETURNING workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version, role_id
 `
 
 type AcceptInvitationParams struct {
@@ -47,14 +47,15 @@ func (q *Queries) AcceptInvitation(ctx context.Context, arg AcceptInvitationPara
 		&i.AcceptedBy,
 		&i.RevokedAt,
 		&i.Version,
+		&i.RoleID,
 	)
 	return i, err
 }
 
 const createInvitation = `-- name: CreateInvitation :one
-INSERT INTO invitations (workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8)
-RETURNING workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version
+INSERT INTO invitations (workspace_id, id, email, token_hash, invited_by, team_ids, role_id, created_at, sent_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9)
+RETURNING workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version, role_id
 `
 
 type CreateInvitationParams struct {
@@ -64,6 +65,7 @@ type CreateInvitationParams struct {
 	TokenHash   []byte
 	InvitedBy   uuid.NullUUID
 	TeamIds     []uuid.UUID
+	RoleID      uuid.NullUUID
 	CreatedAt   time.Time
 	ExpiresAt   time.Time
 }
@@ -76,6 +78,7 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 		arg.TokenHash,
 		arg.InvitedBy,
 		arg.TeamIds,
+		arg.RoleID,
 		arg.CreatedAt,
 		arg.ExpiresAt,
 	)
@@ -94,12 +97,13 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 		&i.AcceptedBy,
 		&i.RevokedAt,
 		&i.Version,
+		&i.RoleID,
 	)
 	return i, err
 }
 
 const invitationByTokenHash = `-- name: InvitationByTokenHash :one
-SELECT i.workspace_id, i.id, i.email, i.token_hash, i.invited_by, i.team_ids, i.created_at, i.sent_at, i.expires_at, i.accepted_at, i.accepted_by, i.revoked_at, i.version, w.id, w.slug, w.name, w.time_zone, w.settings, w.created_at, w.updated_at, w.version, coalesce(u.name, '')::text AS inviter_name
+SELECT i.workspace_id, i.id, i.email, i.token_hash, i.invited_by, i.team_ids, i.created_at, i.sent_at, i.expires_at, i.accepted_at, i.accepted_by, i.revoked_at, i.version, i.role_id, w.id, w.slug, w.name, w.time_zone, w.settings, w.created_at, w.updated_at, w.version, coalesce(u.name, '')::text AS inviter_name
 FROM invitations i
 JOIN workspaces w ON w.id = i.workspace_id
 LEFT JOIN users u ON u.id = i.invited_by
@@ -130,6 +134,7 @@ func (q *Queries) InvitationByTokenHash(ctx context.Context, tokenHash []byte) (
 		&i.Invitation.AcceptedBy,
 		&i.Invitation.RevokedAt,
 		&i.Invitation.Version,
+		&i.Invitation.RoleID,
 		&i.Workspace.ID,
 		&i.Workspace.Slug,
 		&i.Workspace.Name,
@@ -144,7 +149,7 @@ func (q *Queries) InvitationByTokenHash(ctx context.Context, tokenHash []byte) (
 }
 
 const listOpenInvitations = `-- name: ListOpenInvitations :many
-SELECT i.workspace_id, i.id, i.email, i.token_hash, i.invited_by, i.team_ids, i.created_at, i.sent_at, i.expires_at, i.accepted_at, i.accepted_by, i.revoked_at, i.version, coalesce(u.name, '')::text AS inviter_name
+SELECT i.workspace_id, i.id, i.email, i.token_hash, i.invited_by, i.team_ids, i.created_at, i.sent_at, i.expires_at, i.accepted_at, i.accepted_by, i.revoked_at, i.version, i.role_id, coalesce(u.name, '')::text AS inviter_name
 FROM invitations i
 LEFT JOIN users u ON u.id = i.invited_by
 WHERE i.workspace_id = $1 AND i.accepted_at IS NULL AND i.revoked_at IS NULL
@@ -165,6 +170,7 @@ type ListOpenInvitationsRow struct {
 	AcceptedBy  uuid.NullUUID
 	RevokedAt   *time.Time
 	Version     int32
+	RoleID      uuid.NullUUID
 	InviterName string
 }
 
@@ -191,6 +197,7 @@ func (q *Queries) ListOpenInvitations(ctx context.Context, workspaceID uuid.UUID
 			&i.AcceptedBy,
 			&i.RevokedAt,
 			&i.Version,
+			&i.RoleID,
 			&i.InviterName,
 		); err != nil {
 			return nil, err
@@ -204,7 +211,7 @@ func (q *Queries) ListOpenInvitations(ctx context.Context, workspaceID uuid.UUID
 }
 
 const lockInvitation = `-- name: LockInvitation :one
-SELECT workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version FROM invitations WHERE workspace_id = $1 AND id = $2 FOR UPDATE
+SELECT workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version, role_id FROM invitations WHERE workspace_id = $1 AND id = $2 FOR UPDATE
 `
 
 type LockInvitationParams struct {
@@ -229,12 +236,13 @@ func (q *Queries) LockInvitation(ctx context.Context, arg LockInvitationParams) 
 		&i.AcceptedBy,
 		&i.RevokedAt,
 		&i.Version,
+		&i.RoleID,
 	)
 	return i, err
 }
 
 const openInvitationByEmail = `-- name: OpenInvitationByEmail :one
-SELECT workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version FROM invitations
+SELECT workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version, role_id FROM invitations
 WHERE workspace_id = $1 AND email = $2 AND accepted_at IS NULL AND revoked_at IS NULL
 FOR UPDATE
 `
@@ -261,15 +269,16 @@ func (q *Queries) OpenInvitationByEmail(ctx context.Context, arg OpenInvitationB
 		&i.AcceptedBy,
 		&i.RevokedAt,
 		&i.Version,
+		&i.RoleID,
 	)
 	return i, err
 }
 
 const renewInvitation = `-- name: RenewInvitation :one
 UPDATE invitations
-SET token_hash = $3, invited_by = $4, team_ids = $5, sent_at = $6, expires_at = $7, version = version + 1
+SET token_hash = $3, invited_by = $4, team_ids = $5, role_id = $6, sent_at = $7, expires_at = $8, version = version + 1
 WHERE workspace_id = $1 AND id = $2
-RETURNING workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version
+RETURNING workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version, role_id
 `
 
 type RenewInvitationParams struct {
@@ -278,11 +287,12 @@ type RenewInvitationParams struct {
 	TokenHash   []byte
 	InvitedBy   uuid.NullUUID
 	TeamIds     []uuid.UUID
+	RoleID      uuid.NullUUID
 	SentAt      time.Time
 	ExpiresAt   time.Time
 }
 
-// A resend: new token, new expiry, teams replaced.
+// A resend: new token, new expiry, teams and role replaced.
 func (q *Queries) RenewInvitation(ctx context.Context, arg RenewInvitationParams) (Invitation, error) {
 	row := q.db.QueryRow(ctx, renewInvitation,
 		arg.WorkspaceID,
@@ -290,6 +300,7 @@ func (q *Queries) RenewInvitation(ctx context.Context, arg RenewInvitationParams
 		arg.TokenHash,
 		arg.InvitedBy,
 		arg.TeamIds,
+		arg.RoleID,
 		arg.SentAt,
 		arg.ExpiresAt,
 	)
@@ -308,6 +319,7 @@ func (q *Queries) RenewInvitation(ctx context.Context, arg RenewInvitationParams
 		&i.AcceptedBy,
 		&i.RevokedAt,
 		&i.Version,
+		&i.RoleID,
 	)
 	return i, err
 }
@@ -315,7 +327,7 @@ func (q *Queries) RenewInvitation(ctx context.Context, arg RenewInvitationParams
 const revokeInvitation = `-- name: RevokeInvitation :one
 UPDATE invitations SET revoked_at = $3, version = version + 1
 WHERE workspace_id = $1 AND id = $2
-RETURNING workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version
+RETURNING workspace_id, id, email, token_hash, invited_by, team_ids, created_at, sent_at, expires_at, accepted_at, accepted_by, revoked_at, version, role_id
 `
 
 type RevokeInvitationParams struct {
@@ -341,6 +353,7 @@ func (q *Queries) RevokeInvitation(ctx context.Context, arg RevokeInvitationPara
 		&i.AcceptedBy,
 		&i.RevokedAt,
 		&i.Version,
+		&i.RoleID,
 	)
 	return i, err
 }

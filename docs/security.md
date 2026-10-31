@@ -72,9 +72,24 @@ the request comes through a proxy listed in `HORIZON_TRUSTED_PROXIES`.
   (only users with a grant on it).
 
 Code checks **permission keys only**, never role names, through
-`internal/access`. Until roles and grants land (the next step of phase 2),
-an interim checker gives instance admins every permission and members none:
-members see their workspace, its members and teams, and administer nothing.
+`internal/access`:
+
+- A subject (member or team) holds **one role per scope**: one on the whole
+  workspace and one per project. Setting another replaces it.
+- Effective permissions are the union of the user's own grants and their
+  teams', at workspace scope and on the project. Suspended members hold none;
+  their grants come back with them. Leaving the workspace or deleting a team
+  removes its grants.
+- **Instance admins hold every permission** in every workspace: they are the
+  recovery path when a workspace's admins are gone.
+- The workspace-wide lists (members, teams, roles, grants) need a
+  workspace-scope grant, so guests (granted on projects only) don't see them.
+- API tokens need the `admin` scope for `workspace.*` permissions.
+- Inviting gives the new member Contributor; choosing another role needs
+  `workspace.roles.manage`, so inviting can't hand out more than one holds.
+- A new workspace gets the default roles and its creator the Admin role.
+  Workspaces created before roles existed were backfilled: the first member
+  became Admin and the others Contributor (migration 00006).
 
 ### Default roles
 
@@ -105,8 +120,10 @@ Workflow transitions can further restrict who may perform them
 
 ### Enforcement points
 
-- REST: middleware resolves the workspace and project, and the handler declares
-  the required key; the check runs before loading the aggregate.
+- REST: middleware resolves the workspace and project, and the route declares
+  the required key (`access.Service.Need(key)`); the check runs before loading
+  the aggregate. Services check again, so no route depends on its middleware
+  alone.
 - WebSocket: subscriptions are checked when made, and every pushed event is
   checked against the recipient's current permissions (cached per connection,
   invalidated by grant/role events).

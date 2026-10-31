@@ -26,10 +26,10 @@ PostgreSQL schema outline. Authoritative definitions live in
 | `api_tokens` | user_id, name, token_hash (SHA-256), hint, scope (`read` < `write` < `admin`), last_used_at, expires_at (nullable = never) |
 | `workspaces` | slug (unique; lower-case letters, digits, single hyphens), name, time_zone, settings JSONB |
 | `workspace_members` | workspace_id, user_id, status (active, suspended), joined_at, suspended_at — people who joined |
-| `invitations` | workspace_id, email (citext), token_hash, invited_by, team_ids, sent_at, expires_at (7 days), accepted_at/by, revoked_at — people invited but not joined; at most one open per email |
+| `invitations` | workspace_id, email (citext), token_hash, invited_by, team_ids, role_id (given on acceptance), sent_at, expires_at (7 days), accepted_at/by, revoked_at — people invited but not joined; at most one open per email |
 | `teams` / `team_members` | workspace_id, name (citext, unique per workspace), description / team_id, user_id (leaving the workspace leaves its teams) |
-| `roles` | workspace_id, name, permissions text[] |
-| `role_grants` | workspace_id, role_id, subject_type (user/team), subject_id, project_id (nullable = workspace scope) |
+| `roles` | workspace_id, name (citext, unique per workspace), description, builtin (admin, facilitator, contributor, viewer, guest; null = custom), permissions text[], position |
+| `role_grants` | workspace_id, role_id, user_id or team_id (exactly one; foreign keys remove grants with the member or team), project_id (nullable = workspace scope), granted_by; one per subject and scope |
 
 ## Projects and configuration
 
