@@ -64,12 +64,26 @@ socket event ─▶ store.apply(event) ─▶ subscribed components re-render
 
 ## Components
 
-Generic UI comes from **LDS**. What Horizon needs that LDS lacks splits into
-two groups:
+Generic UI comes from **LDS** (pinned at `v0.0.5`). The generic pieces Horizon
+asked LDS for have all shipped:
 
-**Generic — build upstream in LDS** (tracked in the LDS roadmap):
-`lds-popover`, `lds-tooltip`, `lds-drawer`, `lds-kbd`, `lds-empty-state`,
-`lds-skeleton`, a combobox / multi-select with search, a date-range picker.
+| Element | Horizon use |
+|---------|-------------|
+| `lds-combobox` + `lds-option` | Every property picker (status, priority, assignee, labels, iteration, release, parent). Glyph or avatar in the option's `start` slot, key or dates in `end`; labels use `multiple` and `creatable`; server-side search with `filter="none"` + `lds-search` |
+| `lds-segmented` + `lds-segment` | View switcher (list, board, backlog, table, timeline, calendar), report measure (points / issues), inbox unread / all |
+| `lds-date-range` | Start → due on issues, iteration dates; value is the ISO interval `start/end` |
+| `lds-kbd` | One element per key in the command palette, menus, tooltips and the shortcut help (`G` then `I`) |
+| `lds-empty-state` | Empty views and iterations, searches with no results (name the query, offer to clear filters) |
+| `lds-skeleton` | Loading rows, cards and charts, with `aria-busy` on the region |
+| `lds-nav-group href` | A project in the sidebar: the header links to the project overview (swatch in `start`, key in `end`), the chevron shows its pages |
+| `lds-popover` | Display options, filter builder, picker anchors. Non-modal; `placement`, `trigger` slot |
+| `lds-tooltip` | Every icon-only button (still give the button a `label`); `placement="right"` on the collapsed sidebar |
+| `lds-drawer non-modal` | Issue peek panel: no backdrop, list stays interactive; set `--lds-drawer-inset-top` to the header height |
+| Chart tokens | `--lds-color-chart-completed` / `started` / `unstarted` / `abandoned` (fixed stacking order), `-reference`, `-marker`, `-annotation`, `--lds-chart-bar-radius`, `--lds-chart-segment-gap` — see [reports.md](reports.md#charts) |
+| `lds-icon` | 68 Lucide icons, including status (`circle-dashed`, `circle`, `circle-dot`, `circle-check`, `circle-x`), priority (`signal-*`, `octagon-alert`), layouts and git |
+
+The combobox exposes its highlighted option through ARIA element reflection;
+browsers without it still filter and select but do not announce the highlight.
 
 **Horizon-specific — `hzn-*` in this repo**, following LDS rules (shadow DOM,
 semantic tokens only, `:host` display):
@@ -86,7 +100,7 @@ semantic tokens only, `:host` display):
 | `hzn-calendar` | Month and week calendar |
 | `hzn-filter-bar` | Filter chips and builder |
 | `hzn-editor` | Block editor |
-| `hzn-*-picker` | Status, priority, assignee, labels, estimate, iteration, release pickers |
+| `hzn-*-picker` | Status, priority, assignee, labels, estimate, iteration, release pickers: `lds-combobox` wrappers that load options from the store and apply mutations |
 | `hzn-inbox` | Notifications |
 | `hzn-chart-*`, `hzn-sparkline` | Hand-written SVG charts for reports ([reports.md](reports.md#charts)) |
 | `hzn-project-overview` | Fixed project overview page |

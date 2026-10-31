@@ -1,0 +1,379 @@
+/* LiDiSoft Design System — generated from tokens.json */
+
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/Inter-Variable.woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  src: url("fonts/SpaceGrotesk-Variable.woff2");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root, [data-theme="light"] {
+  --lds-color-blue-50: #eef7fd;
+  --lds-color-blue-100: #d6ebfa;
+  --lds-color-blue-200: #b0d9f4;
+  --lds-color-blue-300: #83c1ec;
+  --lds-color-blue-400: #62b0e8;
+  --lds-color-blue-500: #4a9fe3;
+  --lds-color-blue-600: #3480c2;
+  --lds-color-blue-700: #29649b;
+  --lds-color-blue-800: #1f4a73;
+  --lds-color-blue-900: #16334f;
+  --lds-color-coral-50: #fef2f0;
+  --lds-color-coral-100: #fde0db;
+  --lds-color-coral-200: #fbc3ba;
+  --lds-color-coral-300: #f99e90;
+  --lds-color-coral-400: #f78475;
+  --lds-color-coral-500: #f56f5c;
+  --lds-color-coral-600: #d9503c;
+  --lds-color-coral-700: #ad3c2c;
+  --lds-color-coral-800: #822c20;
+  --lds-color-coral-900: #5a1e16;
+  --lds-color-gray-0: #ffffff;
+  --lds-color-gray-25: #fbfcfe;
+  --lds-color-gray-50: #f6f8fb;
+  --lds-color-gray-100: #eef1f6;
+  --lds-color-gray-200: #e7ebf1;
+  --lds-color-gray-300: #cfd6e0;
+  --lds-color-gray-400: #a7b1c2;
+  --lds-color-gray-500: #7c8798;
+  --lds-color-gray-550: #646e80;
+  --lds-color-gray-600: #4a5364;
+  --lds-color-gray-700: #333c4d;
+  --lds-color-gray-800: #1a1f2b;
+  --lds-color-gray-900: #12151d;
+  --lds-color-gray-950: #0b0e14;
+  --lds-color-green-50: #eef9f1;
+  --lds-color-green-100: #d5f0dc;
+  --lds-color-green-200: #ade1ba;
+  --lds-color-green-300: #79cb8e;
+  --lds-color-green-400: #52b56d;
+  --lds-color-green-500: #3aa757;
+  --lds-color-green-600: #2d8544;
+  --lds-color-green-700: #246a37;
+  --lds-color-green-800: #1a4e28;
+  --lds-color-green-900: #12351b;
+  --lds-color-yellow-50: #fefaeb;
+  --lds-color-yellow-100: #fdf2c7;
+  --lds-color-yellow-200: #fbe68c;
+  --lds-color-yellow-300: #f8da51;
+  --lds-color-yellow-400: #f6d43b;
+  --lds-color-yellow-500: #f5cf2b;
+  --lds-color-yellow-600: #d4b012;
+  --lds-color-yellow-700: #a4880e;
+  --lds-color-yellow-800: #77630b;
+  --lds-color-yellow-900: #4f4207;
+  --lds-card-border: var(--lds-color-border-default);
+  --lds-color-accent-active: var(--lds-color-blue-700);
+  --lds-color-accent-border: var(--lds-color-blue-200);
+  --lds-color-accent-default: var(--lds-color-blue-500);
+  --lds-color-accent-fg: var(--lds-color-blue-700);
+  --lds-color-accent-hover: var(--lds-color-blue-600);
+  --lds-color-accent-muted: var(--lds-color-blue-100);
+  --lds-color-accent-subtle: var(--lds-color-blue-50);
+  --lds-color-bg-canvas: var(--lds-color-gray-0);
+  --lds-color-bg-inverse: var(--lds-color-gray-900);
+  --lds-color-bg-muted: var(--lds-color-gray-100);
+  --lds-color-bg-overlay: rgba(18, 21, 29, 0.55);
+  --lds-color-bg-raised: var(--lds-color-gray-0);
+  --lds-color-bg-subtle: var(--lds-color-gray-50);
+  --lds-color-border-default: var(--lds-color-gray-200);
+  --lds-color-border-inverse: var(--lds-color-gray-700);
+  --lds-color-border-strong: var(--lds-color-gray-300);
+  --lds-color-border-subtle: var(--lds-color-gray-100);
+  --lds-color-chart-abandoned: var(--lds-color-coral-600);
+  --lds-color-chart-annotation: var(--lds-color-fg-muted);
+  --lds-color-chart-completed: var(--lds-color-green-600);
+  --lds-color-chart-marker: var(--lds-color-danger-fg);
+  --lds-color-chart-reference: var(--lds-color-fg-subtle);
+  --lds-color-chart-started: var(--lds-color-blue-600);
+  --lds-color-chart-unstarted: var(--lds-color-gray-400);
+  --lds-color-danger-active: var(--lds-color-coral-700);
+  --lds-color-danger-border: var(--lds-color-coral-200);
+  --lds-color-danger-default: var(--lds-color-coral-500);
+  --lds-color-danger-fg: var(--lds-color-coral-700);
+  --lds-color-danger-hover: var(--lds-color-coral-600);
+  --lds-color-danger-muted: var(--lds-color-coral-100);
+  --lds-color-danger-subtle: var(--lds-color-coral-50);
+  --lds-color-fg-default: var(--lds-color-gray-800);
+  --lds-color-fg-disabled: var(--lds-color-gray-400);
+  --lds-color-fg-inverse: var(--lds-color-gray-100);
+  --lds-color-fg-link: var(--lds-color-blue-700);
+  --lds-color-fg-muted: var(--lds-color-gray-600);
+  --lds-color-fg-on-accent: var(--lds-color-gray-0);
+  --lds-color-fg-on-warning: var(--lds-color-gray-900);
+  --lds-color-fg-subtle: var(--lds-color-gray-550);
+  --lds-color-focus-ring: var(--lds-color-blue-600);
+  --lds-color-focus-ring-offset: var(--lds-color-bg-canvas);
+  --lds-color-neutral-active: var(--lds-color-gray-900);
+  --lds-color-neutral-border: var(--lds-color-gray-200);
+  --lds-color-neutral-default: var(--lds-color-gray-800);
+  --lds-color-neutral-fg: var(--lds-color-gray-700);
+  --lds-color-neutral-hover: var(--lds-color-gray-700);
+  --lds-color-neutral-muted: var(--lds-color-gray-100);
+  --lds-color-neutral-subtle: var(--lds-color-gray-50);
+  --lds-color-success-active: var(--lds-color-green-700);
+  --lds-color-success-border: var(--lds-color-green-200);
+  --lds-color-success-default: var(--lds-color-green-500);
+  --lds-color-success-fg: var(--lds-color-green-700);
+  --lds-color-success-hover: var(--lds-color-green-600);
+  --lds-color-success-muted: var(--lds-color-green-100);
+  --lds-color-success-subtle: var(--lds-color-green-50);
+  --lds-color-warning-active: var(--lds-color-yellow-700);
+  --lds-color-warning-border: var(--lds-color-yellow-200);
+  --lds-color-warning-default: var(--lds-color-yellow-500);
+  --lds-color-warning-fg: var(--lds-color-yellow-800);
+  --lds-color-warning-hover: var(--lds-color-yellow-600);
+  --lds-color-warning-muted: var(--lds-color-yellow-100);
+  --lds-color-warning-subtle: var(--lds-color-yellow-50);
+  --lds-card-shadow: 0 1px 2px rgba(20, 30, 50, 0.04), 0 12px 32px rgba(20, 30, 50, 0.06);
+  --lds-overlay-shadow: 0 24px 64px rgba(20, 30, 50, 0.18);
+  --lds-shadow-inset: inset 0 1px 2px rgba(20, 30, 50, 0.06);
+  --lds-shadow-lg: 0 8px 20px rgba(20, 30, 50, 0.10), 0 24px 48px rgba(20, 30, 50, 0.10);
+  --lds-shadow-md: 0 1px 2px rgba(20, 30, 50, 0.04), 0 12px 32px rgba(20, 30, 50, 0.06);
+  --lds-shadow-none: none;
+  --lds-shadow-sm: 0 1px 2px rgba(20, 30, 50, 0.06);
+  --lds-shadow-xl: 0 24px 64px rgba(20, 30, 50, 0.18);
+}
+
+[data-theme="dark"] {
+  --lds-card-border: var(--lds-color-border-default);
+  --lds-color-accent-active: var(--lds-color-blue-200);
+  --lds-color-accent-border: rgba(74, 159, 227, 0.35);
+  --lds-color-accent-default: var(--lds-color-blue-400);
+  --lds-color-accent-fg: var(--lds-color-blue-300);
+  --lds-color-accent-hover: var(--lds-color-blue-300);
+  --lds-color-accent-muted: rgba(74, 159, 227, 0.22);
+  --lds-color-accent-subtle: rgba(74, 159, 227, 0.12);
+  --lds-color-bg-canvas: var(--lds-color-gray-900);
+  --lds-color-bg-inverse: var(--lds-color-gray-50);
+  --lds-color-bg-muted: var(--lds-color-gray-800);
+  --lds-color-bg-overlay: rgba(5, 7, 11, 0.7);
+  --lds-color-bg-raised: var(--lds-color-gray-800);
+  --lds-color-bg-subtle: var(--lds-color-gray-950);
+  --lds-color-border-default: var(--lds-color-gray-700);
+  --lds-color-border-inverse: var(--lds-color-gray-300);
+  --lds-color-border-strong: var(--lds-color-gray-600);
+  --lds-color-border-subtle: var(--lds-color-gray-800);
+  --lds-color-chart-abandoned: var(--lds-color-coral-400);
+  --lds-color-chart-annotation: var(--lds-color-fg-muted);
+  --lds-color-chart-completed: var(--lds-color-green-500);
+  --lds-color-chart-marker: var(--lds-color-danger-fg);
+  --lds-color-chart-reference: var(--lds-color-fg-subtle);
+  --lds-color-chart-started: var(--lds-color-blue-500);
+  --lds-color-chart-unstarted: var(--lds-color-gray-600);
+  --lds-color-danger-active: var(--lds-color-coral-200);
+  --lds-color-danger-border: rgba(245, 111, 92, 0.35);
+  --lds-color-danger-default: var(--lds-color-coral-400);
+  --lds-color-danger-fg: var(--lds-color-coral-300);
+  --lds-color-danger-hover: var(--lds-color-coral-300);
+  --lds-color-danger-muted: rgba(245, 111, 92, 0.22);
+  --lds-color-danger-subtle: rgba(245, 111, 92, 0.12);
+  --lds-color-fg-default: var(--lds-color-gray-100);
+  --lds-color-fg-disabled: var(--lds-color-gray-600);
+  --lds-color-fg-inverse: var(--lds-color-gray-900);
+  --lds-color-fg-link: var(--lds-color-blue-300);
+  --lds-color-fg-muted: var(--lds-color-gray-400);
+  --lds-color-fg-on-accent: var(--lds-color-gray-0);
+  --lds-color-fg-on-warning: var(--lds-color-gray-900);
+  --lds-color-fg-subtle: var(--lds-color-gray-500);
+  --lds-color-focus-ring: var(--lds-color-blue-400);
+  --lds-color-focus-ring-offset: var(--lds-color-bg-canvas);
+  --lds-color-neutral-active: var(--lds-color-gray-0);
+  --lds-color-neutral-border: var(--lds-color-gray-700);
+  --lds-color-neutral-default: var(--lds-color-gray-100);
+  --lds-color-neutral-fg: var(--lds-color-gray-300);
+  --lds-color-neutral-hover: var(--lds-color-gray-200);
+  --lds-color-neutral-muted: var(--lds-color-gray-700);
+  --lds-color-neutral-subtle: var(--lds-color-gray-800);
+  --lds-color-success-active: var(--lds-color-green-200);
+  --lds-color-success-border: rgba(58, 167, 87, 0.35);
+  --lds-color-success-default: var(--lds-color-green-400);
+  --lds-color-success-fg: var(--lds-color-green-300);
+  --lds-color-success-hover: var(--lds-color-green-300);
+  --lds-color-success-muted: rgba(58, 167, 87, 0.22);
+  --lds-color-success-subtle: rgba(58, 167, 87, 0.12);
+  --lds-color-warning-active: var(--lds-color-yellow-200);
+  --lds-color-warning-border: rgba(245, 207, 43, 0.35);
+  --lds-color-warning-default: var(--lds-color-yellow-400);
+  --lds-color-warning-fg: var(--lds-color-yellow-300);
+  --lds-color-warning-hover: var(--lds-color-yellow-300);
+  --lds-color-warning-muted: rgba(245, 207, 43, 0.22);
+  --lds-color-warning-subtle: rgba(245, 207, 43, 0.12);
+  --lds-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --lds-overlay-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  --lds-shadow-inset: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  --lds-shadow-lg: 0 8px 20px rgba(0, 0, 0, 0.45), 0 24px 48px rgba(0, 0, 0, 0.4);
+  --lds-shadow-md: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --lds-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --lds-shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+:root {
+  --lds-card-padding: 1.5rem;
+  --lds-chart-segment-gap: 2px;
+  --lds-control-gap-lg: 0.75rem;
+  --lds-control-gap-md: 0.5rem;
+  --lds-control-gap-sm: 0.5rem;
+  --lds-control-padding-x-lg: 1.25rem;
+  --lds-control-padding-x-md: 1rem;
+  --lds-control-padding-x-sm: 0.75rem;
+  --lds-focus-offset: 2px;
+  --lds-focus-width: 2px;
+  --lds-space-0: 0;
+  --lds-space-1: 0.25rem;
+  --lds-space-2: 0.5rem;
+  --lds-space-3: 0.75rem;
+  --lds-space-4: 1rem;
+  --lds-space-5: 1.25rem;
+  --lds-space-6: 1.5rem;
+  --lds-space-7: 1.75rem;
+  --lds-space-8: 2rem;
+  --lds-space-10: 2.5rem;
+  --lds-space-12: 3rem;
+  --lds-space-14: 3.5rem;
+  --lds-space-16: 4rem;
+  --lds-space-20: 5rem;
+  --lds-space-24: 6rem;
+  --lds-space-32: 8rem;
+  --lds-space-px: 1px;
+  --lds-card-radius: 5px;
+  --lds-chart-bar-radius: 4px;
+  --lds-control-radius-lg: 3px;
+  --lds-control-radius-md: 3px;
+  --lds-control-radius-pill: 999px;
+  --lds-control-radius-sm: 2px;
+  --lds-overlay-radius: 5px;
+  --lds-radius-full: 999px;
+  --lds-radius-lg: 5px;
+  --lds-radius-md: 3px;
+  --lds-radius-none: 0;
+  --lds-radius-sm: 2px;
+  --lds-radius-xl: 12px;
+  --lds-radius-xs: 1px;
+  --lds-avatar-size-lg: 48px;
+  --lds-avatar-size-md: 40px;
+  --lds-avatar-size-sm: 32px;
+  --lds-breakpoint-2xl: 1536px;
+  --lds-breakpoint-lg: 1024px;
+  --lds-breakpoint-md: 768px;
+  --lds-breakpoint-sm: 480px;
+  --lds-breakpoint-xl: 1280px;
+  --lds-control-border-width-default: 1px;
+  --lds-control-height-lg: 48px;
+  --lds-control-height-md: 40px;
+  --lds-control-height-sm: 32px;
+  --lds-icon-size-lg: 24px;
+  --lds-icon-size-md: 20px;
+  --lds-icon-size-sm: 16px;
+  --lds-size-container: 1300px;
+  --lds-size-prose: 68ch;
+  --lds-avatar-font-size-lg: 0.875rem;
+  --lds-avatar-font-size-md: 0.75rem;
+  --lds-avatar-font-size-sm: 0.6875rem;
+  --lds-control-font-size-lg: 1rem;
+  --lds-control-font-size-md: 0.875rem;
+  --lds-control-font-size-sm: 0.875rem;
+  --lds-font-size-2xl: 1.5rem;
+  --lds-font-size-2xs: 0.6875rem;
+  --lds-font-size-3xl: 1.875rem;
+  --lds-font-size-4xl: 2.25rem;
+  --lds-font-size-5xl: 3rem;
+  --lds-font-size-lg: 1.125rem;
+  --lds-font-size-md: 1rem;
+  --lds-font-size-sm: 0.875rem;
+  --lds-font-size-xl: 1.25rem;
+  --lds-font-size-xs: 0.75rem;
+  --lds-font-weight-bold: 700;
+  --lds-font-weight-extrabold: 800;
+  --lds-font-weight-medium: 500;
+  --lds-font-weight-regular: 400;
+  --lds-font-weight-semibold: 600;
+  --lds-font-leading-none: 1;
+  --lds-font-leading-normal: 1.55;
+  --lds-font-leading-relaxed: 1.65;
+  --lds-font-leading-snug: 1.35;
+  --lds-font-leading-tight: 1.15;
+  --lds-font-tracking-caps: 0.14em;
+  --lds-font-tracking-normal: 0;
+  --lds-font-tracking-tight: -0.02em;
+  --lds-font-tracking-wide: 0.04em;
+  --lds-z-base: 0;
+  --lds-z-drawer: 100;
+  --lds-z-modal: 200;
+  --lds-z-popover: 300;
+  --lds-z-raised: 10;
+  --lds-z-sticky: 50;
+  --lds-z-toast: 400;
+  --lds-z-tooltip: 500;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.lds-display {
+  font-family: var(--font-display);
+  font-size: 2.25rem;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.lds-title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.lds-eyebrow {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  line-height: 1.55;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+}
+
+.lds-lead {
+  font-family: var(--font-sans);
+  font-size: 1.125rem;
+  line-height: 1.65;
+  font-weight: 400;
+}
+
+.lds-body {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.65;
+  font-weight: 400;
+}
+
+.lds-control {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  font-weight: 500;
+}
+
+.lds-caption {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1.55;
+  font-weight: 400;
+}
+
+.lds-code {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  font-weight: 400;
+}

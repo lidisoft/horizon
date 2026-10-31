@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Horizon wireframes</title>
+<link rel="stylesheet" href="lds/tokens.css">
+<link rel="stylesheet" href="lds/bundle.css">
+<style>
+  body { margin: 0; background: var(--lds-color-bg-subtle); color: var(--lds-color-fg-default); font-family: var(--lds-font-family-sans); }
+  .hz-gallery { max-width: 1200px; margin: 0 auto; padding: var(--lds-space-10) var(--lds-space-4); }
+  .hz-gallery__head { display: flex; flex-direction: column; gap: var(--lds-space-2); margin-bottom: var(--lds-space-8); }
+  .hz-group { margin-bottom: var(--lds-space-8); }
+  .hz-group__title { margin: 0 0 var(--lds-space-3); font-size: var(--lds-font-size-lg); }
+  .hz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: var(--lds-space-3); }
+  .hz-card { display: flex; flex-direction: column; gap: var(--lds-space-1); padding: var(--lds-space-4); border: 1px solid var(--lds-color-border-default); border-radius: var(--lds-radius-lg); background: var(--lds-color-bg-raised); color: var(--lds-color-fg-default); text-decoration: none; }
+  .hz-card:hover { border-color: var(--lds-color-border-strong); }
+  .hz-card__title { font-weight: var(--lds-font-weight-semibold); }
+  .hz-card__meta { font-size: var(--lds-font-size-xs); color: var(--lds-color-fg-muted); }
+  .hz-toolbar { position: sticky; top: 0; z-index: var(--lds-z-sticky); display: flex; flex-wrap: wrap; align-items: center; gap: var(--lds-space-4); padding: var(--lds-space-2) var(--lds-space-4); background: var(--lds-color-bg-raised); border-bottom: 1px solid var(--lds-color-border-default); font-size: var(--lds-font-size-sm); }
+  .hz-toolbar a { color: var(--lds-color-fg-link); text-decoration: none; }
+  .hz-toolbar__title { font-weight: var(--lds-font-weight-semibold); }
+  .hz-control { display: inline-flex; align-items: center; gap: var(--lds-space-2); color: var(--lds-color-fg-muted); }
+  .hz-spacer { flex: 1; }
+  .hz-stage { padding: var(--lds-space-6) var(--lds-space-4); overflow-x: auto; }
+  .hz-frame { margin: 0 auto; background: var(--lds-color-bg-canvas); box-shadow: var(--lds-shadow-md); }
+</style>
+<script src="lds/bundle.js"></script>
+<script src="boards.js"></script>
+<script src="viewer.js" defer></script>
+</head>
+<body>
+<div id="app"></div>
+<noscript>The wireframes are rendered with JavaScript.</noscript>
+</body>
+</html>

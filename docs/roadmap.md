@@ -9,7 +9,7 @@ usable exists early.
 - [x] Event storm (Issue and Iteration aggregates)
 - [x] Documentation set and ADRs
 - [x] Review open questions (below) with the team
-- [ ] Wireframes for list, issue detail, board, backlog
+- [x] Wireframes for list, issue detail, board, backlog
 
 ## Phase 1 — Skeleton
 
@@ -125,4 +125,6 @@ None at the moment.
 | Responsive / mobile web | Desktop only in v1 — [frontend.md](frontend.md#look-and-feel) |
 | Backend testing | Real dependencies via testcontainers — [ADR-0022](adr/0022-integration-tests-real-dependencies.md) |
 | CI | GitHub Actions: PR checks, release on tag — [development.md](development.md#ci) |
+| Workflow editing | Drafts, published in one step with a migration mapping for removed statuses — [configuration.md](configuration.md#editing-drafts-and-publishing) |
+| Transition conditions | Roles and permissions only in v1; no assignee or reporter conditions |
 | Branch and commit conventions | `dev/<user>/<ticket>-<slug>`, conventional commits, squash merge; tickets move to Horizon once it can host them — [development.md](development.md#branches-commits-and-pull-requests) |

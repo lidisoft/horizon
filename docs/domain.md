@@ -192,7 +192,7 @@ sorting, display options.
 ### Configuration aggregates
 Issue types, workflows, custom fields, estimation scales, labels and policy
 settings are aggregates too: changing them emits events
-(`WorkflowUpdated`, …), so caches and connected clients refresh.
+(`WorkflowDraftSaved`, `WorkflowPublished`, …), so caches and connected clients refresh.
 
 ## Policies
 

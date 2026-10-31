@@ -1,0 +1,412 @@
+/*!
+ * LiDiSoft Design System — lds.css
+ * version 0.0.5
+ *
+ * GENERATED FILE — DO NOT EDIT.
+ * Regenerate with: make build   (see docs/architecture.md)
+ */
+/* ------------------------------------------------------------------
+ * Reset
+ *
+ * Deliberately small. It normalises box sizing, strips the margins that
+ * cause layout surprises, and sets the document-level typography that
+ * every component inherits — nothing more.
+ * ------------------------------------------------------------------ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  font-family: var(--lds-font-family-sans);
+  font-size: var(--lds-font-size-md);
+  line-height: var(--lds-font-leading-relaxed);
+  color: var(--lds-color-fg-default);
+  background: var(--lds-color-bg-canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-family: var(--lds-font-family-display);
+  font-weight: var(--lds-font-weight-semibold);
+  line-height: var(--lds-font-leading-tight);
+  letter-spacing: var(--lds-font-tracking-tight);
+}
+
+p,
+figure,
+blockquote,
+dl,
+dd {
+  margin: 0;
+}
+
+ul[class],
+ol[class] {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--lds-color-fg-link);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+img,
+picture,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--lds-font-family-mono);
+  font-size: 0.9em;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--lds-color-border-default);
+  margin: var(--lds-space-6) 0;
+}
+
+/* One focus treatment for the whole system. Components reuse these tokens
+ * inside their shadow roots rather than inventing their own ring. */
+:where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+  outline: var(--lds-focus-width) solid var(--lds-color-focus-ring);
+  outline-offset: var(--lds-focus-offset);
+  border-radius: var(--lds-radius-xs);
+}
+
+/* ------------------------------------------------------------------
+ * Theme wiring
+ *
+ * data-lds-theme is the explicit switch. When the page has not chosen,
+ * follow the OS. An explicit data-lds-theme="light" always wins because
+ * attribute selectors outrank the bare :root inside the media query.
+ * ------------------------------------------------------------------ */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-lds-theme="light"]) {
+    color-scheme: dark;
+  }
+}
+
+:root[data-lds-theme="dark"],
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* Respect users who ask for less motion: kill transitions system-wide rather
+ * than asking every component to remember. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+/* ------------------------------------------------------------------
+ * Tokens not declared by tokens.json (font stacks and motion), kept here.
+ * Every other --lds-* value comes from the design system's tokens.css.
+ * ------------------------------------------------------------------ */
+:root {
+  --lds-duration-fast: 120ms;
+  --lds-duration-instant: 0ms;
+  --lds-duration-normal: 180ms;
+  --lds-duration-slow: 280ms;
+  --lds-duration-slower: 420ms;
+  --lds-easing-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  --lds-easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --lds-easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --lds-easing-standard: cubic-bezier(0.2, 0, 0.2, 1);
+  --lds-font-family-display: "Space Grotesk", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --lds-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --lds-font-family-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --lds-transition-control: 120ms cubic-bezier(0.2, 0, 0.2, 1);
+  --lds-transition-surface: 180ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+/* ------------------------------------------------------------------
+ * Layout primitives and typography helpers.
+ *
+ * These are light-DOM classes, not components — layout is the one thing
+ * shadow DOM cannot own, because it has to arrange elements the consuming
+ * page created. Everything here is composable and single-purpose; this is
+ * not a utility framework and should not grow into one.
+ *
+ * Naming: .lds-<primitive>, modified by --lds-<primitive>-* custom
+ * properties rather than by variant classes.
+ * ------------------------------------------------------------------ */
+
+.lds-container {
+  width: 100%;
+  max-width: var(--lds-container-width, var(--lds-size-container));
+  margin-inline: auto;
+  padding-inline: var(--lds-space-6);
+}
+
+/* Vertical rhythm. Children are spaced, the container itself is not. */
+.lds-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lds-stack-gap, var(--lds-space-4));
+}
+
+/* Horizontal grouping that wraps instead of overflowing. */
+.lds-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: var(--lds-cluster-align, center);
+  gap: var(--lds-cluster-gap, var(--lds-space-3));
+}
+
+/* Pushes the last child away from the rest — nav bars, card footers. */
+.lds-split {
+  display: flex;
+  align-items: var(--lds-split-align, center);
+  justify-content: space-between;
+  gap: var(--lds-split-gap, var(--lds-space-4));
+}
+
+/* Responsive without media queries: columns fit as many as will hold
+ * --lds-grid-min, then wrap. */
+.lds-grid {
+  display: grid;
+  gap: var(--lds-grid-gap, var(--lds-space-6));
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(var(--lds-grid-min, 260px), 100%), 1fr)
+  );
+}
+
+/* Centres a column and caps its measure for readability. */
+.lds-prose {
+  max-width: var(--lds-prose-width, var(--lds-size-prose));
+}
+
+.lds-prose > * + * {
+  margin-top: var(--lds-space-4);
+}
+
+/* ------------------------------------------------------------------
+ * Typography helpers
+ * ------------------------------------------------------------------ */
+
+.lds-display {
+  font-family: var(--lds-font-family-display);
+  font-size: var(--lds-font-size-4xl);
+  font-weight: var(--lds-font-weight-bold);
+  line-height: var(--lds-font-leading-tight);
+  letter-spacing: var(--lds-font-tracking-tight);
+}
+
+.lds-title {
+  font-family: var(--lds-font-family-display);
+  font-size: var(--lds-font-size-2xl);
+  font-weight: var(--lds-font-weight-semibold);
+  line-height: var(--lds-font-leading-tight);
+  letter-spacing: var(--lds-font-tracking-tight);
+}
+
+.lds-eyebrow {
+  font-family: var(--lds-font-family-display);
+  font-size: var(--lds-font-size-xs);
+  font-weight: var(--lds-font-weight-semibold);
+  letter-spacing: var(--lds-font-tracking-caps);
+  text-transform: uppercase;
+  color: var(--lds-color-fg-muted);
+}
+
+.lds-lead {
+  font-size: var(--lds-font-size-lg);
+  color: var(--lds-color-fg-muted);
+}
+
+.lds-muted {
+  color: var(--lds-color-fg-muted);
+}
+
+.lds-subtle {
+  color: var(--lds-color-fg-subtle);
+}
+
+/* ------------------------------------------------------------------
+ * Accessibility helpers
+ * ------------------------------------------------------------------ */
+
+/* Available to assistive technology, invisible on screen. */
+.lds-visually-hidden:not(:focus):not(:active) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Keyboard-only escape hatch to the main landmark. */
+.lds-skip-link {
+  position: absolute;
+  top: var(--lds-space-2);
+  left: var(--lds-space-2);
+  z-index: var(--lds-z-tooltip);
+  padding: var(--lds-space-2) var(--lds-space-4);
+  border-radius: var(--lds-radius-sm);
+  background: var(--lds-color-bg-raised);
+  box-shadow: var(--lds-shadow-lg);
+  transform: translateY(-200%);
+  transition: transform var(--lds-transition-control);
+}
+
+.lds-skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+
+/* ------------------------------------------------------------------
+ * Light-DOM styles for <lds-table>.
+ *
+ * Nested table cells cannot be reached from the component's shadow
+ * stylesheet (::slotted only matches top-level assigned nodes). Custom
+ * properties set on the host inherit into the light DOM; this file applies
+ * them to table / th / td.
+ * ------------------------------------------------------------------ */
+
+lds-table table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+  font-family: var(--lds-font-family-sans);
+  font-size: var(--lds-table-font-size, var(--lds-font-size-sm));
+  line-height: var(--lds-font-leading-normal);
+  color: var(--lds-table-fg, var(--lds-color-fg-default));
+  background: var(--lds-table-bg, var(--lds-color-bg-canvas));
+}
+
+lds-table caption {
+  caption-side: top;
+  padding-block: var(--lds-space-3);
+  color: var(--lds-color-fg-muted);
+  text-align: start;
+  font-size: var(--lds-font-size-sm);
+}
+
+lds-table th,
+lds-table td {
+  box-sizing: border-box;
+  padding: var(--lds-table-cell-padding-y, var(--lds-space-3))
+    var(--lds-table-cell-padding-x, var(--lds-space-4));
+  border-bottom: var(--lds-control-border-width-default) solid
+    var(--lds-table-border, var(--lds-color-border-default));
+  text-align: start;
+  vertical-align: middle;
+}
+
+lds-table th {
+  font-weight: var(--lds-font-weight-semibold);
+  color: var(--lds-table-header-fg, var(--lds-color-fg-muted));
+  background: var(--lds-table-header-bg, var(--lds-color-bg-muted));
+  white-space: nowrap;
+}
+
+lds-table tbody tr:last-child > th,
+lds-table tbody tr:last-child > td {
+  border-bottom: 0;
+}
+
+lds-table tbody tr:hover > th,
+lds-table tbody tr:hover > td {
+  background: var(--lds-table-row-hover-bg, var(--lds-color-bg-muted));
+}
+
+lds-table[striped] tbody tr:nth-child(even) > th,
+lds-table[striped] tbody tr:nth-child(even) > td {
+  background: var(--lds-table-row-stripe-bg, var(--lds-color-bg-subtle));
+}
+
+lds-table[striped] tbody tr:nth-child(even):hover > th,
+lds-table[striped] tbody tr:nth-child(even):hover > td {
+  background: var(--lds-table-row-hover-bg, var(--lds-color-bg-muted));
+}
+
+/* Sticky header — requires overflow on the shadow frame and a max-height. */
+lds-table[sticky] thead th {
+  position: sticky;
+  top: 0;
+  z-index: var(--lds-z-raised);
+  box-shadow: 0 var(--lds-space-px) 0 var(--lds-table-border, var(--lds-color-border-default));
+}
+
+/* Sortable columns */
+lds-table[sortable] th[data-sortable] {
+  cursor: pointer;
+  user-select: none;
+}
+
+lds-table[sortable] th[data-sortable]:focus-visible {
+  outline: var(--lds-focus-width) solid var(--lds-color-focus-ring);
+  outline-offset: calc(var(--lds-focus-offset) * -1);
+}
+
+lds-table[sortable] th[data-sortable]::after {
+  content: "";
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-inline-start: var(--lds-space-2);
+  vertical-align: 0.15em;
+  border-inline-end: var(--lds-control-border-width-default) solid currentColor;
+  border-block-end: var(--lds-control-border-width-default) solid currentColor;
+  opacity: 0.35;
+  transform: rotate(45deg);
+}
+
+lds-table[sortable] th[data-sortable][aria-sort="ascending"]::after {
+  opacity: 1;
+  transform: translateY(0.15em) rotate(-135deg);
+}
+
+lds-table[sortable] th[data-sortable][aria-sort="descending"]::after {
+  opacity: 1;
+  transform: translateY(-0.05em) rotate(45deg);
+}

@@ -25,7 +25,7 @@ revokes the session server-side; users can list and revoke their sessions.
 ### Model
 
 - A **permission** is a stable key, e.g. `issue.create`, `issue.transition`,
-  `issue.delete`, `iteration.manage`, `project.configure`.
+  `issue.delete`, `iteration.manage`, `project.config.manage`.
 - A **role** is a named set of permissions, defined per workspace.
   ([ADR-0013](adr/0013-configurable-roles-and-permission-sets.md)).
 - A **grant** gives a role to a user or a team, at **workspace** scope (applies
@@ -39,7 +39,9 @@ Code checks **permission keys only**, never role names.
 
 ### Default roles
 
-Seeded in every new workspace and editable afterwards:
+Seeded in every new workspace and editable afterwards, with one guard against
+lock-out: the **Admin** role can't be deleted or lose `workspace.roles.manage`,
+and its last workspace-scope grant can't be removed.
 
 | Role | Intent |
 |------|--------|

@@ -121,6 +121,21 @@ Charts are hand-written SVG components (`hzn-chart-line`, `hzn-chart-bar`,
 tokens. No charting library ([ADR-0006](adr/0006-spa-native-js-no-dependencies.md)).
 Every chart has a table fallback for accessibility.
 
+Colours come from the LDS chart tokens (since `v0.0.4`), never from intents or core
+steps:
+
+| Use | Token |
+|-----|-------|
+| Outcomes, stacked always in this order | `--lds-color-chart-completed`, `-started`, `-unstarted`, `-abandoned` |
+| Ideal or target line (dashed) | `--lds-color-chart-reference` |
+| Today marker | `--lds-color-chart-marker` |
+| Scope changes, dependency arrows, notes | `--lds-color-chart-annotation` |
+| Bar end radius, gap between segments | `--lds-chart-bar-radius`, `--lds-chart-segment-gap` |
+
+`unstarted` is below 3:1 against the surface by design, so any chart using it
+labels its values or offers the table view. Chart text uses `fg` roles; two or
+more series always get a legend.
+
 ## After v1
 
 - Configurable dashboards of widgets (reports, saved views, counters),

@@ -49,7 +49,7 @@ events, so clients invalidate their resolved view.
 |----------|-------|
 | name, icon, colour | Icon from the LDS Lucide sprite |
 | workflow | Bound workflow |
-| fields | Custom fields shown on this type, and whether each is required |
+| fields | Custom fields shown on this type, and whether each is required. Required is checked **when an issue is created**; to require a field at a later step, use a workflow validator on the transition |
 | allowed parent types | Optional restriction (e.g. Sub-task must have a parent; Epic can't have one) |
 
 Hierarchy is free by default: any issue can be the parent of any other in the
@@ -68,7 +68,9 @@ A workflow is a **state machine**, bound per issue type.
 Transition rules (evaluated server-side):
 
 - **Conditions** — who may perform the transition (permission or role), and
-  whether all children must be in a final category.
+  whether all children must be in a final category. Conditions on the
+  person's relation to the issue ("only the assignee", "only the reporter")
+  are not in v1.
 - **Validators** — required fields (built-in or custom) on transition.
 - **Post-actions** — set or clear a field (e.g. clear the assignee, set the
   resolution).
@@ -96,9 +98,25 @@ override).
   (cycle time, cumulative flow); see [reports.md](reports.md).
 - A workflow's initial status must be in an `unstarted` or `started` category.
 
-Editing a workflow that is in use requires a **migration mapping** for any
-removed status; affected issues are moved in the same operation and emit
-`IssueStatusUpdated`.
+### Editing: drafts and publishing
+
+Workflows are edited as a **draft**: statuses, transitions and rules can be
+changed freely without affecting issues, and the draft can be discarded. One
+draft exists per workflow at a time; it is shared by everyone allowed to edit
+the workflow.
+
+**Publishing** applies the draft in one operation:
+
+- It lists the changes and, for every removed status that still holds issues,
+  asks for a **migration mapping** to a status of the new version (a status
+  with the same outcome is suggested). Publishing is refused until every
+  such status is mapped.
+- Affected issues are moved in the same transaction and each emits
+  `IssueStatusUpdated`, so the move appears in their history and in reports.
+- The workflow's `version` increases; `WorkflowPublished` is emitted.
+
+Status categories are not edited in the workflow editor: they are managed on
+their own settings page, and a status only picks one.
 
 ## Custom fields
 

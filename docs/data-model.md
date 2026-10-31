@@ -35,7 +35,7 @@ PostgreSQL schema outline. Authoritative definitions live in
 | `projects` | workspace_id, key, name, lead_id, visibility, settings JSONB (overrides), issue_seq bigint, archived_at |
 | `project_key_aliases` | workspace_id, project_id, old_key |
 | `issue_types` | workspace_id, project_id (nullable = workspace), name, icon, colour, workflow_id, allowed_parent_type_ids |
-| `workflows` | workspace_id, project_id (nullable), name, version |
+| `workflows` | workspace_id, project_id (nullable), name, version, draft JSONB (nullable: statuses, transitions and rules being edited), draft_updated_by, draft_updated_at |
 | `status_categories` | workspace_id, project_id (nullable = workspace), name, colour, position, outcome (`unstarted`, `started`, `completed`, `abandoned`) |
 | `statuses` | workflow_id, name, colour, category_id, position, is_initial |
 | `transitions` | workflow_id, from_status_id (nullable = any), to_status_id, name, rules JSONB |
