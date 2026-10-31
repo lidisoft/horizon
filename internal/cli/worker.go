@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"time"
 
 	"github.com/urfave/cli/v3"
 	"golang.org/x/sync/errgroup"
@@ -48,5 +49,8 @@ func runWorker(ctx context.Context, rt *runtime) error {
 		JetStream: js,
 		Stream:    eventlog.DefaultStream(rt.cfg.EventsRetention),
 		Metrics:   rt.metrics,
+		Jobs: []worker.Job{
+			{Name: "identity-cleanup", Every: time.Hour, Run: rt.identity().Cleanup},
+		},
 	})
 }

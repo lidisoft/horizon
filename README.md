@@ -15,7 +15,7 @@ releases, boards, tables, Gantt timelines and calendars.
 
 ## Status
 
-Phase 1, the skeleton, is in progress ([roadmap](docs/roadmap.md)). The
+Phase 2, identity and organisation, is in progress ([roadmap](docs/roadmap.md)). The
 documentation below is the specification.
 
 ## Getting started
@@ -27,6 +27,7 @@ With Docker installed, and Go and [Task](https://taskfile.dev) installed directl
 mise install                  # optional: the pinned Go and Task
 task up                       # the whole stack; the app answers on http://localhost:8090
 curl localhost:8090/readyz    # PostgreSQL, NATS, S3 and schema checks
+task admin -- create-user --email you@example.com --instance-admin   # prints a link to set your password
 task check                    # what CI runs
 ```
 

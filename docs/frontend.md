@@ -30,6 +30,8 @@ web/
       context.js        service lookup for views (provideContext / requestContext)
       dom.js            constructable style sheets, escaped html`` templates
       api.js            fetch wrapper: auth, idempotency keys, problem details, ETags
+      session.js        signed-in user and CSRF token; sign-in, sign-out
+      forms.js          form values, field errors from problem details, lds-input stopgaps
       socket.js         WebSocket client: reconnect, subscriptions, replay
       store.js          normalised cache (entities by id) + query cache + subscriptions
       mutations.js      optimistic updates with rollback
@@ -82,6 +84,25 @@ socket event ─▶ store.apply(event) ─▶ subscribed components re-render
 - **Rendering**: components subscribe to store slices and re-render with
   small, explicit DOM updates (a keyed-list helper in `core/`). No virtual DOM.
 - **Large lists**: windowed rendering for list and table views above ~200 rows.
+
+## Sessions and routes
+
+`hzn-app` asks `GET /api/v1/me` who is signed in before it starts routing.
+Routes marked `public` (sign-in, forgot and reset password) render without
+the sidebar; any other route sends a signed-out user to
+`/sign-in?next=<path>`, and signing in returns them there (same-origin paths
+only). The frame's guard owns these redirects; views don't navigate after
+signing in or out.
+
+The API client reports a `401 unauthenticated` to the session, which signs
+the page out; a `403 csrf_invalid` (the session changed in another tab)
+reloads `/me` for a fresh token and retries the mutation once with the same
+idempotency key.
+
+Forms use LDS controls, which are form-associated: `FormData` reads them.
+Validation errors from the API (`422`, one `{ field, code }` each) are shown
+in the matching `lds-field`'s error slot as `error.<field>.<code>`, falling
+back to `error.field.<code>`.
 
 ## Components
 

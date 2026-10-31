@@ -1,4 +1,4 @@
-import { ApiError, NetworkError, createApi } from "horizon/core/api.js";
+import { ApiError, NetworkError, createApi, newIdempotencyKey } from "horizon/core/api.js";
 import { assert, describe, test } from "horizon-test/runner.js";
 
 /** A fetch double that records calls and answers with the next response. */
@@ -70,5 +70,54 @@ describe("api", () => {
     await assert.rejects(api.get("/x"), NetworkError);
     const err = await assert.rejects(api.get("/x"));
     assert.equal(err.name, "AbortError");
+  });
+  test("a 401 unauthenticated tells the session; other 401s don't", async () => {
+    const ended = [];
+    const { fetch } = fakeFetch(
+      { status: 401, body: { type: "unauthenticated", status: 401 } },
+      { status: 401, body: { type: "invalid_credentials", status: 401 } },
+    );
+    const api = createApi({ fetch, onUnauthenticated: (err) => ended.push(err.code) });
+    await assert.rejects(api.get("/me"), ApiError);
+    await assert.rejects(api.post("/auth/login", { body: {} }), ApiError);
+    assert.deepEqual(ended, ["unauthenticated"]);
+  });
+
+  test("a stale CSRF token is refreshed and the mutation retried once, same key", async () => {
+    let token = "old";
+    const { fetch, calls } = fakeFetch(
+      { status: 403, body: { type: "csrf_invalid", status: 403 } },
+      { status: 204, body: undefined },
+    );
+    const api = createApi({ fetch, csrfToken: () => token, refreshCsrf: async () => (token = "new") });
+    await api.patch("/me", { body: { name: "Ada" } });
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].headers["X-CSRF-Token"], "old");
+    assert.equal(calls[1].headers["X-CSRF-Token"], "new");
+    assert.equal(calls[0].headers["Idempotency-Key"], calls[1].headers["Idempotency-Key"]);
+  });
+
+  test("a CSRF failure after the refresh is not retried again", async () => {
+    const refused = { status: 403, body: { type: "csrf_invalid", status: 403 } };
+    const { fetch, calls } = fakeFetch(refused, refused);
+    const api = createApi({ fetch, refreshCsrf: async () => {} });
+    const err = await assert.rejects(api.post("/x", { body: {} }), ApiError);
+    assert.equal(err.code, "csrf_invalid");
+    assert.equal(calls.length, 2);
+  });
+  test("idempotency keys are UUIDv4 even without crypto.randomUUID (plain HTTP off localhost)", async () => {
+    const uuid4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    crypto.randomUUID = undefined; // shadows Crypto.prototype.randomUUID, as in an insecure context
+    try {
+      const keys = new Set(Array.from({ length: 50 }, newIdempotencyKey));
+      assert.equal(keys.size, 50);
+      for (const k of keys) assert.match(k, uuid4);
+      const { fetch, calls } = fakeFetch({ status: 204, body: undefined });
+      await createApi({ fetch }).post("/x", { body: {} });
+      assert.match(calls[0].headers["Idempotency-Key"], uuid4);
+    } finally {
+      delete crypto.randomUUID;
+    }
+    assert.equal(typeof crypto.randomUUID, "function");
   });
 });

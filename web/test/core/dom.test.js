@@ -1,4 +1,4 @@
-import { escapeHtml, html, raw, sheet } from "horizon/core/dom.js";
+import { escapeHtml, html, ldsLightSheet, raw, sheet } from "horizon/core/dom.js";
 import { assert, describe, test } from "horizon-test/runner.js";
 
 describe("dom", () => {
@@ -19,5 +19,23 @@ describe("dom", () => {
     assert.ok(a instanceof CSSStyleSheet);
     assert.equal(sheet(":host { color: red; }"), a);
     assert.equal(a.cssRules.length, 1);
+  });
+  test("ldsLightSheet brings LDS table and utility rules into shadow roots", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    try {
+      const root = host.attachShadow({ mode: "open" });
+      root.adoptedStyleSheets = [ldsLightSheet()];
+      root.innerHTML = `<lds-table><table><thead><tr><th>A</th><th><span class="lds-visually-hidden">B</span></th></tr></thead></table></lds-table>`;
+      await customElements.whenDefined("lds-table");
+      const th = root.querySelector("th");
+      assert.equal(getComputedStyle(th).textAlign, "start");
+      assert.ok(parseFloat(getComputedStyle(th).paddingLeft) > 0, "cells are padded");
+      assert.equal(getComputedStyle(root.querySelector(".lds-visually-hidden")).position, "absolute");
+      assert.equal(ldsLightSheet(), ldsLightSheet(), "one shared sheet");
+      assert.ok(![...ldsLightSheet().cssRules].some((r) => r.selectorText === "body"), "no document rules");
+    } finally {
+      host.remove();
+    }
   });
 });

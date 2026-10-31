@@ -1,25 +1,40 @@
 // <hzn-app>: the standalone frame (ADR-0018). It creates the services,
 // provides them to the views it mounts, and owns the sidebar, the routing
 // outlet, the command palette (⌘K) and the shortcut help (?).
+//
+// It also guards routes: signed-out users land on /sign-in?next=…, and
+// public routes (sign-in, password reset) render without the sidebar.
 
 import { createApi } from "horizon/core/api.js";
 import { provideContext } from "horizon/core/context.js";
 import { html, raw, sheet } from "horizon/core/dom.js";
 import { createI18n } from "horizon/core/i18n.js";
 import { createRouter } from "horizon/core/router.js";
+import { createSession, safeNext } from "horizon/core/session.js";
 import { createShortcuts, displayKeys } from "horizon/core/shortcuts.js";
 import { createStore } from "horizon/core/store.js";
 import catalog from "horizon/i18n/en.json" with { type: "json" };
 
-/** Routes: name, URL pattern and the view element mounted for it. */
-export const ROUTES = [{ name: "home", path: "/", view: "hzn-home" }];
+/**
+ * Routes: name, URL pattern and the view element mounted for it. public
+ * routes are for signed-out users and have no sidebar.
+ */
+export const ROUTES = [
+  { name: "home", path: "/", view: "hzn-home" },
+  { name: "account", path: "/account", view: "hzn-account" },
+  { name: "sign-in", path: "/sign-in", view: "hzn-sign-in", public: true },
+  { name: "forgot-password", path: "/forgot-password", view: "hzn-forgot-password", public: true },
+  { name: "reset-password", path: "/reset-password", view: "hzn-reset-password", public: true },
+];
 const NOT_FOUND_VIEW = "hzn-not-found";
 const THEME_KEY = "horizon.theme";
 
 const styles = sheet(`
   :host { display: block; height: 100vh; }
   .frame { display: flex; height: 100%; }
+  .frame[data-layout="public"] lds-nav { display: none; }
   lds-nav { flex: none; }
+  .footer { display: grid; gap: var(--lds-space-1); }
   main { flex: 1; min-width: 0; overflow: auto; }
   .brand {
     font-family: var(--lds-font-family-display);
@@ -56,7 +71,13 @@ export class HznApp extends HTMLElement {
     const i18n = createI18n(catalog);
     const router = createRouter(ROUTES);
     const shortcuts = createShortcuts();
-    this.context = { api: createApi(), store: createStore(), router, i18n, shortcuts };
+    const session = createSession({ api: () => api });
+    const api = createApi({
+      csrfToken: () => session.csrf,
+      onUnauthenticated: () => session.ended(),
+      refreshCsrf: () => session.load().then(() => {}),
+    });
+    this.context = { api, store: createStore(), router, i18n, shortcuts, session };
     provideContext(this, this.context);
 
     const t = i18n.t;
@@ -67,19 +88,27 @@ export class HznApp extends HTMLElement {
         <lds-nav aria-label="${t("nav.label")}">
           <a slot="brand" class="brand" href="/">${t("app.name")}</a>
           <lds-nav-item href="/" data-route="home"><lds-icon slot="start" name="layers"></lds-icon>${t("nav.home")}</lds-nav-item>
-          <lds-button slot="footer" variant="ghost" size="sm" data-action="theme">
-            <lds-icon slot="start" name="moon"></lds-icon><span data-label>${t("theme.dark")}</span>
-          </lds-button>
+          <div slot="footer" class="footer">
+            <lds-nav-item href="/account" data-route="account"><lds-avatar slot="start" size="sm"></lds-avatar><span data-user></span></lds-nav-item>
+            <lds-button variant="ghost" size="sm" data-action="theme">
+              <lds-icon slot="start" name="moon"></lds-icon><span data-label>${t("theme.dark")}</span>
+            </lds-button>
+            <lds-button variant="ghost" size="sm" data-action="sign-out">
+              <lds-icon slot="start" name="log-out"></lds-icon>${t("nav.signOut")}
+            </lds-button>
+          </div>
         </lds-nav>
         <main id="outlet"></main>
       </div>
       <lds-command id="palette" aria-label="${t("command.label")}" placeholder="${t("command.placeholder")}" empty="${t("command.empty")}">
         <lds-command-group heading="${t("command.group.navigation")}">
           <lds-command-item value="home"><lds-icon slot="start" name="layers"></lds-icon>${t("shortcut.home")}</lds-command-item>
+          <lds-command-item value="account"><lds-icon slot="start" name="user"></lds-icon>${t("command.account")}</lds-command-item>
         </lds-command-group>
         <lds-command-group heading="${t("command.group.general")}">
           <lds-command-item value="theme"><lds-icon slot="start" name="moon"></lds-icon>${t("shortcut.theme")}</lds-command-item>
           <lds-command-item value="help"><lds-icon slot="start" name="keyboard"></lds-icon>${t("shortcut.help")}</lds-command-item>
+          <lds-command-item value="sign-out"><lds-icon slot="start" name="log-out"></lds-icon>${t("nav.signOut")}</lds-command-item>
         </lds-command-group>
       </lds-command>
       <lds-modal id="help" size="sm" dismissible>
@@ -87,12 +116,15 @@ export class HznApp extends HTMLElement {
         <dl class="help"></dl>
       </lds-modal>
     `);
+    this.frame = root.querySelector(".frame");
     this.outlet = root.getElementById("outlet");
     this.palette = root.getElementById("palette");
     this.help = root.getElementById("help");
 
     const actions = {
       home: () => router.navigate(router.href("home")),
+      account: () => router.navigate(router.href("account")),
+      "sign-out": () => session.logout(),
       theme: () => this.toggleTheme(),
       help: () => this.showHelp(),
       palette: () => this.palette.setAttribute("open", ""),
@@ -108,11 +140,27 @@ export class HznApp extends HTMLElement {
       action();
     });
     root.querySelector('[data-action="theme"]').addEventListener("click", actions.theme);
+    root.querySelector('[data-action="sign-out"]').addEventListener("click", actions["sign-out"]);
 
     this.renderTheme();
     router.subscribe((match) => this.show(match));
+    session.subscribe(() => {
+      this.renderUser();
+      if (router.current) this.show(router.current);
+    });
     shortcuts.start();
-    router.start();
+    this.start();
+  }
+
+  /** Learns who is signed in, then starts routing. */
+  async start() {
+    try {
+      await this.context.session.load();
+    } catch {
+      // Server unreachable or failing: show the page anyway. Protected
+      // routes send the user to sign-in, which reports errors as they occur.
+    }
+    this.context.router.start();
   }
 
   disconnectedCallback() {
@@ -120,8 +168,22 @@ export class HznApp extends HTMLElement {
     this.context?.router.stop();
   }
 
-  /** Mounts the view for a route, reusing it when only its parameters change. */
+  /**
+   * Mounts the view for a route, reusing it when only its parameters change.
+   * Redirects signed-out users to sign-in, and signed-in users away from it.
+   */
   show(match) {
+    const { session, router } = this.context;
+    const signedIn = session.status === "signed-in";
+    if (!signedIn && !match.route?.public) {
+      router.navigate(`${router.href("sign-in")}?next=${encodeURIComponent(match.path)}`, { replace: true });
+      return;
+    }
+    if (signedIn && match.route?.name === "sign-in") {
+      router.navigate(safeNext(match.query.get("next")), { replace: true });
+      return;
+    }
+    this.frame.dataset.layout = match.route?.public ? "public" : "app";
     const tag = match.route ? match.route.view : NOT_FOUND_VIEW;
     const params = match.route ? match.params : { path: match.path };
     let view = this.outlet.firstElementChild;
@@ -135,6 +197,12 @@ export class HznApp extends HTMLElement {
     for (const item of this.shadowRoot.querySelectorAll("lds-nav-item[data-route]")) {
       item.toggleAttribute("active", item.dataset.route === match.route?.name);
     }
+  }
+
+  renderUser() {
+    const user = this.context.session.user;
+    this.shadowRoot.querySelector("[data-user]").textContent = user?.name ?? "";
+    this.shadowRoot.querySelector("lds-avatar").setAttribute("name", user?.name ?? "");
   }
 
   toggleTheme() {

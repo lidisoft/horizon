@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -32,6 +33,10 @@ type Deps struct {
 	Checks  []Check
 	Metrics *metrics.Registry
 	Web     *Web // nil serves no web app (tests of the API alone)
+	// API registers the modules' routes on /api/v1.
+	API func(api *gin.RouterGroup)
+	// TrustedProxies may set X-Forwarded-For (HORIZON_TRUSTED_PROXIES).
+	TrustedProxies []netip.Prefix
 }
 
 // NewEngine creates the Gin engine with middleware and routes.
@@ -39,6 +44,13 @@ func NewEngine(deps Deps) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.ContextWithFallback = true
+	proxies := make([]string, len(deps.TrustedProxies))
+	for i, p := range deps.TrustedProxies {
+		proxies[i] = p.String()
+	}
+	if err := r.SetTrustedProxies(proxies); err != nil {
+		panic(fmt.Sprintf("server: trusted proxies: %v", err)) // validated by config
+	}
 
 	r.HandleMethodNotAllowed = true
 	r.Use(SecurityHeaders())
@@ -59,6 +71,11 @@ func NewEngine(deps Deps) *gin.Engine {
 		}
 		swagger(c)
 	})
+
+	if deps.API != nil {
+		api := r.Group("/api/v1", NoStore(), SameSiteOnly())
+		deps.API(api)
+	}
 
 	if deps.Web != nil {
 		deps.Web.register(r)

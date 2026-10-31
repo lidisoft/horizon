@@ -8,3 +8,4 @@ docs
 docker-compose.yml
 Dockerfile.dev
 .air.toml
+.gen-check

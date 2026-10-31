@@ -6,10 +6,17 @@ package db
 
 import (
 	"encoding/json"
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+type AuthThrottle struct {
+	Key         string
+	Failures    int32
+	WindowStart time.Time
+}
 
 type Event struct {
 	ID               uuid.UUID
@@ -22,4 +29,38 @@ type Event struct {
 	OccurredAt       time.Time
 	Payload          json.RawMessage
 	PublishedAt      *time.Time
+}
+
+type PasswordReset struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	TokenHash []byte
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+}
+
+type Session struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	TokenHash  []byte
+	CreatedAt  time.Time
+	LastSeenAt time.Time
+	ExpiresAt  time.Time
+	UserAgent  string
+	Ip         *netip.Addr
+}
+
+type User struct {
+	ID              uuid.UUID
+	Email           string
+	Name            string
+	PasswordHash    *string
+	Locale          string
+	Timezone        *string
+	IsInstanceAdmin bool
+	DeactivatedAt   *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	Version         int32
 }

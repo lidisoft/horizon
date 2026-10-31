@@ -3,5 +3,6 @@
 
 # Build output
 tmp/
+.gen-check/
 bin/
 dist/

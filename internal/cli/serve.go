@@ -42,6 +42,9 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 		Checks:  rt.checks(),
 		Metrics: rt.metrics,
 		Web:     webApp,
+		API:     rt.api(),
+
+		TrustedProxies: rt.cfg.TrustedProxies,
 	})
 
 	g, ctx := errgroup.WithContext(ctx)

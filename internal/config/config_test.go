@@ -118,3 +118,24 @@ func TestLoadPreviousKeys(t *testing.T) {
 		t.Errorf("previous keys = %d", len(c.SecretKeysPrevious))
 	}
 }
+
+func TestLoadTrustedProxies(t *testing.T) {
+	vars := complete()
+	vars["TRUSTED_PROXIES"] = "10.0.0.0/8, 192.0.2.1,fd00::/8,10.1.2.3/8"
+	c, err := Load(env(vars), NeedServe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range c.TrustedProxies {
+		got = append(got, p.String())
+	}
+	if want := "10.0.0.0/8 192.0.2.1/32 fd00::/8 10.0.0.0/8"; strings.Join(got, " ") != want {
+		t.Errorf("proxies = %v, want %s", got, want)
+	}
+
+	vars["TRUSTED_PROXIES"] = "10.0.0.0/8,proxy.local"
+	if _, err := Load(env(vars), NeedServe); err == nil || !strings.Contains(err.Error(), `HORIZON_TRUSTED_PROXIES: "proxy.local" is not an IP address or CIDR prefix`) {
+		t.Errorf("err = %v", err)
+	}
+}

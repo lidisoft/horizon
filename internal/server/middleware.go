@@ -105,3 +105,29 @@ func Instrument(m *httpMetrics) gin.HandlerFunc {
 		m.duration.WithLabelValues(c.Request.Method, route).Observe(time.Since(start).Seconds())
 	}
 }
+
+// NoStore keeps API responses out of shared and browser caches: they are
+// per-user.
+func NoStore() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store")
+		c.Next()
+	}
+}
+
+// SameSiteOnly refuses state-changing requests a browser marks as
+// cross-site (Sec-Fetch-Site), a second line behind SameSite cookies and the
+// CSRF token. Clients that don't send the header, such as API scripts, pass.
+func SameSiteOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !isSafeMethod(c.Request.Method) && c.GetHeader("Sec-Fetch-Site") == "cross-site" {
+			WriteProblem(c, Problem{Type: "cross_site_request", Status: http.StatusForbidden})
+			return
+		}
+		c.Next()
+	}
+}
+
+func isSafeMethod(m string) bool {
+	return m == http.MethodGet || m == http.MethodHead || m == http.MethodOptions
+}

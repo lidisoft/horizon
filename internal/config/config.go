@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+	"net/netip"
 	"net/url"
 	"os"
 	"sort"
@@ -60,6 +61,8 @@ const (
 	NeedWorker = NeedDatabase | NeedNATS | NeedS3 | NeedSMTP | NeedSecrets
 	// NeedMigrate is what `horizon migrate` requires.
 	NeedMigrate = NeedDatabase
+	// NeedAdmin is what `horizon admin` requires; BASE_URL is used when set.
+	NeedAdmin = NeedDatabase
 )
 
 // S3 holds object storage settings.
@@ -90,6 +93,9 @@ type Config struct {
 	LogFormat       string
 	HTTPAddr        string
 	MetricsAddr     string
+	// TrustedProxies may set X-Forwarded-For; empty trusts none, so the
+	// client IP is the connection's.
+	TrustedProxies []netip.Prefix
 }
 
 // LookupFunc reads one environment variable; os.LookupEnv in production.
@@ -119,6 +125,7 @@ func Load(lookup LookupFunc, need Need) (Config, error) {
 	c.HTTPAddr = l.optional("HTTP_ADDR", DefaultHTTPAddr)
 	c.MetricsAddr = l.optional("METRICS_ADDR", DefaultMetricsAddr)
 	c.EventsRetention = l.duration("EVENTS_RETENTION", DefaultEventsRetention)
+	c.TrustedProxies = l.prefixes("TRUSTED_PROXIES")
 
 	c.DatabaseURL = l.urlString("DATABASE_URL", need&NeedDatabase != 0, "postgres", "postgresql")
 	c.NatsURL = l.urlString("NATS_URL", need&NeedNATS != 0, "nats", "tls")
@@ -312,4 +319,35 @@ func (l *loader) sessionSecret(name string, required bool) string {
 		l.fail(name, "must be at least %d characters", minSessionSecretLen)
 	}
 	return v
+}
+
+// prefixes reads comma-separated IPs or CIDR prefixes.
+func (l *loader) prefixes(name string) []netip.Prefix {
+	v, ok := l.get(name)
+	if !ok {
+		return nil
+	}
+	var out []netip.Prefix
+	for _, part := range strings.Split(v, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if !strings.Contains(part, "/") {
+			addr, err := netip.ParseAddr(part)
+			if err != nil {
+				l.fail(name, "%q is not an IP address or CIDR prefix", part)
+				continue
+			}
+			out = append(out, netip.PrefixFrom(addr, addr.BitLen()))
+			continue
+		}
+		p, err := netip.ParsePrefix(part)
+		if err != nil {
+			l.fail(name, "%q is not an IP address or CIDR prefix", part)
+			continue
+		}
+		out = append(out, p.Masked())
+	}
+	return out
 }

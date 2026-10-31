@@ -34,6 +34,14 @@ both stacks can run at once; change them in `.env` (see `.env.example`).
 Host-side tasks (`task migrate:*`) reach PostgreSQL on 5433; override with
 `HORIZON_DATABASE_URL`.
 
+There is no sign-up page. Create your account in the running stack, then open
+the printed link to choose a password (the link and every email, such as
+password resets, also land in Mailpit):
+
+```bash
+task admin -- create-user --email you@example.com --name "Your Name" --instance-admin
+```
+
 ## Tests
 
 | Layer | What | How |

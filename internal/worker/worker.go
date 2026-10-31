@@ -5,6 +5,7 @@ package worker
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go/jetstream"
@@ -23,6 +24,16 @@ type Deps struct {
 	JetStream jetstream.JetStream
 	Stream    eventlog.Stream
 	Metrics   *metrics.Registry
+	// Jobs run periodically next to the consumers.
+	Jobs []Job
+}
+
+// Job is periodic housekeeping, such as deleting expired sessions. A failed
+// run is logged and retried at the next tick; it never stops the worker.
+type Job struct {
+	Name  string
+	Every time.Duration
+	Run   func(ctx context.Context) error
 }
 
 // Run starts every consumer and blocks until ctx is cancelled or one fails.
@@ -37,5 +48,26 @@ func Run(ctx context.Context, deps Deps) error {
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return relay.Run(ctx) })
+	for _, job := range deps.Jobs {
+		g.Go(func() error {
+			runJob(ctx, job, logging.WithSystem(deps.Log, "job").With().Str("job", job.Name).Logger())
+			return nil
+		})
+	}
 	return g.Wait()
+}
+
+func runJob(ctx context.Context, job Job, log zerolog.Logger) {
+	tick := time.NewTicker(job.Every)
+	defer tick.Stop()
+	for {
+		if err := job.Run(ctx); err != nil && ctx.Err() == nil {
+			log.Error().Err(err).Msg("job failed")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
 }

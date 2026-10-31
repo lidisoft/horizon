@@ -94,10 +94,10 @@ tasks:
   gen:check:
     desc: Fail if generated code is stale
     cmds:
-      - rm -rf tmp/gen-check && mkdir -p tmp/gen-check
-      - go tool swag init -q -g internal/server/server.go -o tmp/gen-check/docs --outputTypes go,json --parseInternal
+      - rm -rf .gen-check && mkdir -p .gen-check
+      - go tool swag init -q -g internal/server/server.go -o .gen-check/docs --outputTypes go,json --parseInternal
       - |
-        diff -r internal/docs tmp/gen-check/docs || { echo "generated code is stale; run task gen" >&2; exit 1; }
+        diff -r internal/docs .gen-check/docs || { echo "generated code is stale; run task gen" >&2; exit 1; }
       - go tool sqlc diff
 
   check:
@@ -145,6 +145,11 @@ tasks:
     env: { HORIZON_DATABASE_URL: "{{.DATABASE_URL}}" }
     cmds:
       - go run ./cmd/horizon migrate status
+
+  admin:
+    desc: "Run an admin command in the dev stack's app container: task admin -- create-user --email you@example.com --instance-admin"
+    cmds:
+      - docker compose exec app go run ./cmd/horizon admin {{.CLI_ARGS}}
 
   migrate:create:
     desc: "Create the next numbered migration: task migrate:create -- add_users"

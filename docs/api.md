@@ -7,8 +7,12 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
 
 - Base path: `/api/v1`. Breaking changes need a new version.
 - JSON everywhere; field names in `snake_case`; times in RFC 3339 UTC.
-- Authentication: session cookie (SPA, with CSRF token header) or
-  `Authorization: Bearer <api token>`.
+- Authentication: session cookie (SPA, with the `X-CSRF-Token` header on
+  state-changing requests) or `Authorization: Bearer <api token>`
+  ([security.md](security.md#authentication-methods)). Anonymous requests to
+  protected endpoints get `401 unauthenticated`; a missing or stale CSRF
+  token gets `403 csrf_invalid`.
+- API responses are `Cache-Control: no-store`.
 - Workspace in the path: `/api/v1/w/{workspace}/…` (slug).
 - Issues are addressable by key: `/api/v1/w/{ws}/issues/HZN-42`.
 - **Commands are explicit** where the storm names an intent, rather than a
@@ -24,14 +28,21 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   `{ "items": [...], "next_cursor": "…" }`.
 - **Errors**: RFC 9457 problem details
   `{ "type", "title", "status", "detail", "errors": [{ "field", "code" }] }`.
-  Error codes are stable and translated client-side.
+  `type` is a stable snake_case code (`invalid_credentials`,
+  `version_conflict`) translated client-side as `error.<code>`; invalid input
+  is `422 invalid_input` with one `{ field, code }` per problem
+  (`error.<field>.<code>`). Unknown JSON fields are a `400 bad_request`.
+  `429` responses carry `Retry-After`.
 - OpenAPI is generated with swag and served at `/swagger/`.
 
 ## Resource map (v1)
 
 ```
-/auth/login | /auth/logout | /auth/magic-link | /auth/oidc/{provider}/…
-/me | /me/tokens | /me/inbox
+/auth/login | /auth/logout | /auth/password/forgot | /auth/password/reset
+/auth/magic-link | /auth/oidc/{provider}/…
+/me                                        GET (user + CSRF token) | PATCH profile
+/me/password | /me/sessions | /me/sessions/{id} | /me/sessions/revoke-others
+/me/tokens | /me/inbox
 /w                                         workspaces of the current user
 /w/{ws}
   /members  /teams  /roles  /grants

@@ -16,8 +16,10 @@ PostgreSQL schema outline. Authoritative definitions live in
 
 | Table | Key columns |
 |-------|-------------|
-| `users` | email (unique, citext), name, avatar, password_hash (argon2id, nullable), locale, timezone, is_instance_admin |
-| `sessions` | user_id, token_hash, expires_at, user_agent, ip |
+| `users` | email (unique, citext), name, password_hash (argon2id PHC string, nullable), locale, timezone (nullable = the browser's), is_instance_admin, deactivated_at |
+| `sessions` | user_id, token_hash (SHA-256), last_seen_at, expires_at (sliding), user_agent, ip |
+| `password_resets` | user_id, token_hash, expires_at, used_at |
+| `auth_throttle` | key (`email:…` or `ip:…`), failures, window_start — sign-in throttling shared by replicas |
 | `magic_links` | user_id, token_hash, expires_at, used_at |
 | `oidc_providers` | workspace_id (nullable = instance-wide), issuer, client_id, client_secret (encrypted), domain allowlist |
 | `user_identities` | user_id, provider_id, subject |

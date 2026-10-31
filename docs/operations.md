@@ -22,8 +22,9 @@ disposable.
 ## Configuration
 
 Environment variables only, prefixed `HORIZON_`. Startup fails fast, listing
-every missing or invalid variable. `migrate` needs only `DATABASE_URL`; `serve`
-and `worker` need the rest.
+every missing or invalid variable. `migrate` and `admin` need only `DATABASE_URL`
+(`admin` also reads `BASE_URL` to print links); `serve` and `worker` need the
+rest.
 
 | Variable | Notes |
 |----------|-------|
@@ -37,6 +38,7 @@ and `worker` need the rest.
 | `EVENTS_RETENTION` | JetStream retention, Go duration, default `168h` (7 days) |
 | `LOG_LEVEL`, `LOG_FORMAT` | `info` and `json` by default; `LOG_FORMAT=console` for humans |
 | `HTTP_ADDR`, `METRICS_ADDR` | Default `:8080`, `:9090` |
+| `TRUSTED_PROXIES` | Comma-separated IPs or CIDR prefixes of reverse proxies allowed to set `X-Forwarded-For`; default none, so the client IP is the connection's. Set it behind a proxy, or sign-in throttling counts every user as the proxy's address |
 
 ## Lifecycle
 
@@ -98,8 +100,9 @@ position.
 
 | Command | Does |
 |---------|------|
-| `horizon admin create-user` | Create a user, optionally instance admin |
-| `horizon admin reset-password` | Issue a reset link for a user |
+| `horizon admin create-user` | Create a user (`--email`, `--name`, `--instance-admin`); prints a link to choose the password, or reads it with `--password-stdin` |
+| `horizon admin reset-password` | Print a single-use reset link for a user, valid one hour |
+| `horizon admin deactivate-user`, `reactivate-user` | Block or restore an account's sign-in instance-wide; deactivation revokes every session |
 | `horizon admin create-workspace` | Create a workspace with an owner |
 | `horizon admin reconcile` | Post-restore consistency (see above) |
 | `horizon admin rekey` | Re-encrypt secrets with the current `SECRET_KEY` |

@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -22,8 +23,11 @@ import (
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 
+	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/testenv"
 	"github.com/lidisoft/horizon/web"
@@ -36,7 +40,7 @@ func TestMain(m *testing.M) {
 	if *serveAddr != "" {
 		os.Exit(serveForHumans(*serveAddr))
 	}
-	os.Exit(testenv.Main(m, testenv.Chrome))
+	os.Exit(testenv.Main(m, testenv.Postgres|testenv.Chrome))
 }
 
 // testFS holds web/test: the runner and the *.test.js files. It is read from
@@ -141,8 +145,13 @@ var knownIssues = []struct{ text, why string }{
 	},
 }
 
-// failOnErrors fails the test for uncaught exceptions, console errors and
-// CSP violations.
+// expectedStatus matches the browser's own log line for a 4xx answer, such
+// as the 401 of GET /me while signed out: the API reports expected failures
+// with status codes, and the tests assert on what the page shows instead.
+var expectedStatus = regexp.MustCompile(`^Failed to load resource: the server responded with a status of 4\d\d `)
+
+// failOnErrors fails the test for uncaught exceptions, console errors
+// (except 4xx responses) and CSP violations.
 func (c *console) failOnErrors(t *testing.T) {
 	t.Helper()
 	c.mu.Lock()
@@ -150,6 +159,9 @@ func (c *console) failOnErrors(t *testing.T) {
 next:
 	for _, m := range c.messages {
 		if !m.IsException() && m.Type != "error" && m.Type != "assert" {
+			continue
+		}
+		if expectedStatus.MatchString(m.Text) {
 			continue
 		}
 		for _, k := range knownIssues {
@@ -205,16 +217,38 @@ func TestWebUnits(t *testing.T) {
 	logs.failOnErrors(t)
 }
 
-// TestAppShell loads the real page and drives it with the keyboard.
-func TestAppShell(t *testing.T) {
-	ctx := testenv.Browser(t)
+// appServer serves the real app and API against a fresh database with one
+// account, ada@example.com.
+func appServer(t *testing.T) string {
+	t.Helper()
 	w, err := server.NewWeb(web.FS())
 	if err != nil {
 		t.Fatal(err)
 	}
+	ids := identity.New(identity.Options{
+		Pool:          testenv.DB(t),
+		Log:           zerolog.Nop(),
+		SessionSecret: "browser-test-session-secret-0123456789",
+	})
+	_, err = ids.CreateUser(context.Background(), uuid.NullUUID{}, identity.NewUser{Email: "ada@example.com", Name: "Ada Lovelace", Password: testPassword})
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth := identity.NewHTTP(ids, false)
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
-	base := testenv.Serve(t, server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks}))
+	return testenv.Serve(t, server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
+		api.Use(auth.Authenticate())
+		auth.Register(api)
+	}}))
+}
+
+const testPassword = "correct horse battery"
+
+// TestAppShell signs in through the real page and drives it with the keyboard.
+func TestAppShell(t *testing.T) {
+	ctx := testenv.Browser(t)
+	base := appServer(t)
 	logs := watchConsole(ctx)
 
 	const app = `document.querySelector("hzn-app").shadowRoot`
@@ -223,22 +257,61 @@ func TestAppShell(t *testing.T) {
 		v, err := chromedp.Run(ctx, chromedp.Poll[string](expr, chromedp.WithPollingInterval(50*time.Millisecond), chromedp.WithPollingTimeout(10*time.Second)))
 		if err != nil {
 			logs.failOnErrors(t)
-			t.Fatalf("waiting for %s: %v", expr, err)
+			state, _ := chromedp.Run(ctx, chromedp.Evaluate[string](`location.href + " | " + (document.querySelector("hzn-app")?.shadowRoot?.getElementById("outlet")?.firstElementChild?.shadowRoot?.textContent ?? "").replace(/\s+/g, " ").slice(0, 300)`))
+			t.Fatalf("waiting for %s: %v\npage: %s", expr, err, state)
 		}
 		return v
 	}
-	text := func(s string) string { return strings.Join(strings.Fields(s), " ") }
-
-	if err := chromedp.Do(ctx, chromedp.Navigate(base+"/")); err != nil {
-		t.Fatal(err)
+	do := func(actions ...chromedp.Action[chromedp.Void]) {
+		t.Helper()
+		if err := chromedp.Do(ctx, actions...); err != nil {
+			t.Fatal(err)
+		}
 	}
-
+	eval := func(expr string) {
+		t.Helper()
+		do(chromedp.Evaluate[chromedp.Void](expr))
+	}
+	text := func(s string) string { return strings.Join(strings.Fields(s), " ") }
 	// items lists the text of each dt and dd in a <dl>, in order.
 	items := func(dl string) string {
 		return text(poll(`[...(` + dl + `)?.children ?? []].map((e) => e.textContent.trim()).join(" | ")`))
 	}
 
+	// Signed out, the app sends the user to sign-in, remembering where they were.
+	do(chromedp.Navigate(base + "/account"))
+	poll(`location.pathname + location.search === "/sign-in?next=%2Faccount" && "redirected"`)
+	const signIn = app + `.querySelector("hzn-sign-in")?.shadowRoot`
+	poll(signIn + `?.querySelector('[name="email"]') && "form"`)
+	if got := poll(`getComputedStyle(` + app + `.querySelector("lds-nav")).display`); got != "none" {
+		t.Errorf("sidebar on the sign-in page: display %s", got)
+	}
+
+	// A wrong password shows an error and keeps the user on the page.
+	eval(signIn + `.querySelector('[name="email"]').focus()`)
+	do(chromedp.KeyEvent("ada@example.com"))
+	eval(signIn + `.querySelector('[name="password"]').focus()`)
+	do(chromedp.KeyEvent("wrong password!\r"))
+	if got := poll(signIn + `.querySelector("lds-alert").textContent.trim()`); got != "That email and password don't match an account." {
+		t.Errorf("error = %q", got)
+	}
+
+	// Enter in the password field submits; the user lands where they were going.
+	eval(signIn + `.querySelector('[name="password"]').setAttribute("value", "")`)
+	eval(signIn + `.querySelector('[name="password"]').focus()`)
+	do(chromedp.KeyEvent(testPassword + "\r"))
+	poll(`location.pathname === "/account" && ` + app + `.querySelector("hzn-account") && "account"`)
+	account := app + `.querySelector("hzn-account").shadowRoot`
+	if got := poll(account + `.querySelector('[name="name"]')?.getAttribute("value")`); got != "Ada Lovelace" {
+		t.Errorf("profile name = %q", got)
+	}
+	poll(account + `.querySelector("lds-table td")?.textContent.includes("This browser") && "listed"`)
+	if got := text(poll(app + `.querySelector("[data-user]").textContent`)); got != "Ada Lovelace" {
+		t.Errorf("sidebar user = %q", got)
+	}
+
 	// The home view renders inside the frame and shows the readiness checks.
+	do(chromedp.Navigate(base + "/"))
 	got := items(app + `.querySelector("hzn-home")?.shadowRoot?.querySelector("dl.checks")`)
 	if got != "PostgreSQL | OK | NATS | OK | Object storage | OK | Database schema | OK" {
 		t.Errorf("checks = %q", got)
@@ -246,9 +319,7 @@ func TestAppShell(t *testing.T) {
 	poll(app + `.querySelector('lds-nav-item[data-route="home"][active]') && "active"`)
 
 	// "?" opens the shortcut help, generated from the registry.
-	if err := chromedp.Do(ctx, chromedp.KeyEvent("?")); err != nil {
-		t.Fatal(err)
-	}
+	do(chromedp.KeyEvent("?"))
 	poll(app + `.getElementById("help").hasAttribute("open") && "open"`)
 	help := items(app + `.querySelector(".help")`)
 	for _, want := range []string{"Open the command palette | Ctrl+K", "Show keyboard shortcuts | ?", "Go to home | G then H"} {
@@ -256,31 +327,25 @@ func TestAppShell(t *testing.T) {
 			t.Errorf("help %q lacks %q", help, want)
 		}
 	}
-	if err := chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](app+`.getElementById("help").removeAttribute("open")`)); err != nil {
-		t.Fatal(err)
-	}
+	eval(app + `.getElementById("help").removeAttribute("open")`)
 
 	// Ctrl+K opens the palette (the container runs Linux, so mod is Ctrl).
-	if err := chromedp.Do(ctx, chromedp.KeyEvent("k", chromedp.KeyModifiers(chromedp.ModifierCtrl))); err != nil {
-		t.Fatal(err)
-	}
+	do(chromedp.KeyEvent("k", chromedp.KeyModifiers(chromedp.ModifierCtrl)))
 	poll(app + `.getElementById("palette").hasAttribute("open") && "open"`)
-	if err := chromedp.Do(ctx, chromedp.Evaluate[chromedp.Void](app+`.getElementById("palette").removeAttribute("open")`)); err != nil {
-		t.Fatal(err)
-	}
+	eval(app + `.getElementById("palette").removeAttribute("open")`)
 
 	// Unknown paths render the not-found view; "g h" goes home without a reload.
-	if err := chromedp.Do(ctx, chromedp.Navigate(base+"/nowhere")); err != nil {
-		t.Fatal(err)
-	}
+	do(chromedp.Navigate(base + "/nowhere"))
 	poll(app + `.querySelector("hzn-not-found")?.shadowRoot?.textContent.includes("/nowhere") && "shown"`)
-	if _, err := chromedp.Run(ctx, chromedp.Evaluate[bool](`window.__marker = true`)); err != nil {
-		t.Fatal(err)
-	}
-	if err := chromedp.Do(ctx, chromedp.KeyEvent("g"), chromedp.KeyEvent("h")); err != nil {
-		t.Fatal(err)
-	}
+	eval(`window.__marker = true`)
+	do(chromedp.KeyEvent("g"), chromedp.KeyEvent("h"))
 	poll(`location.pathname === "/" && window.__marker === true && ` + app + `.querySelector("hzn-home") && "home"`)
+
+	// Signing out returns to the sign-in page; the session is gone server-side.
+	eval(app + `.querySelector('[data-action="sign-out"]').click()`)
+	poll(`location.pathname === "/sign-in" && "signed out"`)
+	do(chromedp.Navigate(base + "/"))
+	poll(`location.pathname === "/sign-in" && "still signed out"`)
 
 	logs.failOnErrors(t)
 }

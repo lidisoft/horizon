@@ -5,14 +5,17 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	natsgo "github.com/nats-io/nats.go"
 	"github.com/rs/zerolog"
 
 	"github.com/lidisoft/horizon/internal/config"
+	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/migrations"
+	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
 	"github.com/lidisoft/horizon/internal/platform/metrics"
 	"github.com/lidisoft/horizon/internal/platform/nats"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
@@ -62,6 +65,30 @@ func (rt *runtime) close() {
 	}
 	if rt.pool != nil {
 		rt.pool.Close()
+	}
+}
+
+// identity returns the identity service.
+func (rt *runtime) identity() *identity.Service {
+	var sender platformmail.Sender
+	if rt.cfg.SMTPURL != nil {
+		sender = platformmail.NewSMTP(rt.cfg.SMTPURL, rt.cfg.SMTPFrom)
+	}
+	return identity.New(identity.Options{
+		Pool:          rt.pool,
+		Log:           logging.WithSystem(rt.log, "identity"),
+		Mail:          sender,
+		BaseURL:       rt.cfg.BaseURL,
+		SessionSecret: rt.cfg.SessionSecret,
+	})
+}
+
+// api registers every module's routes on /api/v1.
+func (rt *runtime) api() func(api *gin.RouterGroup) {
+	auth := identity.NewHTTP(rt.identity(), rt.cfg.BaseURL.Scheme == "https")
+	return func(api *gin.RouterGroup) {
+		api.Use(auth.Authenticate())
+		auth.Register(api)
 	}
 }
 

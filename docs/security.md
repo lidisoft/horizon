@@ -6,19 +6,45 @@ Users are **instance-wide**; a user can belong to several workspaces. An
 instance admin (bootstrapped with `horizon admin create-user --instance-admin`)
 manages workspaces, OIDC providers and SMTP.
 
+There is **no public sign-up**. Accounts are created by an instance admin
+(`horizon admin create-user`) or by accepting a workspace invitation, which
+proves the email address. Without a password, an account gets a single-use
+link to choose one.
+
+- **Deactivating** an account (instance admin, `horizon admin
+  deactivate-user`) blocks sign-in instance-wide and revokes every session and
+  token. Its issues and history stay.
+- **Suspending** a member is per workspace: it removes access to that
+  workspace only, keeping grants and history, and closes live connections to
+  it. The account and its other workspaces are untouched.
+- **Invitations** expire after 7 days and can be resent.
+
 ## Authentication methods
 
 | Method | Notes |
 |--------|-------|
-| Email + password | argon2id (`golang.org/x/crypto/argon2`), minimum length 12, breached-password check optional; rate-limited login; email verification |
+| Email + password | argon2id (`golang.org/x/crypto/argon2`, OWASP baseline: 19 MiB, 2 passes; parameters stored with each hash), 12 to 256 characters. Sign-in failures are throttled per email (10) and per client IP (100) in 15-minute windows shared by every replica, and all answer `invalid_credentials`, taking the same time whether or not the account exists. Password reset links are single use, valid one hour, carry the token in the URL fragment (never logged), and sign out every session. A breached-password check may come later |
 | Magic link | One-time token emailed, valid 15 min, single use, bound to the requesting browser via a cookie nonce |
 | OIDC / SSO | Generic OpenID Connect (authorization code + PKCE). Providers configured instance-wide or per workspace; optional email-domain allowlist and just-in-time provisioning into a workspace with a default role. A workspace can **enforce** SSO, which disables password and magic-link logins for its members |
 | API tokens | Personal access tokens with scopes (`read`, `write`, `admin`) and optional expiry. Stored hashed (SHA-256); shown once |
 
-Sessions: opaque random token in an `HttpOnly; Secure; SameSite=Lax` cookie,
-stored hashed in `sessions`, sliding expiry (30 days idle). State-changing
-requests from the SPA carry a CSRF token header (double submit). Logging out
-revokes the session server-side; users can list and revoke their sessions.
+Sessions: opaque random token (256 bits) in an `HttpOnly; SameSite=Lax`
+cookie, stored hashed (SHA-256) in `sessions`, sliding expiry (30 days idle).
+Over HTTPS (`BASE_URL` with `https://`) the cookie is `Secure` and named
+`__Host-horizon_session`, which pins it to the exact origin; plain HTTP is for
+development only.
+
+CSRF: state-changing requests made with the session cookie carry
+`X-CSRF-Token`, an HMAC of the session token under `SESSION_SECRET`. The SPA
+gets it from `POST /auth/login` and `GET /me`; a cookie planted by a sibling
+origin can't produce it. Requests a browser marks `Sec-Fetch-Site: cross-site`
+are refused before any handler runs. API tokens (Bearer) need no CSRF token.
+
+Changing the password signs out the user's other sessions. Logging out revokes
+the session server-side; users can list and revoke their sessions.
+
+The client IP (session list, throttling) is the connection's address unless
+the request comes through a proxy listed in `HORIZON_TRUSTED_PROXIES`.
 
 ## Authorisation
 
