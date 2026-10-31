@@ -20,9 +20,11 @@ documentation below is the specification.
 
 ## Getting started
 
-With Go, [Task](https://taskfile.dev) and Docker installed:
+With Docker installed, and Go and [Task](https://taskfile.dev) installed directly or by
+[mise](https://mise.jdx.dev) from `mise.toml`:
 
 ```bash
+mise install                  # optional: the pinned Go and Task
 task up                       # the whole stack; the app answers on http://localhost:8090
 curl localhost:8090/readyz    # PostgreSQL, NATS, S3 and schema checks
 task check                    # what CI runs

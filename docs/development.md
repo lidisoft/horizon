@@ -6,8 +6,11 @@ conventions. The environment itself is described in
 
 ## Prerequisites
 
-Go (version from `go.mod`), [Task](https://taskfile.dev) and Docker (Compose
-and testcontainers). Browser tests run headless Chrome in a container; set
+Go, [Task](https://taskfile.dev) and Docker (Compose and testcontainers).
+[mise](https://mise.jdx.dev) installs the pinned Go and Task versions from
+`mise.toml`: run `mise install` once, and the tools are on the `PATH` inside the
+repository when mise is activated in your shell (otherwise prefix commands with
+`mise exec --`). Browser tests run headless Chrome in a container; set
 `HORIZON_TEST_CHROME` to a local Chrome or Chromium binary to use it instead. Code generators
 (sqlc and swag) are Go tool dependencies run with `go tool`, so there is
 nothing else to install; sqlc needs cgo, so a C compiler (gcc) must be present.
