@@ -22,9 +22,13 @@ motion, dark and light themes (LDS `data-lds-theme`).
 
 ```
 web/
-  index.html            shell page: LDS assets, import map, <hzn-app>
+  embed.go              go:embed of index.html and app/
+  index.html            shell page template: LDS assets, import map, <hzn-app>
   app/
+    main.js             entry: defines the views, then <hzn-app>
     core/               framework-free foundations, usable with or without the frame
+      context.js        service lookup for views (provideContext / requestContext)
+      dom.js            constructable style sheets, escaped html`` templates
       api.js            fetch wrapper: auth, idempotency keys, problem details, ETags
       socket.js         WebSocket client: reconnect, subscriptions, replay
       store.js          normalised cache (entities by id) + query cache + subscriptions
@@ -41,10 +45,27 @@ web/
   vendor/               intentionally empty — see ADR-0006
 ```
 
-Modules are loaded natively (`<script type="module">`), with an import map for
-stable bare specifiers (`horizon/core/store.js`). Go serves `web/` with
-`go:embed` and content-hashed URLs for caching: the server rewrites the import
-map at startup with hashes of each file.
+Modules are loaded natively (`<script type="module">`). Go embeds `web/` and,
+at startup, serves every file of `app/` at `/static/<content hash>/<path>`
+(cached as immutable) and renders `index.html` with an **import map** from
+bare specifiers to those URLs (`horizon/core/store.js` →
+`/static/f738455ceb32/core/store.js`). `index.html` itself is `no-cache`, so
+a deploy changes every changed module's URL and nothing else.
+
+Rules this implies, checked by `internal/server/web_test.go`:
+
+- Modules import each other **only through `horizon/…` specifiers**, never
+  relative paths (those would bypass the hashes and load a module twice).
+- The message catalog is a JSON module
+  (`import catalog from "horizon/i18n/en.json" with { type: "json" }`), so it
+  is hashed too; every literal `t("…")` key must exist in it.
+- No inline scripts or styles. The Content-Security-Policy is
+  `script-src 'self'` plus the import map's own hash, and `style-src 'self'`:
+  components style their shadow roots with constructable style sheets
+  (`sheet()` in `core/dom.js`), which CSP allows.
+
+LDS is served from its Go module at `/lds/<module version>/` (immutable too),
+so upgrading `github.com/lidisoft/design-system` in `go.mod` changes its URLs.
 
 ## State and data flow
 
@@ -109,8 +130,11 @@ semantic tokens only, `:host` display):
 
 Every route view is a custom element that takes its context from attributes
 (`<hzn-board workspace="acme" project="HZN">`) and gets its services (`api`,
-`store`, `socket`) from a context object, not from globals. `hzn-app` creates
-that context in standalone mode; a future shell adapter would create it too.
+`store`, `router`, `i18n`, `shortcuts`, later `socket`) from a context object,
+not from globals. A view calls `requestContext(this)` when connected: it
+dispatches a composed `hzn-context` event that the nearest provider answers.
+`hzn-app` provides the context in standalone mode (`provideContext`); a future
+shell adapter would provide the same object.
 
 ## Block editor
 

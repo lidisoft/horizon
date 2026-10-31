@@ -31,6 +31,7 @@ type Deps struct {
 	Log     zerolog.Logger
 	Checks  []Check
 	Metrics *metrics.Registry
+	Web     *Web // nil serves no web app (tests of the API alone)
 }
 
 // NewEngine creates the Gin engine with middleware and routes.
@@ -39,6 +40,8 @@ func NewEngine(deps Deps) *gin.Engine {
 	r := gin.New()
 	r.ContextWithFallback = true
 
+	r.HandleMethodNotAllowed = true
+	r.Use(SecurityHeaders())
 	r.Use(RequestID())
 	r.Use(Logger(deps.Log))
 	r.Use(Recovery())
@@ -55,6 +58,20 @@ func NewEngine(deps Deps) *gin.Engine {
 			return
 		}
 		swagger(c)
+	})
+
+	if deps.Web != nil {
+		deps.Web.register(r)
+	}
+	r.NoRoute(func(c *gin.Context) {
+		if deps.Web != nil && isAppRoute(c.Request) {
+			deps.Web.serveIndex(c)
+			return
+		}
+		WriteProblem(c, Problem{Status: http.StatusNotFound})
+	})
+	r.NoMethod(func(c *gin.Context) {
+		WriteProblem(c, Problem{Status: http.StatusMethodNotAllowed})
 	})
 
 	return r

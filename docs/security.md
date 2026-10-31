@@ -83,7 +83,9 @@ Workflow transitions can further restrict who may perform them
 - Uploads: content type sniffed server-side, served with
   `Content-Disposition: attachment` except for safe image types; SVG is
   always served as an attachment.
-- Strict Content-Security-Policy: `script-src 'self'` — achievable because
+- Strict Content-Security-Policy on the app page: `script-src 'self'` plus
+  the hash of the import map (the only inline script), `style-src 'self'`,
+  `frame-ancestors 'none'` ([frontend.md](frontend.md#layout-of-web)) — achievable because
   there's no third-party JS and no inline scripts.
 - Audit: the `events` table records who did what. Hard deletes leave a
   tombstone naming the actor.

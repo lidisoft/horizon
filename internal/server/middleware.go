@@ -22,6 +22,18 @@ var validRequestID = regexp.MustCompile(`^[A-Za-z0-9._-]{1,128}$`)
 // loggerKey stores the request-scoped logger in the Gin context.
 const loggerKey = "horizon.logger"
 
+// SecurityHeaders sets the headers every response carries. The page's
+// Content-Security-Policy is set where index.html is served.
+func SecurityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		h := c.Writer.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("X-Frame-Options", "DENY")
+		c.Next()
+	}
+}
+
 // RequestID reuses a well-formed incoming X-Request-Id or generates a UUIDv7,
 // and echoes it in the response.
 func RequestID() gin.HandlerFunc {

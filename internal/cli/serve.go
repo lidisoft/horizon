@@ -9,6 +9,7 @@ import (
 	"github.com/lidisoft/horizon/internal/config"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/server"
+	"github.com/lidisoft/horizon/web"
 )
 
 func serveCommand() *cli.Command {
@@ -32,10 +33,15 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer rt.close()
 
+	webApp, err := server.NewWeb(web.FS())
+	if err != nil {
+		return err
+	}
 	engine := server.NewEngine(server.Deps{
 		Log:     rt.log,
 		Checks:  rt.checks(),
 		Metrics: rt.metrics,
+		Web:     webApp,
 	})
 
 	g, ctx := errgroup.WithContext(ctx)
