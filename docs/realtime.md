@@ -22,11 +22,11 @@ latency or ordering. See [ADR-0008](adr/0008-websockets-for-realtime.md).
 |-----|-----|---------|
 | `sub` | `{ "topics": ["ws:acme", "project:acme/HZN", "issue:acme/HZN-42"], "since": "<event id>" }` | Subscribe; `since` (optional) replays what was missed |
 | `unsub` | `{ "topics": [...] }` | Unsubscribe |
-| `presence` | `{ "issue": "HZN-42", "state": "viewing" \| "editing" }` | Announce presence |
+| `presence` | `{ "ws": "acme", "issue": "HZN-42", "state": "viewing" \| "editing" \| "gone" }` | Announce presence (`issue.view`); repeated every 25 s |
 | `doc.join` | `{ "ws": "acme", "issue": "HZN-42", "version": n }` | Start editing a description (`issue.view`); `version` (optional) is the one the client holds |
 | `doc.steps` | `{ "ws", "issue", "version": n, "client": "<id>", "steps": [...] }` | Submit a batch of steps made against `version` (`issue.edit`) |
 | `doc.leave` | `{ "ws", "issue" }` | Stop editing (closing the socket does too) |
-| `doc.cursor` | `{ "doc": "<id>", "anchor": p, "head": p }` | Share selection |
+| `doc.cursor` | `{ "ws", "issue", "version": n, "anchor": p, "head": p }` | Share the selection (positions in the document at `version`), in a description the socket joined |
 | `ping` | — | Keepalive (every 25 s) |
 
 ### Server → client
@@ -36,17 +36,17 @@ latency or ordering. See [ADR-0008](adr/0008-websockets-for-realtime.md).
 | `ack` | `{ "topics": [...accepted], "denied": [...] }`, answering `sub` and `unsub` by `id` |
 | `error` | `{ "code": "bad_message" \| "unknown_type" }` |
 | `event` | A domain event (see [api.md](api.md#domain-event-format)) |
-| `presence` | Users viewing/editing a subscribed issue |
+| `presence` | `{ issue, users: [{ id, name, state }] }`: who views or edits an issue the socket announced itself on, sent as it changes (a person editing in any tab shows as editing) |
 | `doc.joined` | `{ issue, version, steps: [batches since the client's version], doc? }`: `doc` (the whole document) when the client named no version or the batches since are gone |
 | `doc.steps` | An accepted batch, to everyone editing: `{ issue, version (it applied to), steps, client, user }` |
 | `doc.ack` | The sender's batch is in: `{ issue, version (after it) }` |
 | `doc.reject` | The batch was made against an old version: `{ issue, version, steps: [the batches since] }`; the client rebases and sends again |
 | `doc.error` | `{ issue, code }`: `invalid_steps`, `too_large`, `resync`, `forbidden`, `issue_archived`; the client starts over from the server's document |
-| `doc.cursor` | Other users' selections |
+| `doc.cursor` | Another socket's selection: `{ issue, conn, user, name, version, anchor, head }`, or `gone: true` when it leaves; the client maps it from `version` to its document |
 | `resync` | The client missed too much; refetch the listed topics |
 | `pong` | — |
 
-Presence and the `doc.*` messages arrive with the block editor (phase 5).
+Presence and the `doc.*` messages came with the block editor (phase 5).
 
 ### Topics
 
@@ -86,7 +86,10 @@ commit ─▶ outbox relay ─▶ JetStream ─▶ (NATS core subject horizon.>)
   events follow, otherwise it sends `resync` with the topics to refetch.
   Replayed events can repeat live ones: clients drop events by id.
 - Presence lives in memory per replica and is shared through NATS core subject
-  `horizon.presence.<ws>`, expiring after 60 s without a heartbeat.
+  `horizon.presence.<workspace id>`, expiring after 60 s without a heartbeat;
+  a socket closing announces itself gone. Selections travel on
+  `horizon.cursors.<document id>`; editors draw others' carets and
+  selections over the text, named, in one of five colours per person.
 
 ## Collaborative editing
 

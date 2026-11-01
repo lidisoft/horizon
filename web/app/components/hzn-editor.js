@@ -70,6 +70,17 @@ const styles = sheet(`
   .popup .hint { color: var(--lds-color-fg-muted); margin-inline-start: auto; font-size: var(--lds-font-size-xs); }
   .popup .none { padding: var(--lds-space-1) var(--lds-space-2); color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
   .popup form { display: flex; gap: var(--lds-space-1); }
+  .cursors { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .cursors .caret { position: absolute; inline-size: 2px; background: var(--hzn-cursor); }
+  .cursors .caret span { position: absolute; inset-block-end: 100%; inset-inline-start: -1px; padding: 0 var(--lds-space-1);
+    border-radius: var(--lds-radius-xs) var(--lds-radius-xs) var(--lds-radius-xs) 0; background: var(--hzn-cursor);
+    color: var(--lds-color-bg-surface); font-size: var(--lds-font-size-2xs, 0.65rem); line-height: 1.4; white-space: nowrap; }
+  .cursors .range { position: absolute; background: var(--hzn-cursor); opacity: 0.18; }
+  .cursors [data-color="0"] { --hzn-cursor: var(--lds-color-accent-fg); }
+  .cursors [data-color="1"] { --hzn-cursor: var(--lds-color-success-fg); }
+  .cursors [data-color="2"] { --hzn-cursor: var(--lds-color-warning-fg); }
+  .cursors [data-color="3"] { --hzn-cursor: var(--lds-color-danger-fg); }
+  .cursors [data-color="4"] { --hzn-cursor: var(--lds-color-neutral-fg); }
   .popup input { flex: 1; min-inline-size: 0; font: inherit; padding: var(--lds-space-1) var(--lds-space-2);
     border: 1px solid var(--lds-color-border-default); border-radius: var(--lds-radius-sm); background: var(--lds-color-bg-canvas); color: inherit; }
 `);
@@ -102,6 +113,7 @@ class HznEditor extends HTMLElement {
     this.history = new History();
     this.pending = null; // a value set before connecting
     this.people = new Map();
+    this.cursors = new Map(); // others' selections: conn → { user, name, anchor, head }
   }
 
   connectedCallback() {
@@ -127,6 +139,7 @@ class HznEditor extends HTMLElement {
           ${button("deleteTable", t("editor.deleteTable"), "✕▦", true)}
         </div>
         <div class="editor" spellcheck="true"></div>
+        <div class="cursors" aria-hidden="true"></div>
         <div class="popup" role="listbox" hidden></div>
         <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden data-file>
       </div>`);
@@ -170,6 +183,7 @@ class HznEditor extends HTMLElement {
     dom.addEventListener("hzn-selection", () => {
       this.refreshToolbar();
       this.suggest();
+      this.shareCursor();
     });
     this.addEventListener("focusout", (e) => {
       if (!this.contains(e.relatedTarget) && !root.contains(e.relatedTarget)) {
@@ -213,9 +227,78 @@ class HznEditor extends HTMLElement {
       selection = Selection.atEnd(doc);
     }
     this.history.mapThrough(mapping);
+    this.mapCursors(mapping);
     this.view.updateState(new EditorState(doc, selection, state.storedMarks));
+    this.drawCursors();
     this.refreshToolbar();
     this.dispatchEvent(new CustomEvent("hzn-change", { bubbles: true, composed: true, detail: { doc: doc.toJSON(), steps: [], remote: true } }));
+  }
+
+  /** Sets (or, with null, removes) someone else's selection, in local positions. */
+  remoteCursor(conn, cursor) {
+    if (cursor) this.cursors.set(conn, { ...cursor, at: Date.now() });
+    else this.cursors.delete(conn);
+    this.drawCursors();
+  }
+
+  mapCursors(mapping) {
+    for (const c of this.cursors.values()) {
+      c.anchor = mapping.map(c.anchor);
+      c.head = mapping.map(c.head);
+    }
+  }
+
+  /** Tells the others where this user's selection is, while editing. */
+  shareCursor() {
+    if (!this.collab || !this.view?.hasFocus()) return;
+    const { anchor, head } = this.view.state.selection;
+    this.collab.cursor(anchor, head);
+  }
+
+  /** Draws the others' carets and selections over the text. */
+  drawCursors() {
+    const layer = this.shadowRoot?.querySelector(".cursors");
+    if (!layer) return;
+    layer.textContent = "";
+    const frame = layer.getBoundingClientRect();
+    const max = this.view.state.doc.content.size;
+    for (const [conn, c] of this.cursors) {
+      if (Date.now() - c.at > 60_000 || c.head > max || c.anchor > max) continue;
+      const color = String([...String(c.user)].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7) % 5);
+      try {
+        const range = document.createRange();
+        const a = this.view.domFromPos(Math.min(c.anchor, c.head));
+        const b = this.view.domFromPos(Math.max(c.anchor, c.head));
+        range.setStart(a.node, a.offset);
+        range.setEnd(b.node, b.offset);
+        if (c.anchor !== c.head) {
+          for (const r of range.getClientRects()) {
+            const box = document.createElement("div");
+            box.className = "range";
+            box.dataset.color = color;
+            place(box, r, frame);
+            layer.append(box);
+          }
+        }
+        const h = this.view.domFromPos(c.head);
+        const caretRange = document.createRange();
+        caretRange.setStart(h.node, h.offset);
+        caretRange.collapse(true);
+        const r = caretRange.getClientRects()[0] ?? (h.node.nodeType === Node.ELEMENT_NODE ? h.node.getBoundingClientRect() : null);
+        if (!r) continue;
+        const caret = document.createElement("div");
+        caret.className = "caret";
+        caret.dataset.color = color;
+        caret.dataset.conn = conn;
+        const label = document.createElement("span");
+        label.textContent = c.name;
+        caret.append(label);
+        place(caret, { left: r.left, top: r.top, height: r.height || 18, width: 2 }, frame);
+        layer.append(caret);
+      } catch {
+        // a position the DOM can't show right now
+      }
+    }
   }
 
   /** Stops (or resumes) editing while the connection is away. */
@@ -278,7 +361,12 @@ class HznEditor extends HTMLElement {
     const before = this.view.state.selection;
     if (tr.docChanged && !tr.meta.history) this.history.record(tr, before);
     this.view.updateState(this.view.state.apply(tr));
-    if (tr.docChanged) this.collab?.local(tr.steps);
+    if (tr.docChanged) {
+      this.collab?.local(tr.steps);
+      this.mapCursors(tr.mapping);
+      this.drawCursors();
+    }
+    this.shareCursor();
     if (tr.meta.typing === "insert" && !tr.meta.rule) {
       const rule = inputRule(this.view.state);
       if (rule) rule(this.view.state, (rtr) => this.dispatch(rtr.setMeta("rule", true)));
@@ -647,6 +735,14 @@ class HznEditor extends HTMLElement {
     });
     requestAnimationFrame(() => input.focus());
   }
+}
+
+/** Positions an overlay box over a client rect, through the CSSOM (no style attributes under the CSP). */
+function place(el, r, frame) {
+  el.style.setProperty("left", `${r.left - frame.left}px`);
+  el.style.setProperty("top", `${r.top - frame.top}px`);
+  el.style.setProperty("height", `${r.height}px`);
+  if (el.classList.contains("range")) el.style.setProperty("width", `${r.width}px`);
 }
 
 /** The extent of the link mark around a position, within its textblock. */

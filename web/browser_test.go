@@ -1455,6 +1455,11 @@ func TestCollaboration(t *testing.T) {
 	one.poll(same)
 	two.poll(same)
 	one.poll(`fetch("/api/v1/w/acme/issues/HZN-1").then((r) => r.json()).then((i) => JSON.stringify(i.description_doc).includes("bbbbbmiddle endaaaaa") && "stored")`)
+
+	// Each sees the other's presence (editing) and caret.
+	detail := view + `.querySelector("hzn-issue-detail")`
+	one.poll(detail + `.present?.some((u) => u.state === "editing") && "presence"`)
+	one.poll(ed + `.shadowRoot.querySelector(".cursors .caret span")?.textContent === "Ada Lovelace" && "caret"`)
 	one.logs.failOnErrors(t)
 	two.logs.failOnErrors(t)
 }

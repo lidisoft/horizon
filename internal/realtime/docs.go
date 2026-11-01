@@ -30,6 +30,29 @@ type docMessage struct {
 	Batch      issue.Batch `json:"batch"`
 }
 
+// cursorMessage is a selection on NATS core
+// (<prefix>.cursors.<document id>): positions in the document at Version.
+type cursorMessage struct {
+	DocumentID uuid.UUID `json:"document"`
+	Conn       string    `json:"conn"`
+	User       uuid.UUID `json:"user"`
+	Name       string    `json:"name"`
+	Anchor     int64     `json:"anchor"`
+	Head       int64     `json:"head"`
+	Version    int64     `json:"version"`
+	Gone       bool      `json:"gone,omitempty"`
+}
+
+func (h *Hub) cursorSubject(id string) string { return h.o.Stream.Prefix + ".cursors." + id }
+
+func (h *Hub) publishCursor(m cursorMessage) {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return
+	}
+	_ = h.o.NATS.Publish(h.cursorSubject(m.DocumentID.String()), b)
+}
+
 func (h *Hub) docSubject(id string) string { return h.o.Stream.Prefix + ".docs." + id }
 
 // publishDoc sends an accepted batch to every replica.
@@ -51,22 +74,39 @@ func (h *Hub) runDocs(ctx context.Context) error {
 		return err
 	}
 	defer func() { _ = sub.Unsubscribe() }()
+	cursors := make(chan *nats.Msg, 1024)
+	csub, err := h.o.NATS.ChanSubscribe(h.cursorSubject("*"), cursors)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = csub.Unsubscribe() }()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case m := <-cursors:
+			var cm cursorMessage
+			if json.Unmarshal(m.Data, &cm) != nil {
+				continue
+			}
+			for _, c := range h.docTargets(cm.DocumentID) {
+				if c.id == cm.Conn {
+					continue
+				}
+				c.mu.Lock()
+				j, ok := c.docs[cm.DocumentID]
+				c.mu.Unlock()
+				if ok {
+					c.reply(message{T: "doc.cursor", D: map[string]any{"issue": j.key, "conn": cm.Conn, "user": cm.User, "name": cm.Name,
+						"anchor": cm.Anchor, "head": cm.Head, "version": cm.Version, "gone": cm.Gone}})
+				}
+			}
 		case m := <-ch:
 			var dm docMessage
 			if json.Unmarshal(m.Data, &dm) != nil {
 				continue
 			}
-			h.docMu.Lock()
-			targets := make([]*conn, 0, len(h.docConns[dm.DocumentID]))
-			for c := range h.docConns[dm.DocumentID] {
-				targets = append(targets, c)
-			}
-			h.docMu.Unlock()
-			for _, c := range targets {
+			for _, c := range h.docTargets(dm.DocumentID) {
 				c.mu.Lock()
 				j, ok := c.docs[dm.DocumentID]
 				c.mu.Unlock()
@@ -79,6 +119,17 @@ func (h *Hub) runDocs(ctx context.Context) error {
 	}
 }
 
+// docTargets lists the local sockets editing a document.
+func (h *Hub) docTargets(id uuid.UUID) []*conn {
+	h.docMu.Lock()
+	defer h.docMu.Unlock()
+	out := make([]*conn, 0, len(h.docConns[id]))
+	for c := range h.docConns[id] {
+		out = append(out, c)
+	}
+	return out
+}
+
 // docInbound is the body of the doc.* messages.
 type docInbound struct {
 	WS      string            `json:"ws"`
@@ -86,6 +137,8 @@ type docInbound struct {
 	Version *int64            `json:"version,omitempty"`
 	Client  string            `json:"client,omitempty"`
 	Steps   []json.RawMessage `json:"steps,omitempty"`
+	Anchor  int64             `json:"anchor,omitempty"`
+	Head    int64             `json:"head,omitempty"`
 }
 
 func (c *conn) docError(in inbound, key string, err error) {
@@ -155,6 +208,23 @@ func (c *conn) handleDoc(ctx context.Context, in inbound) {
 		} else {
 			c.reply(message{T: "doc.reject", ID: in.ID, D: map[string]any{"issue": d.Issue, "version": res.Version, "steps": res.Missing}})
 		}
+	case "doc.cursor":
+		// To the others editing it; only for a document the socket joined.
+		if d.Version == nil {
+			return
+		}
+		c.mu.Lock()
+		var docID uuid.UUID
+		for id, j := range c.docs {
+			if j.key == d.Issue {
+				docID = id
+			}
+		}
+		c.mu.Unlock()
+		if docID != uuid.Nil {
+			c.hub.publishCursor(cursorMessage{DocumentID: docID, Conn: c.id, User: c.principal.User.ID, Name: c.principal.User.Name,
+				Anchor: d.Anchor, Head: d.Head, Version: *d.Version})
+		}
 	case "doc.leave":
 		c.mu.Lock()
 		var gone []uuid.UUID
@@ -187,9 +257,13 @@ func (c *conn) join(docID uuid.UUID, j joined) {
 // leave it snapshots it.
 func (c *conn) leave(docID uuid.UUID) {
 	c.mu.Lock()
+	_, was := c.docs[docID]
 	delete(c.docs, docID)
 	c.mu.Unlock()
 	h := c.hub
+	if was {
+		h.publishCursor(cursorMessage{DocumentID: docID, Conn: c.id, User: c.principal.User.ID, Gone: true})
+	}
 	h.docMu.Lock()
 	delete(h.docConns[docID], c)
 	last := len(h.docConns[docID]) == 0

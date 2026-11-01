@@ -55,6 +55,11 @@ type Hub struct {
 
 	docMu    sync.Mutex
 	docConns map[uuid.UUID]map[*conn]struct{} // sockets editing each description
+
+	replica  string // this replica's id, in socket ids
+	presMu   sync.Mutex
+	presence map[uuid.UUID]map[string]presenceEntry // issue → socket id → entry, every replica's
+	viewers  map[uuid.UUID]map[*conn]string         // issue → local sockets on it (the key they named)
 }
 
 // New returns a hub; Run feeds it.
@@ -62,7 +67,8 @@ func New(o Options) *Hub {
 	if o.MaxAge == 0 {
 		o.MaxAge = time.Hour
 	}
-	h := &Hub{o: o, conns: map[*conn]struct{}{}, slugs: map[uuid.UUID]string{}, docConns: map[uuid.UUID]map[*conn]struct{}{}}
+	h := &Hub{o: o, conns: map[*conn]struct{}{}, slugs: map[uuid.UUID]string{}, docConns: map[uuid.UUID]map[*conn]struct{}{},
+		replica: uuid.NewString()[:8], presence: map[uuid.UUID]map[string]presenceEntry{}, viewers: map[uuid.UUID]map[*conn]string{}}
 	if o.Issues != nil {
 		o.Issues.OnDocSteps(h.publishDoc)
 	}
@@ -74,6 +80,11 @@ func (h *Hub) Run(ctx context.Context) error {
 	go func() {
 		if err := h.runDocs(ctx); err != nil {
 			h.o.Log.Error().Err(err).Msg("could not subscribe to document steps")
+		}
+	}()
+	go func() {
+		if err := h.runPresence(ctx); err != nil {
+			h.o.Log.Error().Err(err).Msg("could not subscribe to presence")
 		}
 	}()
 	ch := make(chan *nats.Msg, 1024)
@@ -219,6 +230,7 @@ func (h *Hub) add(c *conn) {
 
 func (h *Hub) remove(c *conn) {
 	c.leaveAll()
+	c.leavePresence()
 	h.mu.Lock()
 	delete(h.conns, c)
 	h.mu.Unlock()

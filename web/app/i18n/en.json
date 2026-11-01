@@ -1099,5 +1099,8 @@
   "editor.table": "Table",
   "editor.image": "Image",
   "editor.uploadFailed": "{name} could not be uploaded: {error}",
-  "editor.resynced": "The description was out of step with the server and has been reloaded."
+  "editor.resynced": "The description was out of step with the server and has been reloaded.",
+  "presence.label": "Also here",
+  "presence.viewing": "{name} is viewing",
+  "presence.editing": "{name} is editing the description"
 }

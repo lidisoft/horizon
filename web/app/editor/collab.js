@@ -6,9 +6,12 @@
 // catches up from the confirmed version.
 
 import { schema } from "horizon/editor/model.js";
-import { rebase, stepFromJSON } from "horizon/editor/transform.js";
+import { Mapping, rebase, stepFromJSON } from "horizon/editor/transform.js";
 
 const SEND_DELAY = 50; // ms: steps typed meanwhile go in the same batch
+const CURSOR_DELAY = 100; // ms between cursor updates
+const CURSOR_REPEAT = 20_000; // ms: an idle cursor is sent again, so it doesn't expire
+const KEEP_MAPS = 500; // confirmed steps' maps kept, to bring others' cursors forward
 const OFFLINE_READONLY = 30_000; // ms without a connection before editing stops
 
 let clients = 0;
@@ -16,8 +19,8 @@ let clients = 0;
 export class Collab {
   /**
    * socket: the app's socket; ws, issue: the description's issue; editor:
-   * { reset(doc, version), receive(doc, mapping), setOffline(bool) };
-   * onError(code).
+   * { reset(doc, version), receive(doc, mapping), setOffline(bool),
+   * remoteCursor(conn, cursor) }; onError(code).
    */
   constructor({ socket, ws, issue, editor, onError = () => {} }) {
     Object.assign(this, { socket, ws, issue, editor, onError });
@@ -27,6 +30,8 @@ export class Collab {
     this.unconfirmed = []; // local steps, applied after it
     this.inflight = 0; // of them, those sent
     this.ready = false;
+    this.maps = []; // [version before, map] of confirmed steps, oldest first
+    this.pendingCursors = new Map(); // conn → cursor ahead of our version
   }
 
   start() {
@@ -37,6 +42,8 @@ export class Collab {
   stop() {
     clearTimeout(this.timer);
     clearTimeout(this.offlineTimer);
+    clearTimeout(this.cursorTimer);
+    clearInterval(this.cursorRepeat);
     if (this.unconfirmed.length && !this.inflight) this.send();
     this.off?.();
     this.socket.send("doc.leave", { ws: this.ws, issue: this.issue });
@@ -87,6 +94,73 @@ export class Collab {
         return this.schedule();
       case "doc.error":
         return this.failed(m.d.code);
+      case "doc.cursor":
+        return this.remoteCursor(m.d);
+    }
+  }
+
+  /** Records the maps of confirmed steps from version on. */
+  remember(version, steps) {
+    steps.forEach((s, i) => this.maps.push([version + i, s.getMap()]));
+    if (this.maps.length > KEEP_MAPS) this.maps.splice(0, this.maps.length - KEEP_MAPS);
+  }
+
+  /** A local position as a position in the confirmed document. */
+  toConfirmed(pos) {
+    const inverted = [];
+    for (let i = this.unconfirmed.length - 1; i >= 0; i--) inverted.push(this.unconfirmed[i].getMap().invert());
+    return new Mapping(inverted).map(pos);
+  }
+
+  /** A position in the document at version, as a local position (null when ahead of us or too old). */
+  fromVersion(pos, version) {
+    if (version > this.version) return null;
+    const first = this.maps.findIndex(([v]) => v === version);
+    if (version < this.version && first < 0) return null;
+    const maps = version < this.version ? this.maps.slice(first).map(([, m]) => m) : [];
+    for (const s of this.unconfirmed) maps.push(s.getMap());
+    return new Mapping(maps).map(pos);
+  }
+
+  /** Sends where the user's selection is, a moment later. */
+  cursor(anchor, head) {
+    this.lastCursor = { anchor, head };
+    if (this.cursorTimer || !this.ready) return;
+    this.cursorTimer = setTimeout(() => {
+      this.cursorTimer = null;
+      this.sendCursor();
+    }, CURSOR_DELAY);
+    if (!this.cursorRepeat) this.cursorRepeat = setInterval(() => this.sendCursor(), CURSOR_REPEAT);
+  }
+
+  sendCursor() {
+    const c = this.lastCursor;
+    if (!c || !this.ready) return;
+    this.socket.send("doc.cursor", { ws: this.ws, issue: this.issue, version: this.version, anchor: this.toConfirmed(c.anchor), head: this.toConfirmed(c.head) });
+  }
+
+  remoteCursor(d) {
+    if (d.gone) {
+      this.pendingCursors.delete(d.conn);
+      return this.editor.remoteCursor(d.conn, null);
+    }
+    if (d.version > this.version) {
+      this.pendingCursors.set(d.conn, d); // shown once we have those steps
+      return;
+    }
+    const anchor = this.fromVersion(d.anchor, d.version);
+    const head = this.fromVersion(d.head, d.version);
+    if (anchor === null || head === null) return;
+    this.editor.remoteCursor(d.conn, { user: d.user, name: d.name, anchor, head });
+  }
+
+  /** Cursors that waited for steps we now have. */
+  flushCursors() {
+    for (const [conn, d] of this.pendingCursors) {
+      if (d.version <= this.version) {
+        this.pendingCursors.delete(conn);
+        this.remoteCursor(d);
+      }
     }
   }
 
@@ -98,6 +172,7 @@ export class Collab {
       if (this.unconfirmed.length) this.onError("lost");
       this.unconfirmed = [];
       this.inflight = 0;
+      this.maps = [];
       this.editor.reset(this.confirmed.toJSON(), this.version);
     }
     for (const b of d.steps ?? []) this.receive(b);
@@ -122,20 +197,24 @@ export class Collab {
       return this.failed("invalid_steps");
     }
     const { doc, steps, mapping } = rebase(this.confirmed, this.unconfirmed, remote);
+    this.remember(this.version, remote);
     this.confirmed = confirmed;
     this.version += remote.length;
     this.unconfirmed = steps;
     this.editor.receive(doc, mapping);
+    this.flushCursors();
   }
 
   /** Our first steps are in, up to version. */
   confirm(version) {
     const n = version - this.version;
     for (const s of this.unconfirmed.slice(0, n)) this.confirmed = s.apply(this.confirmed);
+    this.remember(this.version, this.unconfirmed.slice(0, n));
     this.unconfirmed = this.unconfirmed.slice(n);
     this.version = version;
     this.inflight = 0;
     this.schedule();
+    this.flushCursors();
   }
 
   failed(code) {

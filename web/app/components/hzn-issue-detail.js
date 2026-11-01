@@ -30,6 +30,8 @@ const styles = sheet(`
   :host([mode="peek"]) .props { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: var(--lds-space-2) var(--lds-space-3); align-items: center; }
   :host([mode="peek"]) .props > label { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
   :host([mode="peek"]) .props lds-field::part(label) { display: none; }
+  .presence { display: inline-flex; gap: 2px; }
+  .presence lds-avatar[data-state="editing"] { outline: 2px solid var(--lds-color-accent-fg); border-radius: var(--lds-radius-full); }
   .bar { display: flex; align-items: center; justify-content: space-between; gap: var(--lds-space-3);
     min-block-size: 3.25rem; padding: 0 var(--lds-space-5); border-block-end: 1px solid var(--lds-color-border-default); }
   .crumbs { display: flex; align-items: center; gap: var(--lds-space-2); min-inline-size: 0; font-size: var(--lds-font-size-sm); }
@@ -98,6 +100,8 @@ class HznIssueDetail extends HTMLElement {
     root.addEventListener("hzn-change", (e) => {
       if (e.target.closest?.("[data-composer]")) this.draftDoc = e.detail.doc;
     });
+    root.addEventListener("focusin", (e) => e.target.matches?.("[data-description]") && this.announce("editing"));
+    root.addEventListener("hzn-blur", (e) => e.target.matches?.("[data-description]") && this.announce("viewing"));
     // Pushed changes wait until the control being edited loses focus.
     root.addEventListener("focusout", () => {
       if (this.stale) setTimeout(() => !this.editing() && this.stale && this.load(), 0);
@@ -108,11 +112,41 @@ class HznIssueDetail extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this.announce("gone");
+    clearInterval(this.presenceTimer);
     this.offSocket?.();
     this.offScope?.();
     for (const off of this.offKeys ?? []) off();
     this.offCommands?.();
     clearTimeout(this.timer);
+  }
+
+  /**
+   * Tells the others this user views (or edits, or left) the issue
+   * (docs/realtime.md#presence), repeated so it doesn't expire.
+   */
+  announce(state) {
+    const { socket } = this.context;
+    const key = this.issue?.key;
+    if (this.announced && (this.announced.key !== key || state === "gone")) {
+      socket.send("presence", { ws: this.ws, issue: this.announced.key, state: "gone" });
+      this.announced = null;
+    }
+    if (!key || state === "gone") return;
+    this.announced = { key, state };
+    socket.send("presence", { ws: this.ws, issue: key, state });
+    clearInterval(this.presenceTimer);
+    this.presenceTimer = setInterval(() => this.announced && socket.send("presence", { ws: this.ws, issue: this.announced.key, state: this.announced.state }), 25_000);
+  }
+
+  /** The others on the issue, as avatars; editors ringed. */
+  showPresence() {
+    const box = this.shadowRoot.querySelector("[data-presence]");
+    if (!box) return;
+    const me = this.context.session.user?.id;
+    const { t } = this.context.i18n;
+    const others = (this.present ?? []).filter((u) => u.id !== me);
+    box.innerHTML = String(html`${others.map((u) => html`<lds-avatar size="sm" name="${u.name}" title="${t(u.state === "editing" ? "presence.editing" : "presence.viewing", { name: u.name })}" data-state="${u.state}"></lds-avatar>`)}`);
   }
 
   attributeChangedCallback(_, before, after) {
@@ -228,6 +262,7 @@ class HznIssueDetail extends HTMLElement {
     const header = html`
       <div class="kind">
         <lds-badge size="sm">${type?.name ?? ""}</lds-badge><span class="key">${i.key}</span>
+        <span class="presence" data-presence aria-label="${t("presence.label")}"></span>
         ${archived ? html`<lds-badge size="sm" intent="warning">${t("issues.archived")}</lds-badge>` : ""}
         ${this.mode === "peek" ? html`<span class="grow"></span>${this.menu()}` : ""}
       </div>
@@ -258,6 +293,8 @@ class HznIssueDetail extends HTMLElement {
         ${this.dialogs()}`);
     }
     paintSwatches(this.shadowRoot);
+    this.showPresence();
+    if (this.announced?.key !== i.key) this.announce("viewing");
     // Editors take their documents once mounted.
     const description = this.shadowRoot.querySelector("[data-description]");
     if (description) {
@@ -866,6 +903,11 @@ class HznIssueDetail extends HTMLElement {
 
   /** Reloads when someone else changes the issue. */
   onPush(m) {
+    if (m.t === "presence" && m.d?.issue === this.issue?.key) {
+      this.present = m.d.users;
+      return this.showPresence();
+    }
+    if (m.t === "open" && this.announced) return this.announce(this.announced.state); // after a reconnect
     if (m.t !== "event" || !this.issue || m.d.aggregate?.id !== this.issue.id) return;
     if (m.d.type === "issue.deleted") {
       this.dispatchEvent(new CustomEvent("hzn-issue-gone", { detail: { key: this.issue.key }, bubbles: true, composed: true }));
