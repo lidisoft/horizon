@@ -36,17 +36,17 @@ func Expected() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	var max int64
+	var latest int64
 	for _, e := range entries {
 		v, err := goose.NumericComponent(e.Name())
 		if err != nil {
 			return 0, fmt.Errorf("migration %s: %w", e.Name(), err)
 		}
-		if v > max {
-			max = v
+		if v > latest {
+			latest = v
 		}
 	}
-	return max, nil
+	return latest, nil
 }
 
 // Current returns the version applied to db (0 when none).

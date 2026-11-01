@@ -13,9 +13,9 @@ import (
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	if err := cli.New().Run(ctx, os.Args); err != nil {
+	err := cli.New().Run(ctx, os.Args)
+	stop()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "horizon:", err)
 		os.Exit(1)
 	}

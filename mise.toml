@@ -1,7 +1,9 @@
 # Development tools, pinned (docs/development.md#prerequisites).
 # `mise install` installs them; Docker and a C compiler (for sqlc) are not
-# managed here. sqlc and swag are Go tool dependencies (go.mod).
+# managed here. sqlc and swag are Go tool dependencies (go.mod); golangci-lint
+# is a prebuilt binary, as its maintainers recommend, not a Go tool dependency.
 
 [tools]
 go = "1.26.10"
 task = "3.53.1"
+golangci-lint = "2.15.0"

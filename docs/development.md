@@ -7,8 +7,8 @@ conventions. The environment itself is described in
 ## Prerequisites
 
 Go, [Task](https://taskfile.dev) and Docker (Compose and testcontainers).
-[mise](https://mise.jdx.dev) installs the pinned Go and Task versions from
-`mise.toml`: run `mise install` once, and the tools are on the `PATH` inside the
+[mise](https://mise.jdx.dev) installs the pinned Go, Task and golangci-lint
+versions from `mise.toml`: run `mise install` once, and the tools are on the `PATH` inside the
 repository when mise is activated in your shell (otherwise prefix commands with
 `mise exec --`). Browser tests run headless Chrome in a container; set
 `HORIZON_TEST_CHROME` to a local Chrome or Chromium binary to use it instead. Code generators
@@ -82,13 +82,33 @@ Rules:
   filter evaluation) run the same JSON test vectors from `testdata/`.
 - `task test` runs everything; `task test:unit` skips containers.
 
+## Linting
+
+[golangci-lint](https://golangci-lint.run) v2, configured in `.golangci.yml`.
+It is a prebuilt binary pinned in `mise.toml` (its maintainers advise against
+`go tool` or `go install`, which build it against the module's dependencies),
+and CI installs the same version with `golangci/golangci-lint-action`; bump
+both together.
+
+- `task lint` runs the linters; `task fmt` formats (gofmt -s, and goimports
+  with `github.com/lidisoft/horizon` imports grouped last); `task fmt:check`
+  fails on unformatted code. `task check` runs all three.
+- The standard linters (errcheck, govet, ineffassign, staticcheck, unused)
+  plus bodyclose, errorlint, gocritic (diagnostic checks), misspell, noctx,
+  a curated set of revive rules, rowserrcheck and sqlclosecheck.
+- Generated code is excluded: the sqlc packages (`internal/*/db`) and the
+  swag spec (`internal/docs`).
+- Fix a finding rather than silencing it. A rule that is noise for the whole
+  codebase is disabled in `.golangci.yml` with a comment saying why; a
+  justified one-off is `//nolint:<linter> // reason`.
+
 ## CI
 
 GitHub Actions:
 
 | Workflow | Trigger | Does |
 |----------|---------|------|
-| `check` | Pull requests, pushes to `main` | `task check`: gofmt, vet, generated code freshness (sqlc, swagger), unit and integration tests, headless browser tests |
+| `check` | Pull requests, pushes to `main` | `task check`: formatting, vet, golangci-lint, generated code freshness (sqlc, swagger), unit and integration tests, headless browser tests |
 | `release` | Tags `v*` | `task check`, then build and push the OCI image to `ghcr.io/lidisoft/horizon`, and publish a GitHub release with notes generated from conventional commits |
 
 ## Branches, commits and pull requests

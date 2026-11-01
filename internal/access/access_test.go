@@ -305,7 +305,7 @@ func TestCustomRoles(t *testing.T) {
 	if !f.can(ada, f.scope(), access.IssueTransition) || f.can(ada, f.scope(), access.IssueCreate) {
 		t.Error("custom role not applied")
 	}
-	more := append(perms, access.IssueCreate)
+	more := append(slices.Clone(perms), access.IssueCreate)
 	if _, err := f.acc.UpdateRole(ctx, f.acme.ID, none, qa.ID, qa.Version, access.RoleInput{Permissions: &more}); err != nil {
 		t.Fatal(err)
 	}

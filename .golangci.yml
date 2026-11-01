@@ -1,0 +1,89 @@
+# golangci-lint v2 configuration (docs/development.md#linting).
+# `task lint` runs it; `task check` and CI include it.
+version: "2"
+
+run:
+  # Browser and integration tests are linted too.
+  tests: true
+
+linters:
+  # The standard set: errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - misspell
+    - noctx
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+  settings:
+    gocritic:
+      # Every diagnostic check (likely bugs), on top of the default set; the
+      # style and opinionated tags stay off.
+      enabled-tags: [diagnostic]
+    revive:
+      # revive's defaults minus exported, package-comments, var-naming,
+      # unexported-return, unused-parameter and empty-block: doc-comment,
+      # initialism and signature style that would churn every module for
+      # little gain.
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unreachable-code
+        - name: var-declaration
+    staticcheck:
+      checks:
+        # golangci-lint's defaults: no package-comment or naming style checks.
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        # De Morgan rewrites: the negated form often reads closer to the rule
+        # it encodes (workflow post-actions, rank ordering).
+        - -QF1001
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    paths:
+      # Generated: sqlc query code and the swag OpenAPI spec.
+      - internal/.*/db/
+      - internal/docs/
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/lidisoft/horizon
+  exclusions:
+    generated: lax
+    paths:
+      - internal/.*/db/
+      - internal/docs/
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

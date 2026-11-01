@@ -27,13 +27,13 @@ func notFound(err error, code string) error {
 
 func conflict(code string) error { return apperr.Conflict(code) }
 
-// name validates a definition name of at most max runes.
-func name(fields *apperr.Fields, field, v string, max int) string {
+// name validates a definition name of at most maxLen runes.
+func name(fields *apperr.Fields, field, v string, maxLen int) string {
 	v = strings.TrimSpace(v)
 	switch {
 	case v == "":
 		fields.Add(field, "required")
-	case len([]rune(v)) > max:
+	case len([]rune(v)) > maxLen:
 		fields.Add(field, "too_long")
 	}
 	return v

@@ -208,7 +208,8 @@ Tasks run with [Task](https://taskfile.dev) (`Taskfile.yml`), not Make — see
 | `task up` / `task down` / `task logs` | Docker Compose environment |
 | `task test` | All tests, including integration tests with testcontainers ([development.md](development.md#tests)) |
 | `task test:unit` | Unit tests only, no Docker |
-| `task check` | fmt, vet, tests, generated-code freshness — run before finishing |
+| `task lint` | golangci-lint ([development.md](development.md#linting)) |
+| `task check` | fmt, vet, lint, tests, generated-code freshness — run before finishing |
 | `task migrate:up` / `migrate:down` / `migrate:status` | goose via `horizon migrate` |
 | `task migrate:create -- <name>` | New numbered migration in `internal/migrations/` |
 | `task gen` | All code generation (`gen:sqlc`, `gen:swagger`) |

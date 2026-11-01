@@ -351,7 +351,8 @@ func TestPublish(t *testing.T) {
 			kept = append(kept, tr)
 		}
 	}
-	d.Transitions = append(kept, configdef.Transition{ID: uuid.Must(uuid.NewV7()), From: uuid.NullUUID{UUID: w.Statuses[2].ID, Valid: true}, To: review.ID, Name: "Request review"})
+	kept = append(kept, configdef.Transition{ID: uuid.Must(uuid.NewV7()), From: uuid.NullUUID{UUID: w.Statuses[2].ID, Valid: true}, To: review.ID, Name: "Request review"})
+	d.Transitions = kept
 	saved, err := f.cfg.SaveDraft(ctx, f.ws_(), w.ID, w.DraftVersion, d)
 	if err != nil {
 		t.Fatal(err)

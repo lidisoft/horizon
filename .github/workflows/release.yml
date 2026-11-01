@@ -22,6 +22,12 @@ jobs:
         with:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+      # Installs the pinned binary only; task check runs it. Keep the version
+      # in step with mise.toml.
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          install-only: true
       - name: task check
         run: task check
 

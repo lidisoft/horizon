@@ -36,7 +36,7 @@ func newBrowser(t *testing.T, h http.Handler) *browserClient {
 
 func (b *browserClient) do(method, path, body string, header ...string) *httptest.ResponseRecorder {
 	b.t.Helper()
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req := httptest.NewRequestWithContext(b.t.Context(), method, path, strings.NewReader(body))
 	req.RemoteAddr = "192.0.2.10:5555"
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")

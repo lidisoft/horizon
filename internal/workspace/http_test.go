@@ -47,7 +47,7 @@ func (f *fixture) client(email string) *client {
 
 func (c *client) do(method, path, body string) *httptest.ResponseRecorder {
 	c.t.Helper()
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req := httptest.NewRequestWithContext(c.t.Context(), method, path, strings.NewReader(body))
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}

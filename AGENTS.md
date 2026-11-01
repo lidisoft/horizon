@@ -19,7 +19,8 @@ The task runner is [Task](https://taskfile.dev), not Make
 task up                       # dev environment under Docker + Air
 task test                     # all tests (needs Docker for testcontainers)
 task test:unit                # unit tests only
-task check                    # fmt + vet + test + generated-code freshness — run before finishing
+task lint                     # golangci-lint (.golangci.yml)
+task check                    # fmt + vet + lint + test + generated-code freshness — run before finishing
 task migrate:up               # apply migrations
 task migrate:create -- name   # new migration
 task gen                      # sqlc + swagger

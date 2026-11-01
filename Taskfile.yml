@@ -75,21 +75,25 @@ tasks:
       - go test ./web -run TestWebUnits -args -serve :8089
 
   fmt:
-    desc: Format Go code
+    desc: Format Go code (gofmt -s and goimports, per .golangci.yml)
     cmds:
-      - gofmt -w -s .
+      - golangci-lint fmt ./...
 
   fmt:check:
     desc: Fail if Go code is not formatted
     cmds:
-      - |
-        files=$(gofmt -l -s .)
-        if [ -n "$files" ]; then echo "not gofmt'ed:"; echo "$files"; exit 1; fi
+      # Prints the diff and exits non-zero when a file needs formatting.
+      - golangci-lint fmt --diff ./...
 
   vet:
     desc: Run go vet
     cmds:
       - go vet ./...
+
+  lint:
+    desc: Run golangci-lint (.golangci.yml)
+    cmds:
+      - golangci-lint run ./...
 
   gen:check:
     desc: Fail if generated code is stale
@@ -105,6 +109,7 @@ tasks:
     cmds:
       - task: fmt:check
       - task: vet
+      - task: lint
       - task: gen:check
       - task: test
 

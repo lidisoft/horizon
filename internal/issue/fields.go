@@ -186,8 +186,8 @@ func isSet(e *edit, field string) bool {
 	return !isEmptyValue(values[field])
 }
 
-// clear empties a field (workflow post-action).
-func clear(e *edit, field string) {
+// clearField empties a field (workflow post-action).
+func clearField(e *edit, field string) {
 	i := e.next
 	switch field {
 	case "assignee":

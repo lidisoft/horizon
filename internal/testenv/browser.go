@@ -60,7 +60,7 @@ func (e *env) startChrome(ctx context.Context) ([]testcontainers.Container, erro
 // traffic from Docker bridges. DevTools listens on 127.0.0.1 only, on a free
 // port, so packages testing in parallel don't collide.
 func (e *env) startChromeHostNetwork(ctx context.Context) ([]testcontainers.Container, error) {
-	port, err := freePort()
+	port, err := freePort(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -116,8 +116,8 @@ func (e *env) startChromeBridge(ctx context.Context) ([]testcontainers.Container
 	return containers, nil
 }
 
-func freePort() (int, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+func freePort(ctx context.Context) (int, error) {
+	ln, err := new(net.ListenConfig).Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, err
 	}
@@ -166,7 +166,7 @@ type Listener struct {
 func Listen(t testing.TB) *Listener {
 	t.Helper()
 	require(t, current != nil && current.browser != nil, "Chrome")
-	ln, err := net.Listen("tcp", current.browser.bind)
+	ln, err := new(net.ListenConfig).Listen(t.Context(), "tcp", current.browser.bind)
 	if err != nil {
 		t.Fatalf("testenv: listen: %v", err)
 	}

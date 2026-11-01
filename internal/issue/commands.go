@@ -222,17 +222,17 @@ type AvailableTransition struct {
 func candidates(r *configdef.Resolved, i db.Issue) []configdef.Transition {
 	it, _ := findType(r, i.TypeID)
 	wf := r.Workflows[it.WorkflowID]
-	var specific, any []configdef.Transition
+	var specific, fromAny []configdef.Transition
 	for _, tr := range wf.Transitions {
 		switch {
 		case tr.To == i.StatusID:
 		case tr.From.Valid && tr.From.UUID == i.StatusID:
 			specific = append(specific, tr)
 		case !tr.From.Valid:
-			any = append(any, tr)
+			fromAny = append(fromAny, tr)
 		}
 	}
-	for _, tr := range any {
+	for _, tr := range fromAny {
 		if !slices.ContainsFunc(specific, func(x configdef.Transition) bool { return x.To == tr.To }) {
 			specific = append(specific, tr)
 		}
@@ -318,7 +318,7 @@ func (s *Service) Transition(ctx context.Context, ic Context, version int32, toS
 			case "set_actor":
 				i.AssigneeID = uuid.NullUUID{UUID: ic.Principal.User.ID, Valid: true}
 			default:
-				clear(e, pa.Field)
+				clearField(e, pa.Field)
 			}
 			if pa.Field == "assignee" && before != i.AssigneeID {
 				changes = append(changes, change{"IssueAssigned", map[string]any{"from": before, "to": i.AssigneeID, "by": "workflow"}})

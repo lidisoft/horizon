@@ -20,7 +20,7 @@ func engine(checks ...Check) http.Handler {
 
 func get(t *testing.T, h http.Handler, path string, header http.Header) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
 	for k, v := range header {
 		req.Header[k] = v
 	}

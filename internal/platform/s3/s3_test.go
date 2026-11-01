@@ -35,10 +35,14 @@ func TestPresignedRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := []byte("hello, attachment")
-	req, _ := http.NewRequest(http.MethodPut, put, bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPut, put, bytes.NewReader(body))
 	res, err := http.DefaultClient.Do(req)
-	if err != nil || res.StatusCode != http.StatusOK {
-		t.Fatalf("PUT: %v %v", res, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("PUT: %v", res)
 	}
 	if size, err := c.Stat(ctx, "ws/x/att/1"); err != nil || size != int64(len(body)) {
 		t.Errorf("stat = %d, %v", size, err)
@@ -53,7 +57,8 @@ func TestPresignedRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err = http.Get(get)
+	req, _ = http.NewRequestWithContext(ctx, http.MethodGet, get, nil)
+	res, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +92,7 @@ func TestAllowOrigin(t *testing.T) {
 		t.Fatalf("cors = %+v, %v", cfg, err)
 	}
 	put, _ := c.PresignPut(ctx, "k", time.Minute)
-	req, _ := http.NewRequest(http.MethodOptions, put, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodOptions, put, nil)
 	req.Header.Set("Origin", "https://horizon.example.com")
 	req.Header.Set("Access-Control-Request-Method", "PUT")
 	res, err := http.DefaultClient.Do(req)

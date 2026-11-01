@@ -151,12 +151,17 @@ func (e *env) dial(email string) *socket {
 	e.t.Helper()
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar}
-	res, err := client.Post(e.srv.URL+"/api/v1/auth/login", "application/json", strings.NewReader(`{"email":"`+email+`","password":"`+password+`"}`))
-	if err != nil || res.StatusCode != http.StatusOK {
-		e.t.Fatalf("login: %v %v", res, err)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, e.srv.URL+"/api/v1/auth/login", strings.NewReader(`{"email":"`+email+`","password":"`+password+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := client.Do(req)
+	if err != nil {
+		e.t.Fatalf("login: %v", err)
 	}
 	res.Body.Close()
-	ws, _, err := websocket.Dial(context.Background(), "ws"+strings.TrimPrefix(e.srv.URL, "http")+"/api/v1/ws", &websocket.DialOptions{HTTPClient: client})
+	if res.StatusCode != http.StatusOK {
+		e.t.Fatalf("login: %v", res)
+	}
+	ws, _, err := websocket.Dial(context.Background(), "ws"+strings.TrimPrefix(e.srv.URL, "http")+"/api/v1/ws", &websocket.DialOptions{HTTPClient: client}) //nolint:bodyclose // websocket.Dial closes the handshake response itself
 	if err != nil {
 		e.t.Fatal(err)
 	}

@@ -22,7 +22,7 @@ const (
 	s3SecretKey = "horizon-test-secret"
 )
 
-func (e *env) startS3(ctx context.Context) (testcontainers.Container, error) {
+func (e *env) startS3(ctx context.Context) (*testcontainers.DockerContainer, error) {
 	c, err := testcontainers.Run(ctx, s3Image,
 		testcontainers.WithEnv(map[string]string{"RUSTFS_ACCESS_KEY": s3AccessKey, "RUSTFS_SECRET_KEY": s3SecretKey}),
 		testcontainers.WithExposedPorts("9000/tcp"),
