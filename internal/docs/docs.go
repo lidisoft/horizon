@@ -7152,6 +7152,10 @@ const docTemplate = `{
         "planning.Completion": {
             "type": "object",
             "properties": {
+                "applied_at": {
+                    "description": "AppliedAt is when the policy worker applied it to the issues.",
+                    "type": "string"
+                },
                 "policy": {
                     "type": "string",
                     "enum": [

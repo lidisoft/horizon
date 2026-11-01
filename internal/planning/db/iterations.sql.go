@@ -207,6 +207,47 @@ func (q *Queries) IterationIssueIDs(ctx context.Context, arg IterationIssueIDsPa
 	return items, nil
 }
 
+const iterationIssueOutcomes = `-- name: IterationIssueOutcomes :many
+SELECT i.id, i.archived_at, sc.outcome
+FROM issues i
+JOIN statuses s ON s.id = i.status_id
+JOIN status_categories sc ON sc.id = s.category_id
+WHERE i.workspace_id = $1 AND i.iteration_id = $2
+ORDER BY i.rank
+`
+
+type IterationIssueOutcomesParams struct {
+	WorkspaceID uuid.UUID
+	IterationID uuid.NullUUID
+}
+
+type IterationIssueOutcomesRow struct {
+	ID         uuid.UUID
+	ArchivedAt *time.Time
+	Outcome    string
+}
+
+// The issues in an iteration with their status's outcome, in rank order.
+func (q *Queries) IterationIssueOutcomes(ctx context.Context, arg IterationIssueOutcomesParams) ([]IterationIssueOutcomesRow, error) {
+	rows, err := q.db.Query(ctx, iterationIssueOutcomes, arg.WorkspaceID, arg.IterationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IterationIssueOutcomesRow
+	for rows.Next() {
+		var i IterationIssueOutcomesRow
+		if err := rows.Scan(&i.ID, &i.ArchivedAt, &i.Outcome); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const iterationStats = `-- name: IterationStats :many
 SELECT i.iteration_id::uuid AS iteration_id, i.estimate, sc.outcome, count(*) AS issues
 FROM issues i
@@ -461,4 +502,20 @@ func (q *Queries) SaveIteration(ctx context.Context, arg SaveIterationParams) (I
 		&i.Version,
 	)
 	return i, err
+}
+
+const setCompletion = `-- name: SetCompletion :exec
+UPDATE iterations SET completion = $3 WHERE workspace_id = $1 AND id = $2
+`
+
+type SetCompletionParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	Completion  []byte
+}
+
+// Bookkeeping of the completion policy: no version change.
+func (q *Queries) SetCompletion(ctx context.Context, arg SetCompletionParams) error {
+	_, err := q.db.Exec(ctx, setCompletion, arg.WorkspaceID, arg.ID, arg.Completion)
+	return err
 }

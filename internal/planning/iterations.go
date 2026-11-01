@@ -72,6 +72,8 @@ type Iteration struct {
 type Completion struct {
 	Policy     string        `json:"policy" enums:"archive_done_rollover_rest,archive_all,none"`
 	RolloverTo uuid.NullUUID `json:"rollover_to" swaggertype:"string"`
+	// AppliedAt is when the policy worker applied it to the issues.
+	AppliedAt *time.Time `json:"applied_at,omitempty"`
 }
 
 // Tally counts issues and their estimated points.

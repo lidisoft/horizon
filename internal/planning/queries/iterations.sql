@@ -62,3 +62,16 @@ JOIN statuses s ON s.id = i.status_id
 JOIN status_categories sc ON sc.id = s.category_id
 WHERE i.workspace_id = $1 AND i.project_id = $2 AND i.iteration_id IS NOT NULL
 GROUP BY i.iteration_id, i.estimate, sc.outcome;
+
+-- name: IterationIssueOutcomes :many
+-- The issues in an iteration with their status's outcome, in rank order.
+SELECT i.id, i.archived_at, sc.outcome
+FROM issues i
+JOIN statuses s ON s.id = i.status_id
+JOIN status_categories sc ON sc.id = s.category_id
+WHERE i.workspace_id = $1 AND i.iteration_id = $2
+ORDER BY i.rank;
+
+-- name: SetCompletion :exec
+-- Bookkeeping of the completion policy: no version change.
+UPDATE iterations SET completion = $3 WHERE workspace_id = $1 AND id = $2;

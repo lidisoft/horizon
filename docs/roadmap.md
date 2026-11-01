@@ -48,7 +48,7 @@ usable exists early.
 
 ## Phase 4 — Planning
 
-- [ ] Iterations: plan, schedule, load, start, complete with policy, archive
+- [x] Iterations: plan, schedule, load, start, complete with policy, archive
 - [ ] Backlog view with sprint planning
 - [ ] Board view
 - [ ] Releases, milestones

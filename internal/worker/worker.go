@@ -26,6 +26,8 @@ type Deps struct {
 	Metrics   *metrics.Registry
 	// DeleteObjects removes object storage keys, for the purge job.
 	DeleteObjects func(ctx context.Context, keys []string) error
+	// Consumers are the durable consumers of domain events.
+	Consumers []eventlog.Consumer
 	// Jobs run periodically next to the consumers.
 	Jobs []Job
 }
@@ -60,6 +62,9 @@ func Run(ctx context.Context, deps Deps) error {
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return relay.Run(ctx) })
+	for _, c := range deps.Consumers {
+		g.Go(func() error { return deps.Stream.Consume(ctx, deps.JetStream, c, deps.Log) })
+	}
 	for _, job := range jobs {
 		g.Go(func() error {
 			runJob(ctx, job, logging.WithSystem(deps.Log, "job").With().Str("job", job.Name).Logger())

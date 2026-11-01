@@ -3,6 +3,7 @@ package issue
 import (
 	"context"
 	"errors"
+	"maps"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -73,4 +74,32 @@ func (s *Service) SetIteration(ctx context.Context, tx pgx.Tx, wc workspace.Cont
 		events = append(events, s.event(wc, saved, "IssueIterationChanged", payload))
 	}
 	return before, eventlog.Append(ctx, tx, events...)
+}
+
+// ArchiveIssues archives issues in the caller's transaction, for policies
+// (iteration completion): each one not archived yet records IssueArchived,
+// with payload saying why. Issues already gone are skipped.
+func (s *Service) ArchiveIssues(ctx context.Context, tx pgx.Tx, wc workspace.Context, ids []uuid.UUID, payload map[string]any) error {
+	q := db.New(tx)
+	var events []eventlog.Event
+	for _, id := range ids {
+		cur, err := q.LockIssue(ctx, db.LockIssueParams{WorkspaceID: wc.Workspace.ID, ID: id})
+		if errors.Is(err, pgx.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		if cur.ArchivedAt != nil {
+			continue
+		}
+		now := s.now()
+		cur.ArchivedAt = &now
+		saved, err := s.save(ctx, tx, cur)
+		if err != nil {
+			return err
+		}
+		events = append(events, s.event(wc, saved, "IssueArchived", maps.Clone(payload)))
+	}
+	return eventlog.Append(ctx, tx, events...)
 }

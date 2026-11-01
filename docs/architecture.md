@@ -159,7 +159,13 @@ Details in [realtime.md](realtime.md).
 
 ## Workers
 
-JetStream durable consumers, one per concern, each idempotent:
+JetStream durable consumers, one per concern, each idempotent
+(`eventlog.Consumer`). A consumer filters the stream by aggregate and event
+type, starts at the beginning of the stream when first created, and takes
+one event at a time in stream order across all worker replicas. A failed
+handler is retried with growing delays (1 s up to 10 min), ten times at
+most, then logged as an error and left behind; nothing after it waits
+longer than that.
 
 | Consumer | Does |
 |----------|------|
@@ -167,7 +173,7 @@ JetStream durable consumers, one per concern, each idempotent:
 | `email` | Sends via SMTP, with digests and retries |
 | `webhook` | Matches subscriptions, POSTs signed payloads (HMAC-SHA256), retries with backoff, logs deliveries |
 | `vcs` | Processes forge webhooks: links branches/PRs/commits, applies merge transitions |
-| `policy` | Runs cross-aggregate policies (e.g. iteration completion) as new commands |
+| `policy` | Runs cross-aggregate policies as new commands: applies the completion policy of each `IterationCompleted` ([domain.md](domain.md#iteration-completion-policy)) |
 | `purge` | Scrubs JetStream subjects and S3 objects after hard deletes (a periodic job over the `purges` queue; it keeps tombstones) |
 | `reports` | Maintains report projections ([reports.md](reports.md), [ADR-0021](adr/0021-report-projections.md)) |
 

@@ -95,36 +95,55 @@ func (rt *runtime) identity() *identity.Service {
 	})
 }
 
+// domain holds the domain services, wired to each other.
+type domain struct {
+	identity   *identity.Service
+	access     *access.Service
+	config     *configdef.Service
+	workspaces *workspace.Service
+	projects   *project.Service
+	issues     *issue.Service
+	planning   *planning.Service
+}
+
+// domain builds the domain services: serve and worker share the same graph,
+// so policies run commands exactly as requests do.
+func (rt *runtime) domain() domain {
+	d := domain{identity: rt.identity()}
+	d.access = access.New(rt.pool, nil)
+	d.config = configdef.New(rt.pool, d.access, nil, nil)
+	d.workspaces = workspace.New(workspace.Options{
+		Pool:     rt.pool,
+		Log:      logging.WithSystem(rt.log, "workspace"),
+		Identity: d.identity,
+		Access:   d.access,
+		Mail:     rt.mailer(),
+		BaseURL:  rt.cfg.BaseURL,
+		OnCreate: []workspace.CreateHook{d.config.SeedDefaults},
+	})
+	d.projects = project.New(rt.pool, d.access, nil)
+	d.projects.OnDelete(d.config.DeleteProject)
+	d.issues = issue.New(rt.pool, d.access, d.config, d.projects, nil)
+	d.issues.SetStorage(rt.s3)
+	d.planning = planning.New(rt.pool, d.access, d.config, d.projects, d.issues, nil)
+	return d
+}
+
 // api registers every module's routes on /api/v1; the hub pushes events to
 // its sockets once running.
 func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
-	ids := rt.identity()
-	auth := identity.NewHTTP(ids, rt.cfg.BaseURL.Scheme == "https")
-	acc := access.New(rt.pool, nil)
-	config := configdef.New(rt.pool, acc, nil, nil)
-	workspaceSvc := workspace.New(workspace.Options{
-		Pool:     rt.pool,
-		Log:      logging.WithSystem(rt.log, "workspace"),
-		Identity: ids,
-		Access:   acc,
-		Mail:     rt.mailer(),
-		BaseURL:  rt.cfg.BaseURL,
-		OnCreate: []workspace.CreateHook{config.SeedDefaults},
-	})
-	workspaces := workspace.NewHTTP(workspaceSvc, auth)
-	roles := access.NewHTTP(acc)
-	projectSvc := project.New(rt.pool, acc, nil)
-	projects := project.NewHTTP(projectSvc)
-	configHTTP := configdef.NewHTTP(config)
-	projectSvc.OnDelete(config.DeleteProject)
-	issueSvc := issue.New(rt.pool, acc, config, projectSvc, nil)
-	issueSvc.SetStorage(rt.s3)
-	issues := issue.NewHTTP(issueSvc, projectSvc)
-	plans := planning.NewHTTP(planning.New(rt.pool, acc, config, projectSvc, issueSvc, nil))
-	searchHTTP := search.NewHTTP(search.New(rt.pool, acc, projectSvc, issueSvc))
+	d := rt.domain()
+	auth := identity.NewHTTP(d.identity, rt.cfg.BaseURL.Scheme == "https")
+	workspaces := workspace.NewHTTP(d.workspaces, auth)
+	roles := access.NewHTTP(d.access)
+	projects := project.NewHTTP(d.projects)
+	configHTTP := configdef.NewHTTP(d.config)
+	issues := issue.NewHTTP(d.issues, d.projects)
+	plans := planning.NewHTTP(d.planning)
+	searchHTTP := search.NewHTTP(search.New(rt.pool, d.access, d.projects, d.issues))
 	hub := realtime.New(realtime.Options{
 		Log: logging.WithSystem(rt.log, "realtime"), Pool: rt.pool, NATS: rt.nc, Stream: eventlog.DefaultStream(rt.cfg.EventsRetention),
-		Identity: ids, Access: acc, Workspaces: workspaceSvc, Projects: projectSvc, Issues: issueSvc,
+		Identity: d.identity, Access: d.access, Workspaces: d.workspaces, Projects: d.projects, Issues: d.issues,
 		Origins: []string{rt.cfg.BaseURL.Host},
 	})
 	return func(api *gin.RouterGroup) {

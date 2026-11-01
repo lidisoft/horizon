@@ -51,6 +51,7 @@ func runWorker(ctx context.Context, rt *runtime) error {
 		Stream:        eventlog.DefaultStream(rt.cfg.EventsRetention),
 		Metrics:       rt.metrics,
 		DeleteObjects: rt.s3.Delete,
+		Consumers:     []eventlog.Consumer{rt.domain().planning.PolicyConsumer()},
 		Jobs: []worker.Job{
 			{Name: "identity-cleanup", Every: time.Hour, Run: rt.identity().Cleanup},
 			{Name: "upload-expiry", Every: time.Hour, Run: func(ctx context.Context) error {
