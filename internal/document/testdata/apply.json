@@ -1,0 +1,1258 @@
+[
+ {
+  "name": "insert text",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 2,
+    "to": 2,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "X"
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "aXb"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "delete text",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abc"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 1,
+    "to": 2
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "bc"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "split a paragraph",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abcd"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "paragraph"
+      },
+      {
+       "type": "paragraph"
+      }
+     ],
+     "openStart": 1,
+     "openEnd": 1
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "cd"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "join paragraphs",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "cd"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 5
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abcd"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "join a paragraph onto a heading",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "heading",
+     "attrs": {
+      "level": 1
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "cd"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 5
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "heading",
+     "attrs": {
+      "level": 1
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "abcd"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "delete across paragraphs",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "cd"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 2,
+    "to": 6
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ad"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "insert a paragraph between two",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "a"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "b"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "x"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "a"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "x"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "b"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "a paragraph can't go in a paragraph",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 2,
+    "to": 2,
+    "slice": {
+     "content": [
+      {
+       "type": "paragraph",
+       "content": [
+        {
+         "type": "text",
+         "text": "x"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "error": true
+ },
+ {
+  "name": "an empty document is invalid",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 0,
+    "to": 4
+   }
+  ],
+  "error": true
+ },
+ {
+  "name": "wrap a paragraph in a list",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace_around",
+    "from": 0,
+    "to": 4,
+    "gapFrom": 0,
+    "gapTo": 4,
+    "insert": 2,
+    "slice": {
+     "content": [
+      {
+       "type": "bullet_list",
+       "content": [
+        {
+         "type": "list_item"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "bullet_list",
+     "content": [
+      {
+       "type": "list_item",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "ab"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "lift a paragraph out of a list",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "bullet_list",
+     "content": [
+      {
+       "type": "list_item",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "ab"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace_around",
+    "from": 0,
+    "to": 8,
+    "gapFrom": 2,
+    "gapTo": 6,
+    "insert": 0
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "join list items",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "bullet_list",
+     "content": [
+      {
+       "type": "list_item",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "a"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "type": "list_item",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "b"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 4,
+    "to": 8
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "bullet_list",
+     "content": [
+      {
+       "type": "list_item",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "ab"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "add a mark",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abc"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "add_mark",
+    "from": 2,
+    "to": 3,
+    "mark": {
+     "type": "bold"
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "a"
+      },
+      {
+       "type": "text",
+       "text": "b",
+       "marks": [
+        {
+         "type": "bold"
+        }
+       ]
+      },
+      {
+       "type": "text",
+       "text": "c"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "marks keep their order",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab",
+       "marks": [
+        {
+         "type": "italic"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "add_mark",
+    "from": 1,
+    "to": 3,
+    "mark": {
+     "type": "bold"
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab",
+       "marks": [
+        {
+         "type": "bold"
+        },
+        {
+         "type": "italic"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "add a link",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "add_mark",
+    "from": 1,
+    "to": 2,
+    "mark": {
+     "type": "link",
+     "attrs": {
+      "href": "https://example.com/"
+     }
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "a",
+       "marks": [
+        {
+         "type": "link",
+         "attrs": {
+          "href": "https://example.com/"
+         }
+        }
+       ]
+      },
+      {
+       "type": "text",
+       "text": "b"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "remove a mark",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abc",
+       "marks": [
+        {
+         "type": "bold"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "remove_mark",
+    "from": 1,
+    "to": 2,
+    "mark": {
+     "type": "bold"
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "a"
+      },
+      {
+       "type": "text",
+       "text": "bc",
+       "marks": [
+        {
+         "type": "bold"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "code blocks take no marks",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "code_block",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "add_mark",
+    "from": 1,
+    "to": 3,
+    "mark": {
+     "type": "bold"
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "code_block",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "set a heading's level",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "heading",
+     "attrs": {
+      "level": 1
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "set_attrs",
+    "pos": 0,
+    "attrs": {
+     "level": 2
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "heading",
+     "attrs": {
+      "level": 2
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "check a task",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "task_list",
+     "content": [
+      {
+       "type": "task_item",
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "x"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "set_attrs",
+    "pos": 1,
+    "attrs": {
+     "checked": true
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "task_list",
+     "content": [
+      {
+       "type": "task_item",
+       "attrs": {
+        "checked": true
+       },
+       "content": [
+        {
+         "type": "paragraph",
+         "content": [
+          {
+           "type": "text",
+           "text": "x"
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "levels stop at 3",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "heading",
+     "attrs": {
+      "level": 1
+     },
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "set_attrs",
+    "pos": 0,
+    "attrs": {
+     "level": 4
+    }
+   }
+  ],
+  "error": true
+ },
+ {
+  "name": "insert an issue reference",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 2,
+    "to": 2,
+    "slice": {
+     "content": [
+      {
+       "type": "issue_ref",
+       "attrs": {
+        "key": "HZN-1"
+       }
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "a"
+      },
+      {
+       "type": "issue_ref",
+       "attrs": {
+        "key": "HZN-1"
+       }
+      },
+      {
+       "type": "text",
+       "text": "b"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "positions count UTF-16 code units",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "a😀b"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 4,
+    "to": 5
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "a😀"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "a structure replace keeps content",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 0,
+    "to": 2,
+    "structure": true
+   }
+  ],
+  "error": true
+ },
+ {
+  "name": "several steps",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "c"
+      }
+     ]
+    }
+   },
+   {
+    "stepType": "replace",
+    "from": 4,
+    "to": 4,
+    "slice": {
+     "content": [
+      {
+       "type": "paragraph"
+      },
+      {
+       "type": "paragraph"
+      }
+     ],
+     "openStart": 1,
+     "openEnd": 1
+    }
+   },
+   {
+    "stepType": "replace",
+    "from": 6,
+    "to": 6,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "d"
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abc"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "d"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "name": "no position splits a character",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "a😀b"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "X"
+      }
+     ]
+    }
+   }
+  ],
+  "error": true
+ }
+]

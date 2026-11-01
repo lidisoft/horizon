@@ -1,0 +1,550 @@
+[
+ {
+  "name": "inserts far apart",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "local": [
+   {
+    "stepType": "replace",
+    "from": 1,
+    "to": 1,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "X"
+      }
+     ]
+    }
+   }
+  ],
+  "remote": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "Y"
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "XabY"
+      }
+     ]
+    }
+   ]
+  },
+  "rebased": [
+   {
+    "stepType": "replace",
+    "from": 1,
+    "to": 1,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "X"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "a remote insert before",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "local": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "X"
+      }
+     ]
+    }
+   }
+  ],
+  "remote": [
+   {
+    "stepType": "replace",
+    "from": 1,
+    "to": 1,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "Y"
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "YabX"
+      }
+     ]
+    }
+   ]
+  },
+  "rebased": [
+   {
+    "stepType": "replace",
+    "from": 4,
+    "to": 4,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "X"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "inserts at the same place: remote first",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "local": [
+   {
+    "stepType": "replace",
+    "from": 2,
+    "to": 2,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "X"
+      }
+     ]
+    }
+   }
+  ],
+  "remote": [
+   {
+    "stepType": "replace",
+    "from": 2,
+    "to": 2,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "Y"
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "aYXb"
+      }
+     ]
+    }
+   ]
+  },
+  "rebased": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "X"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "an insert inside remotely deleted text goes",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abcd"
+      }
+     ]
+    }
+   ]
+  },
+  "local": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "X"
+      }
+     ]
+    }
+   }
+  ],
+  "remote": [
+   {
+    "stepType": "replace",
+    "from": 2,
+    "to": 4
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ad"
+      }
+     ]
+    }
+   ]
+  },
+  "rebased": []
+ },
+ {
+  "name": "a step inside what an earlier local step inserted",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "local": [
+   {
+    "stepType": "replace",
+    "from": 2,
+    "to": 2,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "XY"
+      }
+     ]
+    }
+   },
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "Q"
+      }
+     ]
+    }
+   }
+  ],
+  "remote": [
+   {
+    "stepType": "replace",
+    "from": 1,
+    "to": 1,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "Z"
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ZaXQYb"
+      }
+     ]
+    }
+   ]
+  },
+  "rebased": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "XY"
+      }
+     ]
+    }
+   },
+   {
+    "stepType": "replace",
+    "from": 4,
+    "to": 4,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "Q"
+      }
+     ]
+    }
+   }
+  ]
+ },
+ {
+  "name": "a mark over remotely changed text",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abcd"
+      }
+     ]
+    }
+   ]
+  },
+  "local": [
+   {
+    "stepType": "add_mark",
+    "from": 1,
+    "to": 5,
+    "mark": {
+     "type": "bold"
+    }
+   }
+  ],
+  "remote": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "X"
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abXcd",
+       "marks": [
+        {
+         "type": "bold"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "rebased": [
+   {
+    "stepType": "add_mark",
+    "from": 1,
+    "to": 6,
+    "mark": {
+     "type": "bold"
+    }
+   }
+  ]
+ },
+ {
+  "name": "a split rebased over a remote edit",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abcd"
+      }
+     ]
+    }
+   ]
+  },
+  "local": [
+   {
+    "stepType": "replace",
+    "from": 3,
+    "to": 3,
+    "slice": {
+     "content": [
+      {
+       "type": "paragraph"
+      },
+      {
+       "type": "paragraph"
+      }
+     ],
+     "openStart": 1,
+     "openEnd": 1
+    }
+   }
+  ],
+  "remote": [
+   {
+    "stepType": "replace",
+    "from": 1,
+    "to": 1,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "Z"
+      }
+     ]
+    }
+   }
+  ],
+  "result": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "Zab"
+      }
+     ]
+    },
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "cd"
+      }
+     ]
+    }
+   ]
+  },
+  "rebased": [
+   {
+    "stepType": "replace",
+    "from": 4,
+    "to": 4,
+    "slice": {
+     "content": [
+      {
+       "type": "paragraph"
+      },
+      {
+       "type": "paragraph"
+      }
+     ],
+     "openStart": 1,
+     "openEnd": 1
+    }
+   }
+  ]
+ }
+]

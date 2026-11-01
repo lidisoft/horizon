@@ -1,0 +1,221 @@
+[
+ {
+  "name": "through an insertion",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abc"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 2,
+    "to": 2,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "XY"
+      }
+     ]
+    }
+   }
+  ],
+  "positions": [
+   {
+    "pos": 1,
+    "assoc": 1,
+    "to": 1
+   },
+   {
+    "pos": 2,
+    "assoc": -1,
+    "to": 2
+   },
+   {
+    "pos": 2,
+    "assoc": 1,
+    "to": 4
+   },
+   {
+    "pos": 3,
+    "assoc": 1,
+    "to": 5
+   }
+  ]
+ },
+ {
+  "name": "through a deletion",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abcd"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 1,
+    "to": 3
+   }
+  ],
+  "positions": [
+   {
+    "pos": 1,
+    "assoc": 1,
+    "to": 1,
+    "deleted": true
+   },
+   {
+    "pos": 1,
+    "assoc": -1,
+    "to": 1,
+    "deleted": false
+   },
+   {
+    "pos": 2,
+    "assoc": 1,
+    "to": 1,
+    "deleted": true
+   },
+   {
+    "pos": 3,
+    "assoc": 1,
+    "to": 1,
+    "deleted": false
+   },
+   {
+    "pos": 4,
+    "assoc": 1,
+    "to": 2
+   }
+  ]
+ },
+ {
+  "name": "through a wrap",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "ab"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace_around",
+    "from": 0,
+    "to": 4,
+    "gapFrom": 0,
+    "gapTo": 4,
+    "insert": 2,
+    "slice": {
+     "content": [
+      {
+       "type": "bullet_list",
+       "content": [
+        {
+         "type": "list_item"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "positions": [
+   {
+    "pos": 1,
+    "assoc": 1,
+    "to": 3
+   },
+   {
+    "pos": 0,
+    "assoc": -1,
+    "to": 0
+   },
+   {
+    "pos": 4,
+    "assoc": -1,
+    "to": 6
+   },
+   {
+    "pos": 4,
+    "assoc": 1,
+    "to": 8
+   }
+  ]
+ },
+ {
+  "name": "through two steps",
+  "doc": {
+   "type": "doc",
+   "content": [
+    {
+     "type": "paragraph",
+     "content": [
+      {
+       "type": "text",
+       "text": "abcd"
+      }
+     ]
+    }
+   ]
+  },
+  "steps": [
+   {
+    "stepType": "replace",
+    "from": 1,
+    "to": 2
+   },
+   {
+    "stepType": "replace",
+    "from": 2,
+    "to": 2,
+    "slice": {
+     "content": [
+      {
+       "type": "text",
+       "text": "XY"
+      }
+     ]
+    }
+   }
+  ],
+  "positions": [
+   {
+    "pos": 4,
+    "assoc": 1,
+    "to": 5
+   },
+   {
+    "pos": 3,
+    "assoc": -1,
+    "to": 2
+   }
+  ]
+ }
+]

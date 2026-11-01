@@ -117,6 +117,9 @@ func testPage() (http.Handler, error) {
 		rw.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 		_, _ = rw.Write([]byte(entry.String()))
 	})
+	// The document vectors shared with internal/document's Go tests.
+	corpus := http.StripPrefix("/test/corpus/", http.FileServer(http.Dir("../internal/document/testdata")))
+	mux.Handle("GET /test/corpus/", corpus)
 	mux.Handle("GET /test/", http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Cache-Control", "no-store")
 		files.ServeHTTP(rw, r)

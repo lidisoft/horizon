@@ -103,6 +103,9 @@ tasks:
       - |
         diff -r internal/docs .gen-check/docs || { echo "generated code is stale; run task gen" >&2; exit 1; }
       - go tool sqlc diff
+      - go run ./internal/document/schemajs .gen-check/schema.js
+      - |
+        diff web/app/editor/schema.js .gen-check/schema.js || { echo "generated code is stale; run task gen" >&2; exit 1; }
 
   check:
     desc: Everything CI runs - run before finishing
@@ -120,11 +123,17 @@ tasks:
     cmds:
       - task: gen:sqlc
       - task: gen:swagger
+      - task: gen:schema
 
   gen:sqlc:
     desc: Generate query code from internal/<module>/queries into internal/<module>/db
     cmds:
       - go tool sqlc generate
+
+  gen:schema:
+    desc: Generate the editor's document schema (web/app/editor/schema.js) from internal/document/schema.json
+    cmds:
+      - go run ./internal/document/schemajs web/app/editor/schema.js
 
   gen:swagger:
     desc: Generate the OpenAPI spec into internal/docs

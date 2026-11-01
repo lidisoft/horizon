@@ -55,7 +55,7 @@ usable exists early.
 
 ## Phase 5 — Block editor and collaboration
 
-- [ ] Shared schema and step test corpus (Go + JS)
+- [x] Shared schema and step test corpus (Go + JS)
 - [ ] Single-user block editor replacing plain-text descriptions and comments
 - [ ] Server-authoritative step protocol, rebase, snapshots
 - [ ] Presence, remote cursors

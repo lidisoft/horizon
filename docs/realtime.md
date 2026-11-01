@@ -102,7 +102,7 @@ A JSON tree:
   { "type": "paragraph", "content": [
     { "type": "text", "text": "See " },
     { "type": "issue_ref", "attrs": { "key": "HZN-12" } },
-    { "type": "text", "text": " for details", "marks": [{ "type": "em" }] }
+    { "type": "text", "text": " for details", "marks": [{ "type": "italic" }] }
   ]},
   { "type": "task_list", "content": [ … ] }
 ]}
@@ -114,8 +114,16 @@ Inline: text with marks (bold, italic, strike, code, link), mention,
 issue reference, emoji.
 
 Positions are integer offsets into a flattened token sequence, as in
-ProseMirror. The schema and the step types are defined **once** as JSON
-(`internal/document/schema.json`) and loaded by both Go and JS.
+ProseMirror: a text character counts its UTF-16 code units (as JavaScript
+strings do; Go counts the same way), a leaf node 1, and other nodes their
+content plus 2 for their boundaries. No position may fall inside a
+surrogate pair. The schema is defined **once** as JSON
+(`internal/document/schema.json`); Go embeds it and `task gen:schema`
+writes it as `web/app/editor/schema.js`. Content expressions are
+space-separated terms (a node or group name, with `?`, `*` or `+`);
+attributes have defaults and allowed values or a kind (`count`, `string`,
+`uuid`, `issue_key`, `url`: http, https or mailto only). Documents are at
+most 1 MiB serialised and 12 levels deep.
 
 ### Steps
 
@@ -127,9 +135,16 @@ ProseMirror. The schema and the step types are defined **once** as JSON
 | `set_attrs` | Change a node's attributes (heading level, task checked) |
 
 Every step can be **applied** and **mapped** through other steps (position
-mapping). Both operations are implemented in Go and in JS and checked against
-a shared corpus of test vectors (`internal/document/testdata/*.json`), so the
-two implementations can't drift.
+mapping). Both operations are implemented in Go (`internal/document`) and
+in JS (`web/app/editor/model.js`, `transform.js`), following ProseMirror's
+model and transform modules, and checked against a shared corpus of test
+vectors (`internal/document/testdata/*.json`: apply and invert, mapping,
+rebase, schema), so the two implementations can't drift. Steps come from
+clients, so the server checks the whole document after applying them (a
+slice may carry a node whose own content is invalid) and the step parser
+is fuzzed (`FuzzApply`). Mark steps invert exactly only over uniformly
+marked text, as in ProseMirror: the editor emits mark steps over precise
+ranges.
 
 ### Protocol
 
