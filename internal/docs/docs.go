@@ -2214,6 +2214,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/w/{ws}/issues/query": {
+            "post": {
+                "description": "Conditions on built-in fields (project, type, status, status.category, status.outcome, priority, assignee, reporter, parent, iteration, release, labels, estimate, title, text, start_date, due_date, created, updated, resolved, started, archived) and custom fields (cf:\u003cid\u003e), combined with and, or, not; sorted; a page at a time. Placeholders: @me, @today, @current_iteration; relative dates such as -7d. Archived issues only with archived: true. 422 names the place a query goes wrong.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Query issues",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Query",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.QueryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.QueryResult"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/issues/{issue}": {
             "get": {
                 "description": "A former project key resolves too; the response carries the current key.",
@@ -7717,6 +7764,62 @@ const docTemplate = `{
                 }
             }
         },
+        "issue.QueryRequest": {
+            "type": "object",
+            "properties": {
+                "archived": {
+                    "description": "Archived includes archived issues.",
+                    "type": "boolean"
+                },
+                "cursor": {
+                    "type": "string"
+                },
+                "filter": {
+                    "$ref": "#/definitions/query.Node"
+                },
+                "group_by": {
+                    "type": "string",
+                    "example": "status"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "projects": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "HZN"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/query.Sort"
+                    }
+                }
+            }
+        },
+        "issue.QueryResult": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.Issue"
+                    }
+                },
+                "next_cursor": {
+                    "description": "Next is the cursor of the following page, if any.",
+                    "type": "string"
+                },
+                "total": {
+                    "description": "Total is the number of issues matching, all pages.",
+                    "type": "integer"
+                }
+            }
+        },
         "issue.RankRequest": {
             "type": "object",
             "properties": {
@@ -8445,6 +8548,53 @@ const docTemplate = `{
                         "workspace",
                         "private"
                     ]
+                }
+            }
+        },
+        "query.Node": {
+            "type": "object",
+            "properties": {
+                "and": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/query.Node"
+                    }
+                },
+                "field": {
+                    "type": "string",
+                    "example": "status.outcome"
+                },
+                "not": {
+                    "$ref": "#/definitions/query.Node"
+                },
+                "op": {
+                    "type": "string",
+                    "example": "eq"
+                },
+                "or": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/query.Node"
+                    }
+                },
+                "value": {
+                    "type": "object"
+                }
+            }
+        },
+        "query.Sort": {
+            "type": "object",
+            "properties": {
+                "dir": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "field": {
+                    "type": "string",
+                    "example": "rank"
                 }
             }
         },

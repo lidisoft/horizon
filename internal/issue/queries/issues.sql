@@ -129,3 +129,6 @@ RETURNING *;
 UPDATE issues SET iteration_id = $3, updated_at = $4, version = version + 1
 WHERE workspace_id = $1 AND id = $2
 RETURNING *;
+
+-- name: IssuesByIDs :many
+SELECT * FROM issues WHERE workspace_id = $1 AND id = ANY(sqlc.arg(ids)::uuid[]);

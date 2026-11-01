@@ -558,6 +558,61 @@ func (q *Queries) IssueLabels(ctx context.Context, ids []uuid.UUID) ([]IssueLabe
 	return items, nil
 }
 
+const issuesByIDs = `-- name: IssuesByIDs :many
+SELECT workspace_id, id, project_id, number, type_id, title, description, status_id, priority, rank, estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields, started_at, resolved_at, archived_at, created_at, updated_at, version FROM issues WHERE workspace_id = $1 AND id = ANY($2::uuid[])
+`
+
+type IssuesByIDsParams struct {
+	WorkspaceID uuid.UUID
+	Ids         []uuid.UUID
+}
+
+func (q *Queries) IssuesByIDs(ctx context.Context, arg IssuesByIDsParams) ([]Issue, error) {
+	rows, err := q.db.Query(ctx, issuesByIDs, arg.WorkspaceID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Issue
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.ID,
+			&i.ProjectID,
+			&i.Number,
+			&i.TypeID,
+			&i.Title,
+			&i.Description,
+			&i.StatusID,
+			&i.Priority,
+			&i.Rank,
+			&i.Estimate,
+			&i.AssigneeID,
+			&i.ReporterID,
+			&i.ParentID,
+			&i.IterationID,
+			&i.ReleaseID,
+			&i.StartDate,
+			&i.DueDate,
+			&i.Fields,
+			&i.StartedAt,
+			&i.ResolvedAt,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const issuesInStatus = `-- name: IssuesInStatus :many
 SELECT id, workspace_id FROM issues WHERE status_id = $1 AND ($2::uuid IS NULL OR type_id = $2)
 `

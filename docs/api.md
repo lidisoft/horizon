@@ -190,13 +190,28 @@ after, and their events arrive over the socket.
 }
 ```
 
-Fields: built-ins, `status.category`, `status.outcome` (`unstarted`,
-`started`, `completed`, `abandoned`, or the shorthand `open` = unstarted or
-started; use it for cross-project queries), `cf:<field id>` for custom
-fields.
-Operators: `eq`, `neq`, `in`, `nin`, `lt`, `lte`, `gt`, `gte`, `contains`,
-`is_empty`, `is_not_empty`, `within` (relative dates such as `-7d`).
-Placeholders: `@me`, `@current_iteration`, `@today`.
+The request adds `projects` (keys to look in; none: every project the
+caller sees issues of) and `cursor` (the `next_cursor` of the previous
+page); the response has `items`, `total` and `next_cursor`. Archived
+issues count only with `"archived": true`.
+
+Fields: `project` (key or id), `type`, `status`, `status.category`,
+`status.outcome` (`unstarted`, `started`, `completed`, `abandoned`, or the
+shorthands `open` = unstarted or started and `closed`; use it for
+cross-project queries), `priority`, `assignee`, `reporter`, `parent` (key
+or id), `iteration`, `release`, `labels`, `estimate`, `title`, `text`
+(words in the title and description, as prefixes), `start_date`,
+`due_date`, `created`, `updated`, `resolved`, `started`, `archived`, and
+`cf:<field id>` for custom fields (compared by their type).
+Operators: `eq`, `neq`, `in`, `nin`, `lt`, `lte`, `gt`, `gte`, `contains`
+(text; for labels and multi-selects: carries all), `is_empty`,
+`is_not_empty`, `within` (between today and a relative date such as `-7d`,
+`+2w`, `1m`). Placeholders: `@me`, `@current_iteration`, `@today`.
+Sort keys: `rank`, `key`, `title`, `created`, `updated`, `resolved`,
+`start_date`, `due_date`, `priority`, `status` (category order), `estimate`
+and custom fields. Every value is a bind parameter (`internal/query`); a
+query that doesn't compile answers 422 with the place (`filter.and[1].op:
+bad_op`). At most 50 conditions, 6 levels deep, 500 issues a page.
 
 ## Domain event format
 

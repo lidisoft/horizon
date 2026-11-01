@@ -11,6 +11,7 @@ import (
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/project"
+	"github.com/lidisoft/horizon/internal/query"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/workspace"
 )
@@ -31,6 +32,7 @@ func NewHTTP(svc *Service, projects *project.Service) *HTTP {
 // RegisterWorkspace mounts /w/:ws/issues routes.
 func (h *HTTP) RegisterWorkspace(ws *gin.RouterGroup) {
 	ws.POST("/issues", h.create)
+	ws.POST("/issues/query", h.query)
 	g := ws.Group("/issues/:issue", h.enter)
 	g.GET("", h.get)
 	g.PATCH("", h.update)
@@ -105,6 +107,40 @@ func version(c *gin.Context) (int32, bool) {
 		return 0, false
 	}
 	return v, true
+}
+
+// QueryRequest is the body of POST /w/{ws}/issues/query: a query
+// (docs/api.md#querying-issues), the projects to look in (keys; none: every
+// project the caller sees) and the cursor of the page.
+type QueryRequest struct {
+	query.Query
+	Projects []string `json:"projects,omitempty" example:"HZN"`
+	Cursor   string   `json:"cursor,omitempty"`
+}
+
+// query finds issues.
+//
+//	@Summary		Query issues
+//	@Description	Conditions on built-in fields (project, type, status, status.category, status.outcome, priority, assignee, reporter, parent, iteration, release, labels, estimate, title, text, start_date, due_date, created, updated, resolved, started, archived) and custom fields (cf:<id>), combined with and, or, not; sorted; a page at a time. Placeholders: @me, @today, @current_iteration; relative dates such as -7d. Archived issues only with archived: true. 422 names the place a query goes wrong.
+//	@Tags			issues
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws		path		string			true	"Workspace slug"
+//	@Param			body	body		QueryRequest	true	"Query"
+//	@Success		200		{object}	QueryResult
+//	@Failure		422		{object}	server.Problem
+//	@Router			/api/v1/w/{ws}/issues/query [post]
+func (h *HTTP) query(c *gin.Context) {
+	var req QueryRequest
+	if !bind(c, &req) {
+		return
+	}
+	res, err := h.svc.Query(c, workspace.Current(c), req.Query, req.Projects, req.Cursor)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }
 
 // CreateRequest is the body of POST /w/{ws}/issues.
