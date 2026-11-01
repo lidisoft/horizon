@@ -50,7 +50,7 @@ usable exists early.
 
 - [x] Iterations: plan, schedule, load, start, complete with policy, archive
 - [x] Backlog view with sprint planning
-- [ ] Board view
+- [x] Board view
 - [ ] Releases, milestones
 
 ## Phase 5 — Block editor and collaboration
@@ -64,6 +64,7 @@ usable exists early.
 ## Phase 6 — Views
 
 - [ ] Filter AST → SQL compiler, filter bar, saved views (personal / shared)
+- [ ] Board configuration in saved views: WIP limits per column
 - [ ] Table view with inline editing
 - [ ] Working calendars (weekdays, holidays) and time zone settings
 - [ ] Timeline / Gantt with dependencies, auto-scheduling in working days, milestones

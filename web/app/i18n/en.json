@@ -970,5 +970,30 @@
   "activity.iteration_set": "moved it to {to}",
   "activity.iteration_cleared": "took it out of {from}",
   "activity.release_set": "targeted it to {to}",
-  "activity.release_cleared": "took it off {from}"
+  "activity.release_cleared": "took it off {from}",
+  "board.label": "Board",
+  "board.scope": "Issues shown",
+  "board.allIssues": "All issues",
+  "board.swimlanes": "Swimlanes",
+  "board.lanes.none": "No swimlanes",
+  "board.lanes.assignee": "Swimlanes: assignee",
+  "board.lanes.parent": "Swimlanes: parent",
+  "board.lanes.priority": "Swimlanes: priority",
+  "board.noParent": "No parent",
+  "board.otherParent": "Parent in another project",
+  "board.daysLeft": {
+    "one": "{count} day left",
+    "other": "{count} days left"
+  },
+  "board.overdue": {
+    "one": "{count} day over",
+    "other": "{count} days over"
+  },
+  "board.moveTo": "Move {key} to {status}",
+  "board.notInWorkflow": "{key} has no {status} status in its workflow.",
+  "board.notAllowed": "{key} can't go there from its status.",
+  "shortcut.columnLeft": "Previous column",
+  "shortcut.columnRight": "Next column",
+  "shortcut.moveLeft": "Move the issue to the previous column",
+  "shortcut.moveRight": "Move the issue to the next column"
 }

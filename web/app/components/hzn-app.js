@@ -38,6 +38,7 @@ export const ROUTES = [
   { name: "settings-project", path: "/w/:ws/settings/projects/:key", view: "hzn-settings-project", layout: "settings" },
   { name: "project", path: "/w/:ws/p/:key", view: "hzn-project-home" },
   { name: "project-issues", path: "/w/:ws/p/:key/issues", view: "hzn-issue-list" },
+  { name: "project-board", path: "/w/:ws/p/:key/board", view: "hzn-board" },
   { name: "project-backlog", path: "/w/:ws/p/:key/backlog", view: "hzn-backlog" },
   { name: "issue", path: "/w/:ws/issues/:issue", view: "hzn-issue" },
   { name: "search", path: "/w/:ws/search", view: "hzn-search" },

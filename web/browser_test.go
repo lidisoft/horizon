@@ -1107,3 +1107,84 @@ func TestBacklog(t *testing.T) {
 	}
 	pg.logs.failOnErrors(t)
 }
+
+// TestBoard shows the active iteration as columns by status; cards move
+// between columns by dragging and from the keyboard, and swimlanes and
+// the scope change what is shown.
+func TestBoard(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	if status, body := pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`); status != 201 {
+		t.Fatalf("create project: %d %s", status, body)
+	}
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID, Name string } `json:"issue_types"`
+	}
+	if err := json.Unmarshal([]byte(cfg), &resolved); err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Outbox relay", "Replay after reconnect", "Not planned"} {
+		if status, body := pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"`+title+`"}`); status != 201 {
+			t.Fatalf("create issue: %d %s", status, body)
+		}
+	}
+	_, body := pg.api("POST", "/w/acme/projects/HZN/iterations", `{"name":"Sprint 1","start_date":"2026-11-02","end_date":"2026-11-13"}`)
+	var it struct{ ID string }
+	_ = json.Unmarshal([]byte(body), &it)
+	pg.api("POST", "/w/acme/projects/HZN/iterations/"+it.ID+"/issues", `{"add":["HZN-1","HZN-2"]}`)
+	if status, body := pg.api("POST", "/w/acme/projects/HZN/iterations/"+it.ID+"/start", ""); status != 200 {
+		t.Fatalf("start: %d %s", status, body)
+	}
+
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/board"))
+	pg.poll(view + `.querySelector("[data-crumb]")?.textContent.includes("Sprint 1") && "board"`)
+	heads := pg.poll(`[...` + view + `.querySelectorAll(".colhead")].map((h) => h.textContent.replace(/\s+/g, " ").trim()).join(",")`)
+	if heads != "Backlog 2,Todo 0,In progress 0,Done 0,Canceled 0" {
+		t.Errorf("columns = %s", heads)
+	}
+	column := func(key string) string {
+		return pg.poll(view + `.querySelector('.card[data-key="` + key + `"]')?.closest(".cell")?.dataset.column`)
+	}
+
+	// Dragging HZN-1 to Todo transitions it.
+	pg.eval(`(async () => {
+		const card = ` + view + `.querySelector('.card[data-key="HZN-1"]');
+		const dt = new DataTransfer();
+		card.dispatchEvent(new DragEvent("dragstart", { dataTransfer: dt, bubbles: true, composed: true }));
+		window.__dt = dt;
+	})()`)
+	pg.poll(view + `.querySelector('.cell[data-column="2"].blocked') && "transitions known"`) // In progress isn't reachable from Backlog
+	pg.eval(`(() => {
+		const cell = ` + view + `.querySelector('.cell[data-column="1"]');
+		const y = cell.getBoundingClientRect().bottom - 2;
+		cell.dispatchEvent(new DragEvent("dragover", { dataTransfer: window.__dt, clientY: y, bubbles: true, composed: true, cancelable: true }));
+		cell.dispatchEvent(new DragEvent("drop", { dataTransfer: window.__dt, clientY: y, bubbles: true, composed: true, cancelable: true }));
+	})()`)
+	pg.poll(view + `.querySelector('.cell[data-column="1"] .card[data-key="HZN-1"]') && "dropped"`)
+	pg.poll(`fetch("/api/v1/w/acme/issues/HZN-1").then((r) => r.json()).then((i) => i.status_id) && "saved"`)
+	if got := column("HZN-1"); got != "1" {
+		t.Errorf("HZN-1 in column %s", got)
+	}
+
+	// Alt+→ moves the current card on to In progress.
+	pg.click(view + `.querySelector('.card[data-key="HZN-1"]')`)
+	pg.poll(view + `.querySelector('.card[aria-current="true"]')?.dataset.key === "HZN-1" && "current"`)
+	pg.do(chromedp.KeyEvent(kb.ArrowRight, chromedp.KeyModifiers(chromedp.ModifierAlt)))
+	pg.poll(view + `.querySelector('.cell[data-column="2"] .card[data-key="HZN-1"]') && "moved on"`)
+
+	// Swimlanes by assignee; then every issue of the project.
+	pg.eval(`(() => { const s = ` + view + `.querySelector("[data-lanes]"); s.setAttribute("value", "assignee");
+		s.dispatchEvent(new CustomEvent("lds-change", { detail: { value: "assignee" }, bubbles: true, composed: true })); })()`)
+	pg.poll(view + `.querySelector(".lane")?.textContent.includes("Unassigned") && "lanes"`)
+	pg.eval(`(() => { const s = ` + view + `.querySelector("[data-scope]"); s.setAttribute("value", "all");
+		s.dispatchEvent(new CustomEvent("lds-change", { detail: { value: "all" }, bubbles: true, composed: true })); })()`)
+	pg.poll(view + `.querySelector('.card[data-key="HZN-3"]') && "all issues"`)
+	pg.poll(`location.search === "?iteration=all" && "remembered"`)
+	pg.logs.failOnErrors(t)
+}
