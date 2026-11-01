@@ -30,6 +30,7 @@ func (h *HTTP) Register(ws *gin.RouterGroup, more ...func(p *gin.RouterGroup)) {
 	p.POST("/archive", h.archive)
 	p.POST("/unarchive", h.unarchive)
 	p.DELETE("", h.delete)
+	p.GET("/people", h.people)
 	for _, register := range more {
 		register(p)
 	}
@@ -223,4 +224,28 @@ func (h *HTTP) setArchived(c *gin.Context, archived bool) {
 		return
 	}
 	c.JSON(http.StatusOK, p)
+}
+
+// PeopleList is the body of GET /projects/{key}/people.
+type PeopleList struct {
+	Items []Person `json:"items"`
+}
+
+// people lists who sees the project.
+//
+//	@Summary		People of a project
+//	@Description	Active members who see the project, for assignee pickers. Readable by whoever sees the project, guests included.
+//	@Tags			projects
+//	@Produce		json
+//	@Param			ws	path		string	true	"Workspace slug"
+//	@Param			key	path		string	true	"Project key"
+//	@Success		200	{object}	PeopleList
+//	@Router			/api/v1/w/{ws}/projects/{key}/people [get]
+func (h *HTTP) people(c *gin.Context) {
+	items, err := h.svc.People(c, Current(c))
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, PeopleList{Items: items})
 }

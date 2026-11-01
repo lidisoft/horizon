@@ -22,30 +22,32 @@ var Priorities = []string{"urgent", "high", "medium", "low", "none"}
 
 // Issue is the public view of an issue.
 type Issue struct {
-	ID          uuid.UUID       `json:"id"`
-	Key         string          `json:"key" example:"HZN-42"`
-	ProjectID   uuid.UUID       `json:"project_id"`
-	Number      int64           `json:"number"`
-	TypeID      uuid.UUID       `json:"type_id"`
-	Title       string          `json:"title"`
-	Description string          `json:"description"`
-	StatusID    uuid.UUID       `json:"status_id"`
-	Priority    string          `json:"priority" enums:"none,urgent,high,medium,low"`
-	Rank        string          `json:"rank"`
-	Estimate    *string         `json:"estimate"`
-	AssigneeID  uuid.NullUUID   `json:"assignee_id" swaggertype:"string"`
-	ReporterID  uuid.NullUUID   `json:"reporter_id" swaggertype:"string"`
-	ParentID    uuid.NullUUID   `json:"parent_id" swaggertype:"string"`
-	Labels      []uuid.UUID     `json:"labels"`
-	StartDate   *string         `json:"start_date" example:"2026-11-02"`
-	DueDate     *string         `json:"due_date" example:"2026-11-13"`
-	Fields      json.RawMessage `json:"fields" swaggertype:"object"`
-	StartedAt   *time.Time      `json:"started_at"`
-	ResolvedAt  *time.Time      `json:"resolved_at"`
-	ArchivedAt  *time.Time      `json:"archived_at"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	Version     int32           `json:"version"`
+	ID          uuid.UUID     `json:"id"`
+	Key         string        `json:"key" example:"HZN-42"`
+	ProjectID   uuid.UUID     `json:"project_id"`
+	Number      int64         `json:"number"`
+	TypeID      uuid.UUID     `json:"type_id"`
+	Title       string        `json:"title"`
+	Description string        `json:"description"`
+	StatusID    uuid.UUID     `json:"status_id"`
+	Priority    string        `json:"priority" enums:"none,urgent,high,medium,low"`
+	Rank        string        `json:"rank"`
+	Estimate    *string       `json:"estimate"`
+	AssigneeID  uuid.NullUUID `json:"assignee_id" swaggertype:"string"`
+	ReporterID  uuid.NullUUID `json:"reporter_id" swaggertype:"string"`
+	ParentID    uuid.NullUUID `json:"parent_id" swaggertype:"string"`
+	// Parent names the parent when the caller sees it (GET only).
+	Parent     *Ref            `json:"parent,omitempty"`
+	Labels     []uuid.UUID     `json:"labels"`
+	StartDate  *string         `json:"start_date" example:"2026-11-02"`
+	DueDate    *string         `json:"due_date" example:"2026-11-13"`
+	Fields     json.RawMessage `json:"fields" swaggertype:"object"`
+	StartedAt  *time.Time      `json:"started_at"`
+	ResolvedAt *time.Time      `json:"resolved_at"`
+	ArchivedAt *time.Time      `json:"archived_at"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
+	Version    int32           `json:"version"`
 }
 
 func issueFrom(i db.Issue, projectKey string, labels []uuid.UUID) Issue {

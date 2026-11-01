@@ -9,6 +9,8 @@
 // The sidebar's switcher lists the user's workspaces; the last one opened is
 // remembered, and "/" goes there.
 
+import "horizon/components/hzn-issue-create.js";
+import { ISSUE_KEY, issueHref } from "horizon/components/issue-ui.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { createApi } from "horizon/core/api.js";
 import { provideContext } from "horizon/core/context.js";
@@ -35,6 +37,8 @@ export const ROUTES = [
   { name: "settings-projects", path: "/w/:ws/settings/projects", view: "hzn-settings-projects", layout: "settings" },
   { name: "settings-project", path: "/w/:ws/settings/projects/:key", view: "hzn-settings-project", layout: "settings" },
   { name: "project", path: "/w/:ws/p/:key", view: "hzn-project-home" },
+  { name: "project-issues", path: "/w/:ws/p/:key/issues", view: "hzn-issue-list" },
+  { name: "issue", path: "/w/:ws/issues/:issue", view: "hzn-issue" },
   { name: "settings-issue-types", path: "/w/:ws/settings/issue-types", view: "hzn-settings-issue-types", layout: "settings" },
   { name: "settings-workflows", path: "/w/:ws/settings/workflows", view: "hzn-settings-workflows", layout: "settings" },
   { name: "settings-categories", path: "/w/:ws/settings/categories", view: "hzn-settings-categories", layout: "settings" },
@@ -133,7 +137,7 @@ export class HznApp extends HTMLElement {
     // Domain events pushed for the current workspace (docs/realtime.md).
     const socket = createSocket({ store });
     this.context = {
-      api, store, socket, router, i18n, shortcuts, session,
+      api, store, socket, router, i18n, shortcuts, session, commands: createCommands(),
       // Views call refresh after creating, renaming or joining a workspace.
       workspaces: { list: () => this.workspaces, refresh: () => this.loadWorkspaces() },
       // Views call refresh after creating, renaming or archiving a project.
@@ -171,7 +175,10 @@ export class HznApp extends HTMLElement {
         <main id="outlet"></main>
       </div>
       <lds-command id="palette" aria-label="${t("command.label")}" placeholder="${t("command.placeholder")}" empty="${t("command.empty")}">
+        <div data-dynamic></div>
+        <lds-command-group heading="${t("command.group.issues")}" data-goto hidden></lds-command-group>
         <lds-command-group heading="${t("command.group.navigation")}">
+          <lds-command-item value="create-issue" keywords="new"><lds-icon slot="start" name="plus"></lds-icon>${t("command.createIssue")}<lds-kbd slot="end">C</lds-kbd></lds-command-item>
           <lds-command-item value="home"><lds-icon slot="start" name="layers"></lds-icon>${t("shortcut.home")}</lds-command-item>
           <lds-command-item value="account"><lds-icon slot="start" name="user"></lds-icon>${t("command.account")}</lds-command-item>
         </lds-command-group>
@@ -181,6 +188,7 @@ export class HznApp extends HTMLElement {
           <lds-command-item value="sign-out"><lds-icon slot="start" name="log-out"></lds-icon>${t("nav.signOut")}</lds-command-item>
         </lds-command-group>
       </lds-command>
+      <hzn-issue-create></hzn-issue-create>
       <lds-modal id="help" size="sm" dismissible>
         <span slot="header">${t("shortcuts.title")}</span>
         <dl class="help"></dl>
@@ -198,13 +206,26 @@ export class HznApp extends HTMLElement {
       theme: () => this.toggleTheme(),
       help: () => this.showHelp(),
       palette: () => this.palette.setAttribute("open", ""),
+      "create-issue": () => this.createIssue(),
     };
     shortcuts.register({ id: "palette", keys: "mod+k", description: "shortcut.palette", allowInInputs: true, handler: actions.palette });
     shortcuts.register({ id: "help", keys: "?", description: "shortcut.help", handler: actions.help });
     shortcuts.register({ id: "home", keys: "g h", description: "shortcut.home", handler: actions.home });
+    shortcuts.register({ id: "create-issue", keys: "c", description: "shortcut.createIssue", handler: actions["create-issue"] });
+
+    // Commands of the open issue, and "Open <KEY>" for a typed issue key.
+    this.palette.addEventListener("lds-open", () => this.renderCommands());
+    this.palette.addEventListener("input", (event) => this.offerKey(event.composedPath()[0]?.value ?? ""));
 
     this.palette.addEventListener("lds-select", (event) => {
-      const action = actions[event.detail?.value];
+      const value = event.detail?.value ?? "";
+      if (value.startsWith("cmd:") || value.startsWith("goto:")) {
+        this.palette.removeAttribute("open");
+        if (value.startsWith("goto:")) router.navigate(issueHref(this.currentSlug, value.slice(5)));
+        else this.commandRuns.get(value)?.();
+        return;
+      }
+      const action = actions[value];
       if (!action) return;
       this.palette.removeAttribute("open");
       action();
@@ -241,6 +262,36 @@ export class HznApp extends HTMLElement {
       // routes send the user to sign-in, which reports errors as they occur.
     }
     this.context.router.start();
+  }
+
+  /** Renders the commands views registered, for the palette about to open. */
+  renderCommands() {
+    const { commands } = this.context;
+    this.commandRuns = new Map();
+    const box = this.palette.querySelector("[data-dynamic]");
+    box.innerHTML = String(html`${commands.list().map(([id, group]) => html`
+      <lds-command-group heading="${group.heading}">${group.items.map((item, i) => {
+        const value = `cmd:${id}:${i}`;
+        this.commandRuns.set(value, item.run);
+        return html`<lds-command-item value="${value}"><lds-icon slot="start" name="${item.icon}"></lds-icon>${item.label}
+          ${item.keys ? html`<lds-kbd slot="end">${displayKeys(item.keys).join(" ")}</lds-kbd>` : ""}</lds-command-item>`;
+      })}</lds-command-group>`)}`);
+    this.offerKey("");
+  }
+
+  /** Offers to open the issue whose key is typed. */
+  offerKey(query) {
+    const group = this.palette.querySelector("[data-goto]");
+    const key = query.trim().toUpperCase();
+    group.hidden = !this.currentSlug || !ISSUE_KEY.test(key);
+    group.innerHTML = group.hidden ? "" : String(html`
+      <lds-command-item value="goto:${key}" keywords="${key} ${key.toLowerCase()}"><lds-icon slot="start" name="search"></lds-icon>${this.context.i18n.t("command.openIssue", { key })}</lds-command-item>`);
+  }
+
+  /** The New issue dialog, in the current project if any. */
+  createIssue() {
+    if (!this.currentSlug || this.context.session.status !== "signed-in") return;
+    this.shadowRoot.querySelector("hzn-issue-create").show({ ws: this.currentSlug, project: this.currentProject });
   }
 
   /** Keeps the socket open while signed in, watching the current workspace. */
@@ -288,7 +339,8 @@ export class HznApp extends HTMLElement {
         this.syncSocket();
       }
     }
-    this.currentProject = match.params.key?.toUpperCase();
+    // An issue's page belongs to its project (by its key's prefix).
+    this.currentProject = (match.params.key ?? match.params.issue?.replace(/-\d+$/, ""))?.toUpperCase();
     this.markProject();
     const tag = match.route ? match.route.view : NOT_FOUND_VIEW;
     const params = match.route ? match.params : { path: match.path };
@@ -301,6 +353,7 @@ export class HznApp extends HTMLElement {
       for (const [k, v] of Object.entries(params)) view.setAttribute(k, v);
     }
     const section = match.route?.name.startsWith("settings-") ? "settings" : match.route?.name;
+    if (match.route?.name !== "issue") this.context.commands.clear("issue");
     for (const item of this.shadowRoot.querySelectorAll("lds-nav-item[data-route]")) {
       item.toggleAttribute("active", item.dataset.route === section);
     }
@@ -344,7 +397,7 @@ export class HznApp extends HTMLElement {
           ${can.includes("project.create") ? html`<lds-button size="sm" variant="ghost" label="${t("projects.new")}" data-new-project><lds-icon name="plus"></lds-icon></lds-button>` : ""}
         </div>` : ""}
       ${projects.map((p) => html`
-        <lds-nav-item href="/w/${slug}/p/${p.key}" data-project="${p.key}">
+        <lds-nav-item href="/w/${slug}/p/${p.key}/issues" data-project="${p.key}">
           <span slot="start" class="dot" data-colour="${p.colour}"></span>${p.name}<span slot="end" class="project-key">${p.key}</span>
         </lds-nav-item>`)}`);
     paintSwatches(box);
@@ -354,7 +407,7 @@ export class HznApp extends HTMLElement {
 
   markProject() {
     for (const item of this.shadowRoot.querySelectorAll("lds-nav-item[data-project]")) {
-      item.toggleAttribute("active", item.dataset.project === this.currentProject && this.context.router.current?.route?.name === "project");
+      item.toggleAttribute("active", item.dataset.project === this.currentProject && ["project", "project-issues", "issue"].includes(this.context.router.current?.route?.name));
     }
   }
 
@@ -422,4 +475,22 @@ export class HznApp extends HTMLElement {
       .join("");
     this.help.setAttribute("open", "");
   }
+}
+
+/** Commands views add to the palette while they're shown, by group id. */
+function createCommands() {
+  const groups = new Map();
+  return {
+    /** Sets a group ({ heading, items: [{ label, icon, keys?, run }] }); returns its remover. */
+    set(id, group) {
+      groups.set(id, group);
+      return () => groups.get(id) === group && groups.delete(id);
+    },
+    clear(id) {
+      groups.delete(id);
+    },
+    list() {
+      return [...groups.entries()];
+    },
+  };
 }

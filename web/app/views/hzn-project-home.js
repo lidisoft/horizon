@@ -1,7 +1,6 @@
-// <hzn-project-home>: /w/:ws/p/:key — a placeholder until issues arrive.
-// A former key redirects to the current one.
+// <hzn-project-home>: /w/:ws/p/:key — leads to the project's issues until
+// the overview arrives (phase 6), resolving a former key on the way.
 
-import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
 import { errorMessage } from "horizon/core/forms.js";
@@ -9,7 +8,6 @@ import { errorMessage } from "horizon/core/forms.js";
 const styles = sheet(`
   :host { display: block; padding: var(--lds-space-12) var(--lds-space-6); }
   a { color: var(--lds-color-fg-link); }
-  .dot { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: var(--lds-radius-xs); }
 `);
 
 class HznProjectHome extends HTMLElement {
@@ -42,18 +40,7 @@ class HznProjectHome extends HTMLElement {
         </lds-empty-state>`);
       return;
     }
-    if (p.key !== key.toUpperCase()) {
-      router.navigate(`/w/${ws}/p/${p.key}`, { replace: true });
-      return;
-    }
-    this.shadowRoot.innerHTML = String(html`
-      <lds-empty-state>
-        <span slot="icon" class="dot" data-colour="${p.colour}"></span>
-        <h2 slot="title">${p.name} <span class="muted">${p.key}</span></h2>
-        ${p.archived_at ? t("projects.isArchived") : t("projects.empty")}
-        <a slot="actions" href="/w/${ws}/settings/projects/${p.key}">${t("projects.settings")}</a>
-      </lds-empty-state>`);
-    paintSwatches(this.shadowRoot);
+    router.navigate(`/w/${ws}/p/${p.key}/issues`, { replace: true });
   }
 }
 

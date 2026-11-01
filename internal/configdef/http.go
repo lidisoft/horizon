@@ -1,7 +1,10 @@
 package configdef
 
 import (
+	"cmp"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -47,6 +50,7 @@ func (h *HTTP) RegisterProject(p *gin.RouterGroup) {
 		g.POST("/"+kind+"/:id/enable", h.setDisabled(defType, false))
 	}
 	g.POST("/issue-types/:id/copy", h.copyIssueType)
+	g.GET("/resolved", h.resolved)
 	g.POST("/labels/:id/move-to-workspace", h.moveLabel)
 }
 
@@ -849,4 +853,75 @@ func ifMatch(c *gin.Context) (int32, bool) {
 		return 0, false
 	}
 	return v, true
+}
+
+// ResolvedConfig is the configuration a project's issues use: what the
+// project inherits and what it overrides, without what it switched off.
+type ResolvedConfig struct {
+	Categories []Category  `json:"categories"`
+	Workflows  []Workflow  `json:"workflows"`
+	IssueTypes []IssueType `json:"issue_types"`
+	Fields     []Field     `json:"fields"`
+	// TypeFields lists each issue type's fields, in order, by type id.
+	TypeFields map[uuid.UUID][]TypeField `json:"type_fields" swaggertype:"object"`
+	// Labels include those switched off in the project (disabled): issues
+	// keep them, greyed, but they aren't offered.
+	Labels     []Label    `json:"labels"`
+	Estimation Estimation `json:"estimation"`
+}
+
+// resolved returns the project's resolved configuration.
+//
+//	@Summary		Resolved configuration of a project
+//	@Description	For issue screens: categories, published workflows, issue types, fields per type, labels and the estimation scale in effect. Readable by whoever sees the project.
+//	@Tags			configuration
+//	@Produce		json
+//	@Param			ws	path		string	true	"Workspace slug"
+//	@Param			key	path		string	true	"Project key"
+//	@Success		200	{object}	ResolvedConfig
+//	@Router			/api/v1/w/{ws}/projects/{key}/config/resolved [get]
+func (h *HTTP) resolved(c *gin.Context) {
+	t := targetOf(c)
+	r, err := h.svc.Resolve(c, h.svc.pool, t.WorkspaceID, t.ProjectID)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	out := ResolvedConfig{IssueTypes: r.IssueTypes, TypeFields: r.TypeFields, Estimation: r.Estimation}
+	for _, x := range r.Categories {
+		out.Categories = append(out.Categories, x)
+	}
+	slices.SortFunc(out.Categories, func(a, b Category) int { return cmp.Compare(a.Position, b.Position) })
+	for _, w := range r.Workflows {
+		w.Draft = nil
+		out.Workflows = append(out.Workflows, w)
+	}
+	slices.SortFunc(out.Workflows, func(a, b Workflow) int { return strings.Compare(a.Name, b.Name) })
+	for _, f := range r.Fields {
+		out.Fields = append(out.Fields, f)
+	}
+	slices.SortFunc(out.Fields, func(a, b Field) int { return cmp.Compare(a.Position, b.Position) })
+	if out.Labels, err = h.svc.Labels(c, t); err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	if out.TypeFields == nil {
+		out.TypeFields = map[uuid.UUID][]TypeField{}
+	}
+	if out.Categories == nil {
+		out.Categories = []Category{}
+	}
+	if out.Workflows == nil {
+		out.Workflows = []Workflow{}
+	}
+	if out.Fields == nil {
+		out.Fields = []Field{}
+	}
+	if out.Labels == nil {
+		out.Labels = []Label{}
+	}
+	if out.IssueTypes == nil {
+		out.IssueTypes = []IssueType{}
+	}
+	c.JSON(http.StatusOK, out)
 }

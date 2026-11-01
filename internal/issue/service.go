@@ -114,7 +114,17 @@ func (s *Service) Get(ctx context.Context, ic Context) (Issue, error) {
 	if err != nil {
 		return Issue{}, err
 	}
-	return issueFrom(ic.Issue, ic.Project.Key, labels[ic.Issue.ID]), nil
+	i := issueFrom(ic.Issue, ic.Project.Key, labels[ic.Issue.ID])
+	if ic.Issue.ParentID.Valid {
+		parent, key, ok, err := s.visibleIssue(ctx, ic, ic.Issue.ParentID.UUID)
+		if err != nil {
+			return Issue{}, err
+		}
+		if ok {
+			i.Parent = &Ref{ID: parent.ID, Key: key, Name: parent.Title}
+		}
+	}
+	return i, nil
 }
 
 func (s *Service) labelsOf(ctx context.Context, conn db.DBTX, ids []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {

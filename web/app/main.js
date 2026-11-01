@@ -10,6 +10,8 @@ import "horizon/views/hzn-account.js";
 import "horizon/views/hzn-forgot-password.js";
 import "horizon/views/hzn-home.js";
 import "horizon/views/hzn-invitation.js";
+import "horizon/views/hzn-issue-list.js";
+import "horizon/views/hzn-issue.js";
 import "horizon/views/hzn-not-found.js";
 import "horizon/views/hzn-project-home.js";
 import "horizon/views/hzn-reset-password.js";

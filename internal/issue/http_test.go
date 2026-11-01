@@ -129,6 +129,13 @@ func TestHTTPIssues(t *testing.T) {
 	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-1/prioritize", `{"priority":"low"}`), http.StatusConflict, "issue_archived")
 	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-1/unarchive", ""), http.StatusOK, `"archived_at":null`)
 
+	// What issue screens read: the resolved configuration, the people, the parent.
+	c.want(c.do("GET", "/api/v1/w/acme/projects/HZN/config/resolved", ""), http.StatusOK, `"name":"Backlog"`)
+	c.want(c.do("GET", "/api/v1/w/acme/projects/HZN/people", ""), http.StatusOK, `"name":"owner"`)
+	c.want(c.do("PATCH", "/api/v1/w/acme/issues/HZN-1", `{"parent":"HZN-2"}`), http.StatusOK, `"parent_id":"`)
+	c.want(c.do("GET", "/api/v1/w/acme/issues/HZN-1", ""), http.StatusOK, `"parent":{"id":"`)
+	c.want(c.do("PATCH", "/api/v1/w/acme/issues/HZN-1", `{"parent":""}`), http.StatusOK, `"parent_id":null`)
+
 	// Comments, attachments, activity.
 	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-1/comments", `{"body":"Looks good"}`), http.StatusCreated, `"author_name":"owner"`)
 	c.want(c.do("GET", "/api/v1/w/acme/issues/HZN-1/comments", ""), http.StatusOK, `"body":"Looks good"`)

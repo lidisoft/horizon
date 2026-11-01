@@ -141,8 +141,10 @@ semantic tokens only, `:host` display):
 | Element | Purpose |
 |---------|---------|
 | `hzn-app` | Frame: sidebar, routing outlet, ⌘K, toasts |
-| `hzn-issue-row` | Dense list row with inline pickers |
-| `hzn-issue-detail` | Issue page and peek panel |
+| `hzn-issue-list` (view) | A project's issues grouped by status in workflow order, rank order within; peek panel (non-modal `lds-drawer`) beside it |
+| `hzn-issue-detail` | Issue page and peek panel (`mode="page" \| "peek"`): properties save as they change (If-Match), description, sub-issues, links, attachments, activity and comments |
+| `hzn-issue-create` | New issue dialog (button, `C`, ⌘K) |
+| `hzn-move-issue` | Move to another project, with the server's preview of matches and gaps |
 | `hzn-board` | Kanban with drag and drop between columns and rank |
 | `hzn-backlog` | Backlog plus iteration buckets, drag to plan |
 | `hzn-grid` | Table view with field columns and inline editing |
@@ -187,7 +189,15 @@ corpus ([roadmap.md](roadmap.md)).
 ## Accessibility and keyboard
 
 - Every action is reachable by keyboard; the shortcut help (`?`) is generated
-  from the shortcut registry.
+  from the shortcut registry. Issue list: `J`/`K` move, `Enter` peeks, `O`
+  opens the page; anywhere in a workspace `C` creates an issue. Issue page:
+  `S` status, `A` assignee, `P` priority, `L` labels, `E` title, `R` comment,
+  `M` move, `⌘⇧C` copy link.
+- ⌘K lists the commands of what is on screen: views register a group with
+  `context.commands.set(id, { heading, items })` while they're shown (the
+  issue page adds "Change status…", "Assign to…" and others). Typing an issue
+  key offers to open it.
+- The peek panel keeps focus on the list: `J`/`K` move the peek along.
 - Board and backlog drag and drop have keyboard equivalents (move with
   `alt+arrow`, or via the command palette).
 - LDS conventions apply (focus rings, ARIA wiring, contrast checked by eye in

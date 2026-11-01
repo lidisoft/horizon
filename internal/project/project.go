@@ -18,6 +18,7 @@ import (
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/eventlog"
+	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
 	"github.com/lidisoft/horizon/internal/project/db"
 	"github.com/lidisoft/horizon/internal/workspace"
@@ -213,6 +214,45 @@ func (s *Service) Enter(ctx context.Context, wc workspace.Context, key string) (
 		return Context{}, err
 	}
 	return Context{Context: wc, Project: projectFrom(p, aliases[p.ID])}, nil
+}
+
+// Person is someone who can see a project: assignee pickers, avatars.
+type Person struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name" example:"Ada Lovelace"`
+}
+
+// People lists the active members who see the project, by name.
+func (s *Service) People(ctx context.Context, pc Context) ([]Person, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT u.id, u.name FROM workspace_members m JOIN users u ON u.id = m.user_id
+		WHERE m.workspace_id = $1 AND m.status = 'active' ORDER BY lower(u.name), u.id`, pc.Workspace.ID)
+	if err != nil {
+		return nil, err
+	}
+	all, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Person])
+	if err != nil {
+		return nil, err
+	}
+	p, err := db.New(s.pool).ProjectByKey(ctx, db.ProjectByKeyParams{WorkspaceID: pc.Workspace.ID, Key: pc.Project.Key})
+	if err != nil {
+		return nil, err
+	}
+	out := []Person{}
+	for _, person := range all {
+		wc := pc.Context
+		wc.Principal = identity.Principal{User: identity.User{ID: person.ID, Name: person.Name}}
+		v, err := s.visibility(ctx, wc)
+		if err != nil {
+			return nil, err
+		}
+		if ok, err := v.sees(ctx, p); err != nil {
+			return nil, err
+		} else if ok {
+			out = append(out, person)
+		}
+	}
+	return out, nil
 }
 
 // EnterByID is Enter for a project known by id.

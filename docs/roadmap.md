@@ -43,7 +43,7 @@ usable exists early.
 - [x] Comments (plain text first), attachments via S3
 - [x] Activity feed from `events`
 - [x] WebSocket pushes for domain events (no collab yet)
-- [ ] List view, issue detail, ⌘K palette, shortcuts
+- [x] List view, issue detail, ⌘K palette, shortcuts
 - [ ] Full-text search
 
 ## Phase 4 — Planning

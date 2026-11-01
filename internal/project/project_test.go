@@ -286,3 +286,34 @@ func roleID(t *testing.T, f *fixture, name string) uuid.UUID {
 	t.Fatalf("no role %s", name)
 	return uuid.Nil
 }
+
+func TestPeople(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.create("HZN", "Horizon", "workspace")
+	f.create("SEC", "Secret", "private")
+	ada := f.member("ada@example.com")
+	pc, err := f.enter(f.owner, "HZN")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := func(pc project.Context) string {
+		people, err := f.svc.People(ctx, pc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, p := range people {
+			out = append(out, p.Name)
+		}
+		return strings.Join(out, ",")
+	}
+	if got := names(pc); got != "ada,owner" {
+		t.Errorf("HZN people = %s", got)
+	}
+	sec, _ := f.enter(f.owner, "SEC")
+	if got := names(sec); got != "owner" {
+		t.Errorf("SEC people = %s (ada can't see it)", got)
+	}
+	_ = ada
+}

@@ -3838,6 +3838,42 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/w/{ws}/projects/{key}/config/resolved": {
+            "get": {
+                "description": "For issue screens: categories, published workflows, issue types, fields per type, labels and the estimation scale in effect. Readable by whoever sees the project.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Resolved configuration of a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.ResolvedConfig"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/projects/{key}/issues": {
             "get": {
                 "produces": [
@@ -3886,6 +3922,42 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/issue.Page"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/people": {
+            "get": {
+                "description": "Active members who see the project, for assignee pickers. Readable by whoever sees the project, guests included.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "projects"
+                ],
+                "summary": "People of a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/project.PeopleList"
                         }
                     }
                 }
@@ -5196,6 +5268,49 @@ const docTemplate = `{
                 }
             }
         },
+        "configdef.ResolvedConfig": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Category"
+                    }
+                },
+                "estimation": {
+                    "$ref": "#/definitions/configdef.Estimation"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Field"
+                    }
+                },
+                "issue_types": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.IssueType"
+                    }
+                },
+                "labels": {
+                    "description": "Labels include those switched off in the project (disabled): issues\nkeep them, greyed, but they aren't offered.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Label"
+                    }
+                },
+                "type_fields": {
+                    "description": "TypeFields lists each issue type's fields, in order, by type id.",
+                    "type": "object"
+                },
+                "workflows": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/configdef.Workflow"
+                    }
+                }
+            }
+        },
         "configdef.Rules": {
             "type": "object",
             "properties": {
@@ -5942,6 +6057,14 @@ const docTemplate = `{
                 "number": {
                     "type": "integer"
                 },
+                "parent": {
+                    "description": "Parent names the parent when the caller sees it (GET only).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/issue.Ref"
+                        }
+                    ]
+                },
                 "parent_id": {
                     "type": "string"
                 },
@@ -6341,6 +6464,29 @@ const docTemplate = `{
                 "size": {
                     "type": "integer",
                     "example": 2048
+                }
+            }
+        },
+        "project.PeopleList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/project.Person"
+                    }
+                }
+            }
+        },
+        "project.Person": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Ada Lovelace"
                 }
             }
         },

@@ -636,7 +636,7 @@ func TestProjects(t *testing.T) {
 		t.Errorf("suggested key = %q", got)
 	}
 	admin.eval(view + `.querySelector('[data-action="create"]').click()`)
-	admin.poll(`location.pathname === "/w/acme/p/DS" && "created"`)
+	admin.poll(`location.pathname === "/w/acme/p/DS/issues" && "created"`)
 	item := appRoot + `.querySelector('lds-nav-item[data-project="DS"]')`
 	if got := admin.poll(item + `?.textContent.trim() + " | " + ` + item + `?.querySelector(".project-key")?.textContent`); got != "Design systemDS | DS" {
 		t.Errorf("sidebar item = %q", got)
@@ -651,7 +651,7 @@ func TestProjects(t *testing.T) {
 	admin.eval(view + `.querySelector('[data-action="save"]').click()`)
 	admin.poll(`location.pathname === "/w/acme/settings/projects/LDS" && "renamed"`)
 	admin.do(chromedp.Navigate(a.base + "/w/acme/p/DS"))
-	admin.poll(`location.pathname === "/w/acme/p/LDS" && "redirected"`)
+	admin.poll(`location.pathname === "/w/acme/p/LDS/issues" && "redirected"`)
 
 	// Invite Grace as Viewer: she sees the project until it turns private.
 	admin.do(chromedp.Navigate(a.base + "/w/acme/settings/members"))
@@ -839,4 +839,100 @@ func serveForHumans(addr string) int {
 		return 1
 	}
 	return 0
+}
+
+// TestIssues creates issues from the list, peeks at one and changes it
+// there, opens its page from the keyboard, and uses the palette.
+func TestIssues(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	created := `fetch("/api/v1/w/acme/projects", { method: "POST", headers: { "Content-Type": "application/json", "X-CSRF-Token": ` +
+		`document.querySelector("hzn-app").context.session.csrf }, body: JSON.stringify({ key: "HZN", name: "Horizon" }) }).then((r) => String(r.status))`
+	if got, err := chromedp.Run(pg.ctx, chromedp.Evaluate[string](created, chromedp.EvalAwaitPromise)); err != nil || got != "201" {
+		t.Fatalf("create project: %q, %v", got, err)
+	}
+
+	// The project leads to its (empty) issue list.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/hzn"))
+	pg.poll(`location.pathname === "/w/acme/p/HZN/issues" && "list"`)
+	pg.poll(view + `.querySelector("lds-empty-state") && "empty"`)
+
+	// New issue, from the button, then from the keyboard.
+	dialog := view + `.querySelector("hzn-issue-create").shadowRoot`
+	pg.click(view + `.querySelector('[data-action="create"]')`)
+	pg.poll(dialog + `.querySelector("lds-modal").hasAttribute("open") && "open"`)
+	pg.typeInto(dialog+`.querySelector('[name="title"]')`, "Outbox relay\r")
+	pg.poll(view + `.querySelector('.row[data-key="HZN-1"]') && "listed"`)
+	shell := appRoot + `.querySelector("hzn-issue-create").shadowRoot`
+	pg.eval(`document.activeElement?.blur()`)
+	pg.do(chromedp.KeyEvent("c"))
+	pg.poll(shell + `.querySelector("lds-modal").hasAttribute("open") && "open"`)
+	pg.typeInto(shell+`.querySelector('[name="title"]')`, "Replay after reconnect\r")
+	pg.poll(view + `.querySelector('.row[data-key="HZN-2"]') && "listed"`)
+	if got := pg.poll(view + `.querySelector(".group")?.textContent.replace(/\s+/g, " ").trim()`); got != "Backlog 2" {
+		t.Errorf("group = %q", got)
+	}
+
+	// j, Enter: the peek opens on HZN-1; change its priority and status there.
+	pg.eval(`document.activeElement?.blur()`)
+	pg.do(chromedp.KeyEvent("j"))
+	pg.do(chromedp.KeyEvent("\r"))
+	peek := view + `.querySelector("[data-peek] hzn-issue-detail").shadowRoot`
+	pg.poll(peek + `.querySelector("h1")?.textContent === "Outbox relay" && "peek"`)
+	change := func(root, sel, value string) {
+		pg.eval(`(() => { const el = ` + root + `.querySelector('` + sel + `'); el.setAttribute("value", "` + value + `");
+			el.dispatchEvent(new CustomEvent("lds-change", { detail: { value: "` + value + `" }, bubbles: true, composed: true })); })()`)
+	}
+	change(peek, `[data-prop="priority"]`, "high")
+	pg.poll(view + `.querySelector('.row[data-key="HZN-1"] .priority')?.dataset.priority === "high" && "prioritized"`)
+	todo := pg.poll(peek + `.querySelector('[data-prop="status"] option:nth-child(2)')?.value`)
+	change(peek, `[data-prop="status"]`, todo)
+	pg.poll(`[...` + view + `.querySelectorAll(".group")].map((g) => g.textContent.replace(/\s+/g, " ").trim()).join(",") === "Backlog 1,Todo 1" && "moved"`)
+
+	// A comment from the peek shows in the activity.
+	pg.typeInto(peek+`.querySelector("[data-composer] lds-textarea")`, "Looks good")
+	pg.click(peek + `.querySelector('[data-action="comment"]')`)
+	pg.poll(peek + `.querySelector("[data-comment] .body")?.textContent === "Looks good" && "commented"`)
+
+	// o opens the page; the palette offers the issue's commands.
+	pg.eval(`document.activeElement?.blur()`)
+	pg.do(chromedp.KeyEvent("o"))
+	pg.poll(`location.pathname === "/w/acme/issues/HZN-1" && "page"`)
+	pg.poll(view + `.querySelector("hzn-issue-detail").shadowRoot.querySelector("h1")?.textContent === "Outbox relay" && "loaded"`)
+	pg.eval(`document.activeElement?.blur()`)
+	pg.do(chromedp.KeyEvent("k", chromedp.KeyModifiers(chromedp.ModifierCtrl)))
+	palette := appRoot + `.getElementById("palette")`
+	pg.poll(palette + `.hasAttribute("open") && "open"`)
+	if got := pg.poll(palette + `.querySelector("[data-dynamic] lds-command-group")?.getAttribute("heading")`); got != "Issue HZN-1" {
+		t.Errorf("palette group = %q", got)
+	}
+	// Typing a key offers to open it.
+	pg.do(chromedp.KeyEvent("hzn-2"))
+	pg.poll(palette + `.querySelector('[value="goto:HZN-2"]') && "offered"`)
+	pg.eval(palette + `.querySelector('[value="goto:HZN-2"]').click()`)
+	pg.poll(`location.pathname === "/w/acme/issues/HZN-2" && "opened"`)
+
+	// e edits the title; Enter saves it.
+	detail := view + `.querySelector("hzn-issue-detail").shadowRoot`
+	pg.poll(detail + `.querySelector("h1")?.textContent === "Replay after reconnect" && "loaded"`)
+	pg.eval(`document.activeElement?.blur()`)
+	pg.do(chromedp.KeyEvent("e"))
+	pg.poll(detail + `.querySelector("[data-title-input]") && "editing"`)
+	pg.eval(detail + `.querySelector("[data-title-input]").setAttribute("value", "")`)
+	pg.typeInto(detail+`.querySelector("[data-title-input]")`, "Replay missed events\r")
+	pg.poll(detail + `.querySelector("h1")?.textContent === "Replay missed events" && "renamed"`)
+
+	// Delete it from the menu.
+	pg.eval(detail + `.querySelector('[data-action="delete"]').click()`)
+	pg.poll(detail + `.querySelector('[data-dialog="delete"]').hasAttribute("open") && "asked"`)
+	pg.click(detail + `.querySelector('[data-action="confirm-delete"]')`)
+	pg.poll(`location.pathname === "/w/acme/p/HZN/issues" && "back"`)
+	pg.poll(`!` + view + `.querySelector('.row[data-key="HZN-2"]') && ` + view + `.querySelector('.row[data-key="HZN-1"]') && "gone"`)
+
+	pg.logs.failOnErrors(t)
 }
