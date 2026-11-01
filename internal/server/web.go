@@ -59,7 +59,10 @@ type indexData struct {
 }
 
 // NewWeb indexes webFS (index.html and app/) and renders the shell page.
-func NewWeb(webFS fs.FS) (*Web, error) {
+//
+// origins are other origins the page fetches from and shows images of: the
+// object storage's public endpoint, for attachments.
+func NewWeb(webFS fs.FS, origins ...string) (*Web, error) {
 	imports := map[string]string{}
 	w := &Web{assets: map[string]asset{}, imports: imports}
 
@@ -110,7 +113,7 @@ func NewWeb(webFS fs.FS) (*Web, error) {
 	w.index = buf.Bytes()
 
 	// The import map is the page's only inline script: allow exactly it.
-	w.csp = CSP(importMap)
+	w.csp = CSP(importMap, origins...)
 	return w, nil
 }
 
@@ -157,16 +160,21 @@ func (w *Web) Imports() map[string]string {
 func (w *Web) LDSBase() string { return w.ldsBase }
 
 // CSP returns the page's Content-Security-Policy for an import map whose
-// JSON is importMap. Test pages use it to run under the same policy.
-func CSP(importMap []byte) string {
+// JSON is importMap, connecting to and showing images from origins too.
+// Test pages use it to run under the same policy.
+func CSP(importMap []byte, origins ...string) string {
 	sum := sha256.Sum256(importMap)
+	extra := ""
+	for _, o := range origins {
+		extra += " " + o
+	}
 	return strings.Join([]string{
 		"default-src 'self'",
 		"script-src 'self' 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'",
 		"style-src 'self'",
-		"img-src 'self' data:",
+		"img-src 'self' data:" + extra,
 		"font-src 'self'",
-		"connect-src 'self'",
+		"connect-src 'self'" + extra,
 		"object-src 'none'",
 		"base-uri 'none'",
 		"form-action 'self'",

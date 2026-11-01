@@ -111,7 +111,9 @@ func (rt *runtime) api() func(api *gin.RouterGroup) {
 	projects := project.NewHTTP(projectSvc)
 	configHTTP := configdef.NewHTTP(config)
 	projectSvc.OnDelete(config.DeleteProject)
-	issues := issue.NewHTTP(issue.New(rt.pool, acc, config, projectSvc, nil), projectSvc)
+	issueSvc := issue.New(rt.pool, acc, config, projectSvc, nil)
+	issueSvc.SetStorage(rt.s3)
+	issues := issue.NewHTTP(issueSvc, projectSvc)
 	return func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)

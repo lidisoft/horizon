@@ -57,8 +57,8 @@ PostgreSQL schema outline. Authoritative definitions live in
 | `issue_key_aliases` | workspace_id, project_id, number, issue_id — keys left behind by moves; a former project key resolves to the project first (`project_key_aliases`), then here |
 | `issue_labels` | issue_id, label_id |
 | `issue_links` | workspace_id, source_id, target_id, type (`relates_to`, `blocks`, `duplicates`, `precedes`), lag_days (`precedes` only) — inverse types (`blocked_by` …) are the same row read from its target |
-| `comments` | issue_id, author_id, document_id, edited_at |
-| `attachments` | workspace_id, issue_id, uploader_id, filename, content_type, size, object_key |
+| `comments` | workspace_id, issue_id, author_id, body (plain text until phase 5, then document_id), edited_at, version |
+| `attachments` | workspace_id, issue_id, uploader_id, filename, content_type (sniffed), size, object_key, state (pending, ready), completed_at |
 | `iterations` | workspace_id, project_id, name, goal, state, start_date, end_date, completed_at, archived_at, version |
 | `releases` | workspace_id, project_id, name, description, state, start_date, release_date |
 | `milestones` | workspace_id, project_id (nullable), name, date |

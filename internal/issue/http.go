@@ -36,6 +36,16 @@ func (h *HTTP) RegisterWorkspace(ws *gin.RouterGroup) {
 	g.PATCH("", h.update)
 	g.DELETE("", h.delete)
 	g.GET("/move/preview", h.previewMove)
+	g.GET("/comments", h.comments)
+	g.POST("/comments", h.addComment)
+	g.PATCH("/comments/:id", h.editComment)
+	g.DELETE("/comments/:id", h.deleteComment)
+	g.GET("/attachments", h.attachments)
+	g.POST("/attachments", h.startUpload)
+	g.POST("/attachments/:id/complete", h.completeUpload)
+	g.GET("/attachments/:id/download", h.download)
+	g.DELETE("/attachments/:id", h.deleteAttachment)
+	g.GET("/activity", h.activity)
 	g.POST("/move", h.move)
 	g.GET("/transitions", h.transitions)
 	g.POST("/transition", h.transition)
@@ -510,9 +520,8 @@ func (h *HTTP) addLink(c *gin.Context) {
 //	@Success	204
 //	@Router		/api/v1/w/{ws}/issues/{issue}/links/{id} [delete]
 func (h *HTTP) removeLink(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		server.WriteError(c, apperr.NotFound("link_not_found"))
+	id, ok := paramID(c, "link_not_found")
+	if !ok {
 		return
 	}
 	if err := h.svc.RemoveLink(c, current(c), id); err != nil {
@@ -603,4 +612,264 @@ func (h *HTTP) move(c *gin.Context) {
 	}
 	i, err := h.svc.Move(c, current(c), in)
 	reply(c, http.StatusOK, i, err)
+}
+
+func paramID(c *gin.Context, notFound string) (uuid.UUID, bool) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		server.WriteError(c, apperr.NotFound(notFound))
+		return id, false
+	}
+	return id, true
+}
+
+// comments lists an issue's comments.
+//
+//	@Summary	List an issue's comments
+//	@Tags		comments
+//	@Produce	json
+//	@Param		ws		path		string	true	"Workspace slug"
+//	@Param		issue	path		string	true	"Issue key"
+//	@Param		cursor	query		string	false	"next_cursor of the previous page"
+//	@Param		limit	query		int		false	"Page size, at most 200"
+//	@Success	200		{object}	CommentPage
+//	@Router		/api/v1/w/{ws}/issues/{issue}/comments [get]
+func (h *HTTP) comments(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	p, err := h.svc.Comments(c, current(c), c.Query("cursor"), limit)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, p)
+}
+
+// CommentRequest is the body of a comment; plain text for now.
+type CommentRequest struct {
+	Body string `json:"body"`
+}
+
+// addComment comments on an issue.
+//
+//	@Summary	Comment on an issue
+//	@Tags		comments
+//	@Accept		json
+//	@Produce	json
+//	@Param		ws		path		string			true	"Workspace slug"
+//	@Param		issue	path		string			true	"Issue key"
+//	@Param		body	body		CommentRequest	true	"Comment"
+//	@Success	201		{object}	Comment
+//	@Router		/api/v1/w/{ws}/issues/{issue}/comments [post]
+func (h *HTTP) addComment(c *gin.Context) {
+	var req CommentRequest
+	if !bind(c, &req) {
+		return
+	}
+	cm, err := h.svc.AddComment(c, current(c), req.Body)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	server.SetETag(c, cm.Version)
+	c.JSON(http.StatusCreated, cm)
+}
+
+// editComment changes the caller's own comment.
+//
+//	@Summary	Edit a comment
+//	@Tags		comments
+//	@Accept		json
+//	@Produce	json
+//	@Param		ws			path		string			true	"Workspace slug"
+//	@Param		issue		path		string			true	"Issue key"
+//	@Param		id			path		string			true	"Comment id"
+//	@Param		If-Match	header		string			false	"Comment version"
+//	@Param		body		body		CommentRequest	true	"New body"
+//	@Success	200			{object}	Comment
+//	@Failure	403			{object}	server.Problem	"not_author"
+//	@Router		/api/v1/w/{ws}/issues/{issue}/comments/{id} [patch]
+func (h *HTTP) editComment(c *gin.Context) {
+	var req CommentRequest
+	id, ok := paramID(c, "comment_not_found")
+	if !ok || !bind(c, &req) {
+		return
+	}
+	if v, ok := version(c); ok {
+		cm, err := h.svc.EditComment(c, current(c), id, v, req.Body)
+		if err != nil {
+			server.WriteError(c, err)
+			return
+		}
+		server.SetETag(c, cm.Version)
+		c.JSON(http.StatusOK, cm)
+	}
+}
+
+// deleteComment removes a comment.
+//
+//	@Summary		Delete a comment
+//	@Description	The author's own, or any with issue.comment.moderate.
+//	@Tags			comments
+//	@Param			ws		path	string	true	"Workspace slug"
+//	@Param			issue	path	string	true	"Issue key"
+//	@Param			id		path	string	true	"Comment id"
+//	@Success		204
+//	@Router			/api/v1/w/{ws}/issues/{issue}/comments/{id} [delete]
+func (h *HTTP) deleteComment(c *gin.Context) {
+	id, ok := paramID(c, "comment_not_found")
+	if !ok {
+		return
+	}
+	if err := h.svc.DeleteComment(c, current(c), id); err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// AttachmentList is the body of GET …/attachments.
+type AttachmentList struct {
+	Items []Attachment `json:"items"`
+}
+
+// attachments lists an issue's attachments.
+//
+//	@Summary	List an issue's attachments
+//	@Tags		attachments
+//	@Produce	json
+//	@Param		ws		path		string	true	"Workspace slug"
+//	@Param		issue	path		string	true	"Issue key"
+//	@Success	200		{object}	AttachmentList
+//	@Router		/api/v1/w/{ws}/issues/{issue}/attachments [get]
+func (h *HTTP) attachments(c *gin.Context) {
+	items, err := h.svc.Attachments(c, current(c))
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, AttachmentList{Items: items})
+}
+
+// UploadRequest announces a file to attach.
+type UploadRequest struct {
+	Filename    string `json:"filename" example:"trace.log"`
+	ContentType string `json:"content_type,omitempty" example:"text/plain"`
+	Size        int64  `json:"size" example:"2048"`
+}
+
+// startUpload starts an attachment upload.
+//
+//	@Summary		Start an attachment upload
+//	@Description	Needs issue.attach. PUT the bytes to upload_url (presigned, 15 minutes), then POST …/complete. At most 100 MiB.
+//	@Tags			attachments
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws		path		string			true	"Workspace slug"
+//	@Param			issue	path		string			true	"Issue key"
+//	@Param			body	body		UploadRequest	true	"The file"
+//	@Success		201		{object}	Upload
+//	@Router			/api/v1/w/{ws}/issues/{issue}/attachments [post]
+func (h *HTTP) startUpload(c *gin.Context) {
+	var req UploadRequest
+	if !bind(c, &req) {
+		return
+	}
+	u, err := h.svc.StartUpload(c, current(c), req.Filename, req.ContentType, req.Size)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, u)
+}
+
+// completeUpload makes an uploaded attachment visible.
+//
+//	@Summary		Complete an attachment upload
+//	@Description	The object must be stored, with the announced size (409 upload_missing, 422 size: mismatch). The content type is sniffed.
+//	@Tags			attachments
+//	@Produce		json
+//	@Param			ws		path		string	true	"Workspace slug"
+//	@Param			issue	path		string	true	"Issue key"
+//	@Param			id		path		string	true	"Attachment id"
+//	@Success		200		{object}	Attachment
+//	@Router			/api/v1/w/{ws}/issues/{issue}/attachments/{id}/complete [post]
+func (h *HTTP) completeUpload(c *gin.Context) {
+	id, ok := paramID(c, "attachment_not_found")
+	if !ok {
+		return
+	}
+	a, err := h.svc.CompleteUpload(c, current(c), id)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, a)
+}
+
+// download redirects to a short-lived download URL.
+//
+//	@Summary		Download an attachment
+//	@Description	Redirects to a presigned URL (5 minutes). PNG, JPEG, GIF and WebP open inline; everything else downloads.
+//	@Tags			attachments
+//	@Param			ws		path	string	true	"Workspace slug"
+//	@Param			issue	path	string	true	"Issue key"
+//	@Param			id		path	string	true	"Attachment id"
+//	@Success		302
+//	@Router			/api/v1/w/{ws}/issues/{issue}/attachments/{id}/download [get]
+func (h *HTTP) download(c *gin.Context) {
+	id, ok := paramID(c, "attachment_not_found")
+	if !ok {
+		return
+	}
+	u, err := h.svc.DownloadURL(c, current(c), id)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.Header("Cache-Control", "private, no-store")
+	c.Redirect(http.StatusFound, u)
+}
+
+// deleteAttachment removes an attachment.
+//
+//	@Summary		Delete an attachment
+//	@Description	The uploader's own (issue.attach), or any with issue.comment.moderate. The object is purged in the background.
+//	@Tags			attachments
+//	@Param			ws		path	string	true	"Workspace slug"
+//	@Param			issue	path	string	true	"Issue key"
+//	@Param			id		path	string	true	"Attachment id"
+//	@Success		204
+//	@Router			/api/v1/w/{ws}/issues/{issue}/attachments/{id} [delete]
+func (h *HTTP) deleteAttachment(c *gin.Context) {
+	id, ok := paramID(c, "attachment_not_found")
+	if !ok {
+		return
+	}
+	if err := h.svc.DeleteAttachment(c, current(c), id); err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// activity returns an issue's history.
+//
+//	@Summary		An issue's activity
+//	@Description	Its domain events, newest first, in the public event format: ids of statuses, types, labels, fields, people and visible issues are named.
+//	@Tags			issues
+//	@Produce		json
+//	@Param			ws		path		string	true	"Workspace slug"
+//	@Param			issue	path		string	true	"Issue key"
+//	@Param			cursor	query		string	false	"next_cursor of the previous page"
+//	@Param			limit	query		int		false	"Page size, at most 100"
+//	@Success		200		{object}	ActivityPage
+//	@Router			/api/v1/w/{ws}/issues/{issue}/activity [get]
+func (h *HTTP) activity(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	p, err := h.svc.Activity(c, current(c), c.Query("cursor"), limit)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, p)
 }

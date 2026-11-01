@@ -24,6 +24,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"sync"
 	"testing"
@@ -48,6 +49,8 @@ type Service uint8
 const (
 	Postgres Service = 1 << iota
 	NATS
+	// S3 is RustFS object storage (S3); each test gets its own bucket.
+	S3Storage
 	// Chrome is headless Chrome for browser tests (Browser, Serve). Set
 	// HORIZON_TEST_CHROME to a local binary to skip the container.
 	Chrome
@@ -67,6 +70,8 @@ type env struct {
 	createMu sync.Mutex // CREATE DATABASE … TEMPLATE needs the template idle
 
 	natsURL string
+
+	s3Endpoint *url.URL
 
 	browser *browserEnv
 }
@@ -127,6 +132,17 @@ func Main(m *testing.M, services Service) int {
 		}
 		if e.natsURL, err = c.ConnectionString(ctx); err != nil {
 			fmt.Fprintln(os.Stderr, "testenv: nats:", err)
+			return 1
+		}
+	}
+
+	if services&S3Storage != 0 {
+		c, err := e.startS3(ctx)
+		if c != nil {
+			containers = append(containers, c)
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "testenv: s3:", err)
 			return 1
 		}
 	}

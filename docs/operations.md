@@ -31,6 +31,7 @@ rest.
 | `DATABASE_URL` | PostgreSQL DSN |
 | `NATS_URL` | NATS URL, with credentials if any |
 | `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | Object storage. `S3_ENDPOINT` is a URL (`https://` enables TLS); `S3_REGION` defaults to `us-east-1`. The bucket must exist |
+| `S3_PUBLIC_ENDPOINT` | Optional: where browsers reach the bucket, when it differs from `S3_ENDPOINT` (an internal address). Attachment URLs are presigned for it. `serve` adds a CORS rule for `BASE_URL` to the bucket; with a provider that manages CORS elsewhere, allow `PUT` and `GET` from that origin there |
 | `SMTP_URL` | `smtp://user:pass@host:port`, plus `SMTP_FROM` |
 | `BASE_URL` | Public URL; used in emails, OIDC redirects, webhooks |
 | `SECRET_KEY` | Encrypts secrets at rest: 32 random bytes, base64 (`openssl rand -base64 32`). `SECRET_KEY_PREVIOUS` (comma-separated, same format) allows rotation: old keys decrypt, the current key re-encrypts |

@@ -159,6 +159,27 @@ func History(ctx context.Context, conn db.DBTX, aggregateType string, aggregateI
 	if err != nil {
 		return nil, fmt.Errorf("eventlog: history: %w", err)
 	}
+	return fromRows(rows), nil
+}
+
+// Before returns up to limit events of one aggregate in a workspace, newest
+// first, older than the event before (uuid.Nil: from the newest), for
+// activity feeds.
+func Before(ctx context.Context, conn db.DBTX, workspaceID uuid.UUID, aggregateType string, aggregateID, before uuid.UUID, limit int) ([]Event, error) {
+	rows, err := db.New(conn).AggregateEventsBefore(ctx, db.AggregateEventsBeforeParams{
+		WorkspaceID:   uuid.NullUUID{UUID: workspaceID, Valid: true},
+		AggregateType: aggregateType,
+		AggregateID:   aggregateID,
+		Before:        uuid.NullUUID{UUID: before, Valid: before != uuid.Nil},
+		MaxRows:       int32(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("eventlog: page: %w", err)
+	}
+	return fromRows(rows), nil
+}
+
+func fromRows(rows []db.Event) []Event {
 	events := make([]Event, len(rows))
 	for i, r := range rows {
 		events[i] = Event{
@@ -173,5 +194,5 @@ func History(ctx context.Context, conn db.DBTX, aggregateType string, aggregateI
 			Payload:          r.Payload,
 		}
 	}
-	return events, nil
+	return events
 }

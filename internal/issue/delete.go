@@ -122,11 +122,15 @@ func (s *Service) deleteOne(ctx context.Context, tx pgx.Tx, wc workspace.Context
 	if err := eventlog.Append(ctx, tx, events...); err != nil {
 		return err
 	}
+	objects, err := q.AttachmentKeys(ctx, []uuid.UUID{i.ID})
+	if err != nil {
+		return err
+	}
 	if err := q.DeleteIssue(ctx, db.DeleteIssueParams{WorkspaceID: i.WorkspaceID, ID: i.ID}); err != nil {
 		return err
 	}
 	i.Version++
-	return eventlog.Tombstone(ctx, tx, s.event(wc, i, "IssueDeleted", map[string]any{"key": key, "project_id": i.ProjectID}))
+	return eventlog.Tombstone(ctx, tx, s.event(wc, i, "IssueDeleted", map[string]any{"key": key, "project_id": i.ProjectID}), objects...)
 }
 
 // deleteProject removes a deleted project's issues and scrubs their
@@ -153,8 +157,12 @@ func (s *Service) deleteProject(ctx context.Context, tx pgx.Tx, pc project.Conte
 			return err
 		}
 	}
+	objects, err := q.AttachmentKeys(ctx, ids)
+	if err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM issues WHERE workspace_id = $1 AND project_id = $2`, pc.Workspace.ID, pc.Project.ID); err != nil {
 		return err
 	}
-	return eventlog.Scrub(ctx, tx, uuid.NullUUID{UUID: pc.Workspace.ID, Valid: true}, "issue", ids)
+	return eventlog.Scrub(ctx, tx, uuid.NullUUID{UUID: pc.Workspace.ID, Valid: true}, "issue", ids, objects...)
 }

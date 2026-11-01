@@ -25,10 +25,35 @@ type ApiToken struct {
 	ExpiresAt  *time.Time
 }
 
+type Attachment struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	IssueID     uuid.UUID
+	UploaderID  uuid.NullUUID
+	Filename    string
+	ContentType string
+	Size        int64
+	ObjectKey   string
+	State       string
+	CreatedAt   time.Time
+	CompletedAt *time.Time
+}
+
 type AuthThrottle struct {
 	Key         string
 	Failures    int32
 	WindowStart time.Time
+}
+
+type Comment struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	IssueID     uuid.UUID
+	AuthorID    uuid.NullUUID
+	Body        string
+	CreatedAt   time.Time
+	EditedAt    *time.Time
+	Version     int32
 }
 
 type ConfigDisable struct {

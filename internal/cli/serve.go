@@ -33,9 +33,13 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 	}
 	defer rt.close()
 
-	webApp, err := server.NewWeb(web.FS())
+	webApp, err := server.NewWeb(web.FS(), rt.s3.PublicOrigin)
 	if err != nil {
 		return err
+	}
+	// Browsers upload attachments straight to the bucket.
+	if err := rt.s3.AllowOrigin(ctx, rt.cfg.BaseURL.Scheme+"://"+rt.cfg.BaseURL.Host); err != nil {
+		rt.log.Warn().Err(err).Msg("could not allow the app's origin in the bucket's CORS rules; attachment uploads may fail")
 	}
 	engine := server.NewEngine(server.Deps{
 		Log:     rt.log,

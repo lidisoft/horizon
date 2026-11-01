@@ -57,6 +57,61 @@ func (q *Queries) AggregateEvents(ctx context.Context, arg AggregateEventsParams
 	return items, nil
 }
 
+const aggregateEventsBefore = `-- name: AggregateEventsBefore :many
+SELECT id, workspace_id, aggregate_type, aggregate_id, aggregate_version, type, actor_id, occurred_at, payload, published_at
+FROM events
+WHERE workspace_id = $1 AND aggregate_type = $2 AND aggregate_id = $3
+  AND ($4::uuid IS NULL OR id < $4::uuid)
+ORDER BY id DESC
+LIMIT $5
+`
+
+type AggregateEventsBeforeParams struct {
+	WorkspaceID   uuid.NullUUID
+	AggregateType string
+	AggregateID   uuid.UUID
+	Before        uuid.NullUUID
+	MaxRows       int32
+}
+
+// A page of one aggregate's history, newest first, before cursor (an event id).
+func (q *Queries) AggregateEventsBefore(ctx context.Context, arg AggregateEventsBeforeParams) ([]Event, error) {
+	rows, err := q.db.Query(ctx, aggregateEventsBefore,
+		arg.WorkspaceID,
+		arg.AggregateType,
+		arg.AggregateID,
+		arg.Before,
+		arg.MaxRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Event
+	for rows.Next() {
+		var i Event
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.AggregateType,
+			&i.AggregateID,
+			&i.AggregateVersion,
+			&i.Type,
+			&i.ActorID,
+			&i.OccurredAt,
+			&i.Payload,
+			&i.PublishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 type AppendEventsParams struct {
 	ID               uuid.UUID
 	WorkspaceID      uuid.NullUUID

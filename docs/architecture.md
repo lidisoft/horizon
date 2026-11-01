@@ -65,12 +65,11 @@ internal/
   workspace/              workspaces, members, teams
   project/                projects, keys, sequences
   configdef/              status categories, workflows, issue types, fields, scales, labels; the workspace→project resolver
-  issue/                  issues, links, hierarchy, ranking, comments
+  issue/                  issues, links, hierarchy, ranking, moves, deletes, comments, attachments, activity
   planning/               iterations, releases, milestones
   view/                   saved views, filter AST → SQL compiler
   document/               block documents, collaborative steps
   realtime/               WebSocket hub, subscriptions, presence
-  attachment/             uploads, S3
   notify/                 inbox, subscriptions, email
   webhook/                endpoints, deliveries, signing
   vcs/                    git forge integrations
@@ -169,9 +168,19 @@ JetStream durable consumers, one per concern, each idempotent:
 
 ## Object storage
 
-Attachments go to S3-compatible storage only. Uploads use presigned PUT URLs.
-Downloads go through a Horizon endpoint that checks permissions and redirects
-to a short-lived presigned GET. Keys: `ws/<workspace_id>/att/<attachment_id>`.
+Attachments go to S3-compatible storage only. Uploads use presigned PUT URLs:
+the client announces the file (name, size, type), PUTs the bytes, then
+completes the upload; Horizon checks the stored size and sniffs the content
+type. Downloads go through a Horizon endpoint that checks permissions and
+redirects to a short-lived presigned GET. Keys:
+`ws/<workspace_id>/att/<attachment_id>`.
+
+Browsers reach the bucket at `S3_PUBLIC_ENDPOINT` (default `S3_ENDPOINT`):
+URLs are presigned for it, the page's CSP allows it in `connect-src` and
+`img-src`, and `serve` adds a CORS rule for `BASE_URL`'s origin to the bucket
+at startup (keeping the bucket's other rules). Uploads never completed expire
+after a day (`upload-expiry` job); deleted attachments' objects go through the
+`purge` job.
 
 ## Configuration of the process
 

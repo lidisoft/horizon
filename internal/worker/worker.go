@@ -24,6 +24,8 @@ type Deps struct {
 	JetStream jetstream.JetStream
 	Stream    eventlog.Stream
 	Metrics   *metrics.Registry
+	// DeleteObjects removes object storage keys, for the purge job.
+	DeleteObjects func(ctx context.Context, keys []string) error
 	// Jobs run periodically next to the consumers.
 	Jobs []Job
 }
@@ -51,6 +53,8 @@ func Run(ctx context.Context, deps Deps) error {
 		JetStream: deps.JetStream,
 		Stream:    deps.Stream,
 		Log:       logging.WithSystem(deps.Log, "purge"),
+
+		DeleteObjects: deps.DeleteObjects,
 	}
 	jobs := append([]Job{{Name: "purge", Every: 15 * time.Second, Run: purger.Run}}, deps.Jobs...)
 

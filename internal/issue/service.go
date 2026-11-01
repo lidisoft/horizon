@@ -39,6 +39,7 @@ type Service struct {
 	access   *access.Service
 	config   *configdef.Service
 	projects *project.Service
+	storage  Storage
 	now      func() time.Time
 }
 

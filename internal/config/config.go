@@ -67,11 +67,14 @@ const (
 
 // S3 holds object storage settings.
 type S3 struct {
-	Endpoint  *url.URL
-	Bucket    string
-	Region    string
-	AccessKey string
-	SecretKey string
+	Endpoint *url.URL
+	// PublicEndpoint is where browsers reach the bucket (presigned uploads
+	// and downloads); Endpoint when unset.
+	PublicEndpoint *url.URL
+	Bucket         string
+	Region         string
+	AccessKey      string
+	SecretKey      string
 }
 
 // Config is the validated process configuration.
@@ -132,11 +135,15 @@ func Load(lookup LookupFunc, need Need) (Config, error) {
 
 	s3 := need&NeedS3 != 0
 	c.S3 = S3{
-		Endpoint:  l.url("S3_ENDPOINT", s3, "http", "https"),
-		Bucket:    l.str("S3_BUCKET", s3),
-		Region:    l.optional("S3_REGION", DefaultS3Region),
-		AccessKey: l.str("S3_ACCESS_KEY", s3),
-		SecretKey: l.str("S3_SECRET_KEY", s3),
+		Endpoint:       l.url("S3_ENDPOINT", s3, "http", "https"),
+		PublicEndpoint: l.url("S3_PUBLIC_ENDPOINT", false, "http", "https"),
+		Bucket:         l.str("S3_BUCKET", s3),
+		Region:         l.optional("S3_REGION", DefaultS3Region),
+		AccessKey:      l.str("S3_ACCESS_KEY", s3),
+		SecretKey:      l.str("S3_SECRET_KEY", s3),
+	}
+	if c.S3.PublicEndpoint == nil {
+		c.S3.PublicEndpoint = c.S3.Endpoint
 	}
 
 	smtp := need&NeedSMTP != 0

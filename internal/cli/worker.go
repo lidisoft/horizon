@@ -9,6 +9,7 @@ import (
 
 	"github.com/lidisoft/horizon/internal/config"
 	"github.com/lidisoft/horizon/internal/eventlog"
+	"github.com/lidisoft/horizon/internal/issue"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/platform/nats"
 	"github.com/lidisoft/horizon/internal/server"
@@ -44,13 +45,17 @@ func runWorker(ctx context.Context, rt *runtime) error {
 		return err
 	}
 	return worker.Run(ctx, worker.Deps{
-		Log:       logging.WithSystem(rt.log, "worker"),
-		Pool:      rt.pool,
-		JetStream: js,
-		Stream:    eventlog.DefaultStream(rt.cfg.EventsRetention),
-		Metrics:   rt.metrics,
+		Log:           logging.WithSystem(rt.log, "worker"),
+		Pool:          rt.pool,
+		JetStream:     js,
+		Stream:        eventlog.DefaultStream(rt.cfg.EventsRetention),
+		Metrics:       rt.metrics,
+		DeleteObjects: rt.s3.Delete,
 		Jobs: []worker.Job{
 			{Name: "identity-cleanup", Every: time.Hour, Run: rt.identity().Cleanup},
+			{Name: "upload-expiry", Every: time.Hour, Run: func(ctx context.Context) error {
+				return issue.ExpireUploads(ctx, rt.pool, time.Now().Add(-issue.UploadExpiry))
+			}},
 		},
 	})
 }

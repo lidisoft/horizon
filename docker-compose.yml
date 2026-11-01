@@ -7,6 +7,8 @@ x-horizon-env: &horizon-env
   HORIZON_DATABASE_URL: postgres://horizon:horizon@postgres:5432/horizon?sslmode=disable
   HORIZON_NATS_URL: nats://nats:4222
   HORIZON_S3_ENDPOINT: http://rustfs:9000
+  # Where the browser reaches the bucket (presigned uploads and downloads).
+  HORIZON_S3_PUBLIC_ENDPOINT: http://localhost:${S3_PORT:-9100}
   HORIZON_S3_BUCKET: horizon
   HORIZON_S3_ACCESS_KEY: horizon
   HORIZON_S3_SECRET_KEY: horizon-dev-secret

@@ -40,8 +40,8 @@ usable exists early.
       rank, parent/child, links, archive
 - [x] Issues: move between projects, hard delete with scrubbing (and
       project deletion)
-- [ ] Comments (plain text first), attachments via S3
-- [ ] Activity feed from `events`
+- [x] Comments (plain text first), attachments via S3
+- [x] Activity feed from `events`
 - [ ] WebSocket pushes for domain events (no collab yet)
 - [ ] List view, issue detail, ⌘K palette, shortcuts
 - [ ] Full-text search

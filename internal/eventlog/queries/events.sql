@@ -57,3 +57,12 @@ DELETE FROM purges WHERE id = $1;
 
 -- name: FailedPurge :exec
 UPDATE purges SET attempts = attempts + 1 WHERE id = $1;
+
+-- name: AggregateEventsBefore :many
+-- A page of one aggregate's history, newest first, before cursor (an event id).
+SELECT *
+FROM events
+WHERE workspace_id = sqlc.arg(workspace_id) AND aggregate_type = sqlc.arg(aggregate_type) AND aggregate_id = sqlc.arg(aggregate_id)
+  AND (sqlc.narg(before)::uuid IS NULL OR id < sqlc.narg(before)::uuid)
+ORDER BY id DESC
+LIMIT sqlc.arg(max_rows);

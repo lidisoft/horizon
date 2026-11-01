@@ -2289,6 +2289,54 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/issues/{issue}/activity": {
+            "get": {
+                "description": "Its domain events, newest first, in the public event format: ids of statuses, types, labels, fields, people and visible issues are named.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "An issue's activity",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "next_cursor of the previous page",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, at most 100",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.ActivityPage"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/issues/{issue}/archive": {
             "post": {
                 "produces": [
@@ -2383,6 +2431,204 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/issues/{issue}/attachments": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "attachments"
+                ],
+                "summary": "List an issue's attachments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.AttachmentList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Needs issue.attach. PUT the bytes to upload_url (presigned, 15 minutes), then POST …/complete. At most 100 MiB.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "attachments"
+                ],
+                "summary": "Start an attachment upload",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "The file",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.UploadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Upload"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/attachments/{id}": {
+            "delete": {
+                "description": "The uploader's own (issue.attach), or any with issue.comment.moderate. The object is purged in the background.",
+                "tags": [
+                    "attachments"
+                ],
+                "summary": "Delete an attachment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Attachment id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/attachments/{id}/complete": {
+            "post": {
+                "description": "The object must be stored, with the announced size (409 upload_missing, 422 size: mismatch). The content type is sniffed.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "attachments"
+                ],
+                "summary": "Complete an attachment upload",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Attachment id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Attachment"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/attachments/{id}/download": {
+            "get": {
+                "description": "Redirects to a presigned URL (5 minutes). PNG, JPEG, GIF and WebP open inline; everything else downloads.",
+                "tags": [
+                    "attachments"
+                ],
+                "summary": "Download an attachment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Attachment id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/issues/{issue}/children": {
             "get": {
                 "produces": [
@@ -2413,6 +2659,199 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/issue.IssueList"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/comments": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comments"
+                ],
+                "summary": "List an issue's comments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "next_cursor of the previous page",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page size, at most 200",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.CommentPage"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comments"
+                ],
+                "summary": "Comment on an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Comment",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.CommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Comment"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/comments/{id}": {
+            "delete": {
+                "description": "The author's own, or any with issue.comment.moderate.",
+                "tags": [
+                    "comments"
+                ],
+                "summary": "Delete a comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comment id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "comments"
+                ],
+                "summary": "Edit a comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comment id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comment version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "New body",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.CommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Comment"
+                        }
+                    },
+                    "403": {
+                        "description": "not_author",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
                         }
                     }
                 }
@@ -5214,11 +5653,71 @@
                 }
             }
         },
+        "issue.ActivityPage": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.PublicEvent"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
         "issue.AssignRequest": {
             "type": "object",
             "properties": {
                 "assignee_id": {
                     "type": "string"
+                }
+            }
+        },
+        "issue.Attachment": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string",
+                    "example": "text/plain; charset=utf-8"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "filename": {
+                    "type": "string",
+                    "example": "trace.log"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "inline": {
+                    "description": "shown in the page (safe images)",
+                    "type": "boolean"
+                },
+                "issue_id": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "uploader_id": {
+                    "type": "string"
+                },
+                "uploader_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.AttachmentList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.Attachment"
+                    }
                 }
             }
         },
@@ -5236,6 +5735,57 @@
                     "type": "string"
                 },
                 "to_status_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.Comment": {
+            "type": "object",
+            "properties": {
+                "author_id": {
+                    "type": "string"
+                },
+                "author_name": {
+                    "type": "string"
+                },
+                "body": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "edited_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "issue_id": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "issue.CommentPage": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.Comment"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.CommentRequest": {
+            "type": "object",
+            "properties": {
+                "body": {
                     "type": "string"
                 }
             }
@@ -5300,6 +5850,25 @@
                 "estimate": {
                     "type": "string",
                     "example": "5"
+                }
+            }
+        },
+        "issue.EventAggregate": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "HZN-42"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "issue"
+                },
+                "version": {
+                    "type": "integer"
                 }
             }
         },
@@ -5604,12 +6173,55 @@
                 }
             }
         },
+        "issue.PublicEvent": {
+            "type": "object",
+            "properties": {
+                "actor": {
+                    "$ref": "#/definitions/issue.Ref"
+                },
+                "aggregate": {
+                    "$ref": "#/definitions/issue.EventAggregate"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "occurred_at": {
+                    "type": "string"
+                },
+                "payload": {
+                    "description": "Payload has the stored values, ids of known entities replaced by\n{id, name} (issues: {id, key, name}).",
+                    "type": "object"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "issue.status_updated"
+                },
+                "workspace": {
+                    "type": "string",
+                    "example": "acme"
+                }
+            }
+        },
         "issue.RankRequest": {
             "type": "object",
             "properties": {
                 "after": {
                     "type": "string",
                     "example": "HZN-41"
+                }
+            }
+        },
+        "issue.Ref": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         },
@@ -5665,6 +6277,41 @@
                 },
                 "type_id": {
                     "type": "string"
+                }
+            }
+        },
+        "issue.Upload": {
+            "type": "object",
+            "properties": {
+                "attachment": {
+                    "$ref": "#/definitions/issue.Attachment"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "method": {
+                    "type": "string",
+                    "example": "PUT"
+                },
+                "upload_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.UploadRequest": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string",
+                    "example": "text/plain"
+                },
+                "filename": {
+                    "type": "string",
+                    "example": "trace.log"
+                },
+                "size": {
+                    "type": "integer",
+                    "example": 2048
                 }
             }
         },

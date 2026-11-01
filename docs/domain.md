@@ -147,7 +147,14 @@ sequence counter.
 **Events** (in addition to those in the storm): `IssueUnarchived`,
 `IssueMoved` (to another project), `IssueParentChanged`, `IssueUnlinked`,
 `IssueRanked`, `IssueIterationChanged`, `IssueReleaseChanged`,
-`IssueCommented`, `IssueAttachmentAdded`.
+`IssueCommented`, `IssueCommentEdited`, `IssueCommentDeleted`,
+`IssueAttachmentAdded`, `IssueAttachmentRemoved`. Comment and attachment
+events carry their ids, never their content.
+
+**Comments** are plain text until block documents (phase 5). Authors edit
+and delete their own; `issue.comment.moderate` deletes anyone's. Archived
+issues take no new comments or attachments. **Attachments** are at most
+100 MiB; the uploader or a moderator removes them.
 
 ### Link
 Stored with its source issue, typed:

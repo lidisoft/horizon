@@ -74,7 +74,12 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
     /transitions                           GET those available from the current status ("blocked" when not allowed)
     /transition  /assign  /estimate  /prioritize  /rank  /archive  /unarchive   POST (If-Match optional)
     /links  /links/{id}                    GET | POST {type, target, lag_days?} | DELETE; seen from the issue (blocks / blocked_by …)
-    /children  /move  /comments  /attachments  /activity  /subscription
+    /children  /move  /move/preview
+    /comments  /comments/{id}               GET (oldest first) | POST {body} | PATCH (author) | DELETE (author, or issue.comment.moderate)
+    /attachments                           GET | POST {filename, content_type, size} → presigned upload_url
+    /attachments/{id}/complete  /download  POST after the PUT | GET redirects to a presigned URL; DELETE /attachments/{id}
+    /activity                              GET the issue's events, newest first, in the domain event format
+    /subscription
   /views  /milestones  /search
   /reports/{report}                        report data (see reports.md)
   /projects/{key}/overview                 project overview blocks

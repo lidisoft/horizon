@@ -129,6 +129,25 @@ func TestHTTPIssues(t *testing.T) {
 	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-1/prioritize", `{"priority":"low"}`), http.StatusConflict, "issue_archived")
 	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-1/unarchive", ""), http.StatusOK, `"archived_at":null`)
 
+	// Comments, attachments, activity.
+	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-1/comments", `{"body":"Looks good"}`), http.StatusCreated, `"author_name":"owner"`)
+	c.want(c.do("GET", "/api/v1/w/acme/issues/HZN-1/comments", ""), http.StatusOK, `"body":"Looks good"`)
+	store := newFakeStorage()
+	f.svc.SetStorage(store)
+	rec = c.do("POST", "/api/v1/w/acme/issues/HZN-1/attachments", `{"filename":"notes.txt","content_type":"text/plain","size":5}`)
+	c.want(rec, http.StatusCreated, `"upload_url":"https://storage.test/`)
+	var up issue.Upload
+	_ = json.Unmarshal(rec.Body.Bytes(), &up)
+	store.put(objectKeyOf(up), []byte("hello"))
+	att := "/api/v1/w/acme/issues/HZN-1/attachments/" + up.Attachment.ID.String()
+	c.want(c.do("POST", att+"/complete", ""), http.StatusOK, `"content_type":"text/plain; charset=utf-8"`)
+	rec = c.do("GET", att+"/download", "")
+	if rec.Code != http.StatusFound || !strings.HasPrefix(rec.Header().Get("Location"), "https://storage.test/") {
+		t.Errorf("download: %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	c.want(c.do("GET", "/api/v1/w/acme/issues/HZN-1/activity?limit=2", ""), http.StatusOK, `"type":"issue.attachment_added"`)
+	c.want(c.do("DELETE", att, ""), http.StatusNoContent, "")
+
 	// Move and delete.
 	f.project("OPS", "Operations", "workspace")
 	c.want(c.do("GET", "/api/v1/w/acme/issues/HZN-2/move/preview?project=OPS", ""), http.StatusOK, `"project":"OPS"`)
