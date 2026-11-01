@@ -9,8 +9,9 @@
 // anything is saved, the server's plan says which issues the bar precedes
 // would have to move and by how many working days: with none, the change
 // is saved; with some, a dialog asks to move them all, the issue alone, or
-// nothing (docs/frontend.md#timeline).
+// nothing (hzn-reschedule, docs/frontend.md#timeline).
 
+import "horizon/components/hzn-reschedule.js";
 import "horizon/components/hzn-view-bar.js";
 import { Calendar, addDays, daysBetween } from "horizon/components/calendar.js";
 import { changesProjectData, forgetProjects, issueHref, issueStyles, projectData, statusGlyph } from "horizon/components/issue-ui.js";
@@ -80,11 +81,6 @@ const styles = sheet(`
   svg.links path { fill: none; stroke: var(--lds-color-fg-subtle); stroke-width: 1.5; }
   svg.links path.late { stroke: var(--lds-color-danger-fg); }
   .empty { padding: var(--lds-space-12) var(--lds-space-6); }
-  .moves { display: grid; gap: var(--lds-space-2); margin: var(--lds-space-3) 0 0; padding: 0; list-style: none; }
-  .moves li { display: grid; grid-template-columns: 5rem minmax(0, 1fr) auto; gap: var(--lds-space-3); align-items: baseline; }
-  .moves .shift { font-variant-numeric: tabular-nums; color: var(--lds-color-fg-muted); }
-  .moves .blocked { color: var(--lds-color-danger-fg); }
-  .actions { display: flex; justify-content: flex-end; gap: var(--lds-space-2); flex-wrap: wrap; }
 `);
 
 function storedZoom() {
@@ -255,11 +251,7 @@ class HznTimeline extends HTMLElement {
         <lds-button variant="ghost" size="sm" data-action="today">${t("timeline.today")}</lds-button>
       </div>
       <div class="gantt" data-gantt><lds-skeleton></lds-skeleton></div>
-      <lds-modal size="md" data-plan>
-        <span slot="header" data-plan-title></span>
-        <div data-plan-body></div>
-        <div slot="footer" class="actions" data-plan-actions></div>
-      </lds-modal>`);
+      <hzn-reschedule></hzn-reschedule>`);
     paintSwatches(this.shadowRoot);
   }
 
@@ -451,67 +443,10 @@ class HznTimeline extends HTMLElement {
     this.propose(i, i.start_date || grip === "start" ? start : "", due);
   }
 
-  /** Asks the server for the plan; saves at once when nothing else moves. */
-  async propose(i, start, due) {
-    const { api, i18n } = this.context;
-    const path = `${this.base}/issues/${encodeURIComponent(i.key)}/schedule`;
-    const body = { start_date: start, due_date: due };
-    try {
-      const { data: plan } = await api.post(path, { body, ifMatch: `"${i.version}"` });
-      if (!plan.moves.length) {
-        await api.post(path, { body: { ...body, confirm: true }, ifMatch: `"${i.version}"` });
-        return this.done(i.key);
-      }
-      this.pending = { i, body, plan };
-      this.showPlan();
-    } catch (err) {
-      globalThis.LDS?.toast?.({ intent: "danger", title: err.code === "version_conflict" ? i18n.t("issues.conflict") : errorMessage(err, i18n) });
-      this.reload();
-    }
-  }
-
-  showPlan() {
-    const { t } = this.context.i18n;
-    const { i, plan } = this.pending;
-    const modal = this.shadowRoot.querySelector("[data-plan]");
-    const movable = plan.moves.filter((m) => !m.blocked).length;
-    modal.querySelector("[data-plan-title]").textContent = t("timeline.planTitle", { key: i.key });
-    modal.querySelector("[data-plan-body]").innerHTML = String(html`
-      <p>${t("timeline.planIntro", { key: i.key, count: plan.moves.length })}</p>
-      <ul class="moves">${plan.moves.map((m) => html`
-        <li data-move="${m.key}"><strong>${m.key}</strong><span>${m.title}</span>
-          ${m.blocked ? html`<span class="blocked">${t(`timeline.blocked.${m.blocked}`)}</span>`
-            : html`<span class="shift">${t("timeline.shift", { count: m.shift })} · ${m.to.start_date ?? ""}${m.to.start_date ? " → " : ""}${m.to.due_date ?? ""}</span>`}
-        </li>`)}</ul>`);
-    modal.querySelector("[data-plan-actions]").innerHTML = String(html`
-      <lds-button variant="ghost" data-action="plan-cancel">${t("tokens.cancel")}</lds-button>
-      <lds-button variant="secondary" data-action="plan-alone">${t("timeline.moveAlone", { key: i.key })}</lds-button>
-      ${movable ? html`<lds-button variant="primary" data-action="plan-all">${t("timeline.moveAll", { count: movable + 1 })}</lds-button>` : ""}`);
-    modal.setAttribute("open", "");
-  }
-
-  async applyPlan(all) {
-    const { api, i18n } = this.context;
-    const { i, body } = this.pending;
-    this.pending = null;
-    this.shadowRoot.querySelector("[data-plan]").removeAttribute("open");
-    try {
-      if (all) {
-        const { data: plan } = await api.post(`${this.base}/issues/${encodeURIComponent(i.key)}/schedule`, { body: { ...body, confirm: true }, ifMatch: `"${i.version}"` });
-        const failed = plan.moves.filter((m) => m.result !== "moved").length;
-        if (failed) globalThis.LDS?.toast?.({ intent: "warning", title: i18n.t("timeline.notMoved", { count: failed }) });
-      } else {
-        await api.patch(`${this.base}/issues/${encodeURIComponent(i.key)}`, { body, ifMatch: `"${i.version}"` });
-      }
-    } catch (err) {
-      globalThis.LDS?.toast?.({ intent: "danger", title: err.code === "version_conflict" ? i18n.t("issues.conflict") : errorMessage(err, i18n) });
-    }
-    this.done(i.key);
-  }
-
-  done(key) {
-    this.focusKey = key;
-    document.dispatchEvent(new CustomEvent("hzn-issue-changed", { detail: { key } }));
+  /** Proposes new dates (hzn-reschedule); the bar is redrawn from what was saved. */
+  propose(i, start, due) {
+    this.focusKey = i.key;
+    this.shadowRoot.querySelector("hzn-reschedule").propose({ ws: this.ws, issue: i, start, due });
   }
 
   onKey(e) {
@@ -533,14 +468,6 @@ class HznTimeline extends HTMLElement {
     switch (action) {
       case "today":
         return this.scrollToDate(addDays(this.calendar.today(), -7));
-      case "plan-cancel":
-        this.pending = null;
-        this.shadowRoot.querySelector("[data-plan]").removeAttribute("open");
-        return this.renderChart();
-      case "plan-alone":
-        return this.applyPlan(false);
-      case "plan-all":
-        return this.applyPlan(true);
     }
   }
 

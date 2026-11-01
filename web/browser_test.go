@@ -1502,6 +1502,7 @@ func TestTimeline(t *testing.T) {
 		return s(v.Start) + ".." + s(v.Due)
 	}
 	bar := func(key string) string { return view + `.querySelector('[data-bar="` + key + `"]')` }
+	plan := view + `.querySelector("hzn-reschedule").shadowRoot`
 
 	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/timeline"))
 	pg.poll(view + `.querySelectorAll(".gbar").length === 2 && ` + view + `.querySelectorAll(".lane.unscheduled").length === 1 && "timeline"`)
@@ -1522,14 +1523,14 @@ func TestTimeline(t *testing.T) {
 	pg.poll(bar("HZN-1") + `?.dataset.to === "2026-11-05" && document.activeElement && "due moved"`)
 	pg.eval(bar("HZN-1") + `.focus()`)
 	pg.do(chromedp.KeyEvent(kb.ArrowRight, chromedp.KeyModifiers(chromedp.ModifierAlt|chromedp.ModifierShift)))
-	pg.poll(view + `.querySelector("[data-plan]").hasAttribute("open") && "plan"`)
-	if got := pg.poll(view + `.querySelector('[data-move="HZN-2"]')?.textContent.replace(/\s+/g, " ").trim()`); !strings.Contains(got, "1 working day later") {
+	pg.poll(plan + `.querySelector("[data-plan]").hasAttribute("open") && "plan"`)
+	if got := pg.poll(plan + `.querySelector('[data-move="HZN-2"]')?.textContent.replace(/\s+/g, " ").trim()`); !strings.Contains(got, "1 working day later") {
 		t.Errorf("plan row = %s", got)
 	}
 	if got := dates("HZN-1"); got != "2026-11-02..2026-11-05" {
 		t.Errorf("Design moved before confirming: %s", got)
 	}
-	pg.click(view + `.querySelector('[data-action="plan-all"]')`)
+	pg.click(plan + `.querySelector('[data-action="plan-all"]')`)
 	pg.poll(bar("HZN-2") + `?.dataset.x === "2026-11-09" && "pushed"`)
 	if got := dates("HZN-1") + " " + dates("HZN-2"); got != "2026-11-02..2026-11-06 2026-11-09..2026-11-10" {
 		t.Errorf("after confirming = %s", got)
@@ -1547,6 +1548,84 @@ func TestTimeline(t *testing.T) {
 	pg.poll(view + `.querySelectorAll(".gbar").length === 3 && "scheduled"`)
 	if got := dates("HZN-3"); strings.Contains(got, "-..") {
 		t.Errorf("Someday = %s", got)
+	}
+	pg.logs.failOnErrors(t)
+}
+
+// TestCalendarView shows issues on their due dates with the project's
+// holidays, iterations and milestones, and moves them by keyboard and drag.
+func TestCalendarView(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	must := func(status int, body string) {
+		t.Helper()
+		if status >= 300 {
+			t.Fatalf("%d %s", status, body)
+		}
+	}
+	must(pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`))
+	must(pg.api("PUT", "/w/acme/config/settings/calendar", `{"holidays":[{"date":"2026-11-11","name":"Armistice"}]}`))
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID, Name string } `json:"issue_types"`
+	}
+	if err := json.Unmarshal([]byte(cfg), &resolved); err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Outbox relay", "Replay", "Saved views"} {
+		must(pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"`+title+`"}`))
+	}
+	must(pg.api("PATCH", "/w/acme/issues/HZN-1", `{"due_date":"2026-11-12"}`))
+	must(pg.api("PATCH", "/w/acme/issues/HZN-2", `{"start_date":"2026-11-10","due_date":"2026-11-13"}`))
+	must(pg.api("PATCH", "/w/acme/issues/HZN-3", `{"due_date":"2026-11-12"}`))
+	must(pg.api("POST", "/w/acme/projects/HZN/iterations", `{"name":"Sprint 7","start_date":"2026-11-09","end_date":"2026-11-20"}`))
+	must(pg.api("POST", "/w/acme/milestones", `{"project":"HZN","name":"Beta","date":"2026-11-20"}`))
+	day := func(d string) string { return view + `.querySelector('[data-day="` + d + `"]')` }
+	chips := func(d string) string {
+		return pg.poll(`[...` + day(d) + `.querySelectorAll("[data-chip]:not(.under-way)")].map((c) => c.dataset.chip).join(",") || "none"`)
+	}
+
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/calendar?mode=month&date=2026-11-01"))
+	pg.poll(day("2026-11-12") + `?.querySelector("[data-chip]") && "calendar"`)
+	if got := chips("2026-11-12"); got != "HZN-1,HZN-3" {
+		t.Errorf("12 November = %s", got)
+	}
+	if got := pg.poll(day("2026-11-11") + `.className + " " + ` + day("2026-11-11") + `.querySelector(".note")?.textContent`); !strings.Contains(got, "holiday") || !strings.Contains(got, "Armistice") {
+		t.Errorf("holiday = %s", got)
+	}
+	pg.poll(day("2026-11-14") + `.classList.contains("off") && "weekend"`)
+	pg.poll(view + `.querySelector(".strip")?.textContent.includes("Sprint 7") && "iteration"`)
+	pg.poll(day("2026-11-20") + `.querySelector(".marker.milestone")?.textContent.includes("Beta") && "milestone"`)
+
+	// Alt+→ on an issue moves it a day.
+	pg.eval(day("2026-11-12") + `.querySelector('[data-chip="HZN-1"]').focus()`)
+	pg.do(chromedp.KeyEvent(kb.ArrowRight, chromedp.KeyModifiers(chromedp.ModifierAlt)))
+	pg.poll(day("2026-11-13") + `.querySelector('[data-chip="HZN-1"]') && "moved"`)
+
+	// Dragged to Monday the 16th.
+	pg.eval(`(() => {
+		const chip = ` + day("2026-11-12") + `.querySelector('[data-chip="HZN-3"]');
+		const dt = new DataTransfer();
+		chip.dispatchEvent(new DragEvent("dragstart", { dataTransfer: dt, bubbles: true, composed: true }));
+		const target = ` + day("2026-11-16") + `;
+		target.dispatchEvent(new DragEvent("dragover", { dataTransfer: dt, bubbles: true, composed: true, cancelable: true }));
+		target.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, composed: true, cancelable: true }));
+	})()`)
+	pg.poll(day("2026-11-16") + `.querySelector('[data-chip="HZN-3"]') && "dropped"`)
+	if _, body := pg.api("GET", "/w/acme/issues/HZN-3", ""); !strings.Contains(body, `"due_date":"2026-11-16"`) {
+		t.Errorf("HZN-3 = %s", body)
+	}
+
+	// The week shows what is under way.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/calendar?mode=week&date=2026-11-10"))
+	pg.poll(day("2026-11-11") + `?.querySelector('.under-way[data-chip="HZN-2"]') && "under way"`)
+	if got := chips("2026-11-13"); got != "HZN-1,HZN-2" {
+		t.Errorf("13 November = %s", got)
 	}
 	pg.logs.failOnErrors(t)
 }

@@ -68,7 +68,7 @@ usable exists early.
 - [x] Table view with inline editing
 - [x] Working calendars (weekdays, holidays) and time zone settings
 - [x] Timeline / Gantt with dependencies, auto-scheduling in working days, milestones
-- [ ] Calendar view
+- [x] Calendar view
 - [ ] Workspace roadmap across projects
 
 ## Phase 7 — Reports

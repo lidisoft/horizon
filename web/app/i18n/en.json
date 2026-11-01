@@ -886,6 +886,7 @@
   "planning.layouts.board": "Board",
   "planning.layouts.table": "Table",
   "planning.layouts.timeline": "Timeline",
+  "planning.layouts.calendar": "Calendar",
   "planning.layouts.backlog": "Backlog",
   "planning.backlog": "Backlog",
   "planning.velocity": "Velocity (last 3)",
@@ -1145,6 +1146,23 @@
   "timeline.notMoved": {
     "one": "{count} issue changed meanwhile and wasn't moved.",
     "other": "{count} issues changed meanwhile and weren't moved."
+  },
+  "calview.weekOf": "Week of {date}",
+  "calview.prev.month": "Previous month",
+  "calview.prev.week": "Previous week",
+  "calview.next.month": "Next month",
+  "calview.next.week": "Next week",
+  "calview.mode": "Show",
+  "calview.modes.month": "Month",
+  "calview.modes.week": "Week",
+  "calview.release": "Release",
+  "calview.due": {
+    "one": "{count} issue due",
+    "other": "{count} issues due"
+  },
+  "calview.more": {
+    "one": "+{count} more",
+    "other": "+{count} more"
   },
   "shortcut.columnLeft": "Previous column",
   "shortcut.columnRight": "Next column",
