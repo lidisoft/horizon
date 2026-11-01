@@ -471,6 +471,12 @@ export class EditorView {
     }
     if (e.inputType === "insertCompositionText" || e.inputType === "insertFromComposition") return;
     e.preventDefault();
+    // The input of a key a binding already handled (some browsers and
+    // drivers send it despite the cancelled keydown).
+    const h = this.handledKey;
+    this.handledKey = null;
+    if (h && performance.now() - h.time < 100 && ((h.key === "Enter" && /^insert(Paragraph|LineBreak)$/.test(e.inputType)) ||
+      (e.inputType === "insertText" && (e.data === h.key || (h.key === "Tab" && e.data === "\t"))))) return;
     this.readSelection();
     const handler = this.inputHandlers[e.inputType];
     if (handler) handler(this, e);
@@ -483,6 +489,7 @@ export class EditorView {
         this.readSelection();
         if (binding.run(this)) {
           e.preventDefault();
+          this.handledKey = { key: e.key, time: performance.now() };
           return;
         }
       }

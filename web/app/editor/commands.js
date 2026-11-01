@@ -660,3 +660,42 @@ export function insertNodes(nodes) {
     return true;
   };
 }
+
+/**
+ * Inserts blocks at the selection: in place of an empty paragraph, before
+ * or after the textblock the cursor is at the edge of, or between the two
+ * halves of a top-level paragraph split at the cursor; elsewhere after the
+ * top-level block. The cursor goes to the end of them, or with
+ * atStart to their first textblock (a new table's first cell).
+ */
+export function insertBlocks(blocks, atStart = false) {
+  return (state, dispatch) => {
+    const fragment = Fragment.from(blocks);
+    if (!fragment.childCount) return false;
+    if (!dispatch) return true;
+    const tr = state.tr;
+    deleteRange(tr, state.selection.from, state.selection.to);
+    const $pos = tr.doc.resolve(tr.selection.from);
+    let at;
+    if ($pos.parent.isTextblock && $pos.depth === 1) {
+      if (!$pos.parent.content.size) {
+        tr.replace($pos.before(), $pos.after(), new Slice(fragment, 0, 0));
+        tr.setSelection(atStart ? Selection.near(tr.doc, $pos.before(), 1) : Selection.near(tr.doc, $pos.before() + fragment.size, -1));
+        dispatch(tr);
+        return true;
+      }
+      if ($pos.parentOffset === 0) at = $pos.before();
+      else if ($pos.parentOffset === $pos.parent.content.size) at = $pos.after();
+      else {
+        tr.step(new ReplaceStep($pos.pos, $pos.pos, new Slice(Fragment.from([$pos.parent.copy(), $pos.parent.copy()]), 1, 1), true));
+        at = $pos.pos + 1;
+      }
+    } else {
+      at = $pos.after(1);
+    }
+    tr.insert(at, fragment);
+    tr.setSelection(atStart ? Selection.near(tr.doc, at, 1) : Selection.near(tr.doc, at + fragment.size, -1));
+    dispatch(tr);
+    return true;
+  };
+}

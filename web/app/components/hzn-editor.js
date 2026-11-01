@@ -1,29 +1,40 @@
 // <hzn-editor>: the block editor (docs/frontend.md#block-editor) for
 // descriptions and comments.
 //
-// Attributes: placeholder, label, ws and issue-key (for images and links),
-// readonly, autofocus. Properties: value (the document's JSON; setting it
-// replaces the content), state, people (a Map for mentions). Events
-// (bubbling, composed): hzn-change { doc, steps } on every change (steps
-// as JSON, for the collaboration protocol), hzn-blur when focus leaves.
-// Keys: ⌘B ⌘I ⌘E (code) ⌘⇧X (strike); ⌘⌥0–3 paragraph and headings;
-// ⌘⇧7 ⌘⇧8 ⌘⇧9 lists; Tab / ⇧Tab in lists; ⌘Z ⌘⇧Z.
+// Attributes: placeholder, label, ws and issue-key (for images, issue
+// references and uploads), readonly, autofocus, bare (no border until
+// focused). Properties: value (the document's JSON; setting it replaces the
+// content), state, people (a Map id → { name } for mentions). Events
+// (bubbling, composed): hzn-change { doc, steps } on every change (steps as
+// JSON), hzn-blur when focus leaves.
+//
+// Keys: ⌘B ⌘I ⌘E (code) ⌘⇧X (strike) ⌘K (link); ⌘⌥0–3 paragraph and
+// headings; ⌘⇧7 ⌘⇧8 ⌘⇧9 lists; Tab / ⇧Tab in lists and tables; ⌘Z ⌘⇧Z.
+// Typing: "/" opens the block menu, "@" mentions, "KEY-" references an
+// issue, ":name" an emoji; Markdown shortcuts (horizon/editor/rules.js).
+// Paste takes HTML, Markdown and images.
 
+import { fromHTML, fromMarkdown, inlineOnly, looksLikeMarkdown } from "horizon/editor/clipboard.js";
 import { History } from "horizon/editor/history.js";
-import { blockActive, deleteBy, deleteSelection, insertLineBreak, insertText, liftListItem, markActive, setBlockType, sinkListItem,
-  splitBlock, toggleList, toggleMark, toggleTask, toggleWrap } from "horizon/editor/commands.js";
-import { schema } from "horizon/editor/model.js";
-import { docStyles } from "horizon/editor/render.js";
+import {
+  blockActive, blockText, deleteBy, deleteSelection, insertBlocks, insertLineBreak, insertNodes, insertText, liftListItem, markActive, setBlockType,
+  sinkListItem, splitBlock, toggleList, toggleMark, toggleTask, toggleWrap,
+} from "horizon/editor/commands.js";
+import { Fragment, Slice, schema } from "horizon/editor/model.js";
+import { EMOJI, docStyles } from "horizon/editor/render.js";
+import { inputRule } from "horizon/editor/rules.js";
 import { EditorState, Selection } from "horizon/editor/state.js";
+import { addColumn, addRow, createTable, deleteColumn, deleteRow, deleteTable, goToCell, tableContext } from "horizon/editor/tables.js";
 import { EditorView } from "horizon/editor/view.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
+import { errorMessage } from "horizon/core/forms.js";
 
 const isMac = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || "");
 
 const styles = sheet(`
   :host { display: block; }
-  .frame { border: 1px solid var(--lds-color-border-default); border-radius: var(--lds-radius-md); background: var(--lds-color-bg-surface); }
+  .frame { position: relative; border: 1px solid var(--lds-color-border-default); border-radius: var(--lds-radius-md); background: var(--lds-color-bg-surface); }
   .frame:focus-within { border-color: var(--lds-color-accent-border); box-shadow: 0 0 0 1px var(--lds-color-accent-border); }
   :host([bare]) .frame { border-color: transparent; background: transparent; }
   :host([bare]) .frame:focus-within { border-color: var(--lds-color-border-default); box-shadow: none; }
@@ -34,6 +45,7 @@ const styles = sheet(`
     font: inherit; font-size: var(--lds-font-size-sm); cursor: pointer; }
   .toolbar button:hover { background: var(--lds-color-bg-subtle); color: var(--lds-color-fg-default); }
   .toolbar button[aria-pressed="true"] { background: var(--lds-color-accent-subtle); color: var(--lds-color-accent-fg); }
+  .toolbar button[hidden], .toolbar .sep[hidden] { display: none; }
   .toolbar .sep { inline-size: 1px; margin: var(--lds-space-1) 2px; background: var(--lds-color-border-subtle); }
   .editor { min-block-size: var(--hzn-editor-min-height, 4.5rem); padding: var(--lds-space-2) var(--lds-space-3); outline: none;
     white-space: pre-wrap; word-wrap: break-word; line-height: 1.55; }
@@ -42,27 +54,45 @@ const styles = sheet(`
   .editor ul.tasks li > div { flex: 1; min-inline-size: 0; }
   .editor .check { flex: none; inline-size: 1rem; block-size: 1rem; margin-block-start: 0.3em; border: 1px solid var(--lds-color-border-strong);
     border-radius: var(--lds-radius-xs); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-  .editor li[data-checked="true"] > .check { background: var(--lds-color-accent-bg, var(--lds-color-accent-fg)); border-color: transparent; }
-  .editor li[data-checked="true"] > .check::after { content: "✓"; color: var(--lds-color-fg-on-accent, white); font-size: 0.75rem; }
+  .editor li[data-checked="true"] > .check { background: var(--lds-color-accent-fg); border-color: transparent; }
+  .editor li[data-checked="true"] > .check::after { content: "✓"; color: var(--lds-color-bg-surface); font-size: 0.75rem; }
   .editor li[data-checked="true"] > div { color: var(--lds-color-fg-muted); text-decoration: line-through; }
   .editor figure.image { margin: 0 0 var(--lds-space-2); }
   .editor figure.image img { max-inline-size: 100%; border-radius: var(--lds-radius-md); }
-  .editor .emoji { font-style: normal; }
   .editor a { pointer-events: none; }
+  .popup { position: absolute; z-index: 10; min-inline-size: 14rem; max-inline-size: 22rem; max-block-size: 16rem; overflow: auto;
+    padding: var(--lds-space-1); border: 1px solid var(--lds-color-border-default); border-radius: var(--lds-radius-md);
+    background: var(--lds-color-bg-surface); box-shadow: var(--lds-shadow-md, 0 4px 16px rgb(0 0 0 / 0.15)); }
+  .popup[hidden] { display: none; }
+  .popup [role="option"] { display: flex; gap: var(--lds-space-2); align-items: center; padding: var(--lds-space-1) var(--lds-space-2);
+    border-radius: var(--lds-radius-sm); cursor: pointer; font-size: var(--lds-font-size-sm); }
+  .popup [role="option"][aria-selected="true"] { background: var(--lds-color-accent-subtle); }
+  .popup .hint { color: var(--lds-color-fg-muted); margin-inline-start: auto; font-size: var(--lds-font-size-xs); }
+  .popup .none { padding: var(--lds-space-1) var(--lds-space-2); color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
+  .popup form { display: flex; gap: var(--lds-space-1); }
+  .popup input { flex: 1; min-inline-size: 0; font: inherit; padding: var(--lds-space-1) var(--lds-space-2);
+    border: 1px solid var(--lds-color-border-default); border-radius: var(--lds-radius-sm); background: var(--lds-color-bg-canvas); color: inherit; }
 `);
 
 const mod = (e) => (isMac ? e.metaKey : e.ctrlKey);
 const key = (spec, run) => {
-  // "Mod-Shift-x": modifiers then the key (KeyboardEvent.key, lower case) or a code.
+  // "Mod-Shift-x": modifiers then the key (KeyboardEvent.key) or a code.
   const parts = spec.split("-");
   const k = parts.pop();
   const want = { mod: parts.includes("Mod"), shift: parts.includes("Shift"), alt: parts.includes("Alt") };
   return {
-    match: (e) => mod(e) === want.mod && e.shiftKey === want.shift && e.altKey === want.alt &&
-      (e.key.toLowerCase() === k.toLowerCase() || e.code === k),
+    match: (e) => mod(e) === want.mod && e.shiftKey === want.shift && e.altKey === want.alt && (e.key.toLowerCase() === k.toLowerCase() || e.code === k),
     run,
   };
 };
+
+// What the text before the cursor asks for.
+const TRIGGERS = [
+  { kind: "slash", re: /(?:^|\s)\/([\p{L}\d ]{0,20})$/u },
+  { kind: "mention", re: /(?:^|\s)@([\p{L}\d._-]{0,30})$/u },
+  { kind: "issue", re: /(?:^|[\s(])([A-Z][A-Z0-9]{1,9}-\d*)$/ },
+  { kind: "emoji", re: /(?:^|\s):([a-z0-9_+-]{2,20})$/ },
+];
 
 class HznEditor extends HTMLElement {
   static observedAttributes = ["readonly", "placeholder"];
@@ -71,6 +101,7 @@ class HznEditor extends HTMLElement {
     super();
     this.history = new History();
     this.pending = null; // a value set before connecting
+    this.people = new Map();
   }
 
   connectedCallback() {
@@ -79,27 +110,42 @@ class HznEditor extends HTMLElement {
     const root = this.attachShadow({ mode: "open", delegatesFocus: true });
     root.adoptedStyleSheets = [docStyles, styles];
     const { t } = this.context.i18n;
-    const button = (cmd, label, text) => html`<button type="button" tabindex="-1" data-cmd="${cmd}" title="${label}" aria-label="${label}">${text}</button>`;
+    const button = (cmd, label, text, hidden = false) =>
+      html`<button type="button" tabindex="-1" data-cmd="${cmd}" title="${label}" aria-label="${label}" ${hidden ? html`hidden` : ""}>${text}</button>`;
     root.innerHTML = String(html`
       <div class="frame">
         <div class="toolbar" role="toolbar" aria-label="${t("editor.toolbar")}">
           ${button("bold", t("editor.bold"), html`<b>B</b>`)}${button("italic", t("editor.italic"), html`<i>I</i>`)}
-          ${button("strike", t("editor.strike"), html`<s>S</s>`)}${button("code", t("editor.code"), "</>")}
+          ${button("strike", t("editor.strike"), html`<s>S</s>`)}${button("code", t("editor.code"), "</>")}${button("link", t("editor.link"), "🔗")}
           <span class="sep"></span>
           ${button("h1", t("editor.heading", { level: 1 }), "H1")}${button("h2", t("editor.heading", { level: 2 }), "H2")}
           ${button("bullet", t("editor.bulletList"), "•")}${button("ordered", t("editor.orderedList"), "1.")}${button("task", t("editor.taskList"), "☐")}
           ${button("quote", t("editor.quote"), "❝")}${button("codeblock", t("editor.codeBlock"), "{ }")}
+          <span class="sep" data-table-tools hidden></span>
+          ${button("addRow", t("editor.addRow"), "+▭", true)}${button("addColumn", t("editor.addColumn"), "+▯", true)}
+          ${button("deleteRow", t("editor.deleteRow"), "−▭", true)}${button("deleteColumn", t("editor.deleteColumn"), "−▯", true)}
+          ${button("deleteTable", t("editor.deleteTable"), "✕▦", true)}
         </div>
         <div class="editor" spellcheck="true"></div>
+        <div class="popup" role="listbox" hidden></div>
+        <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden data-file>
       </div>`);
     const dom = root.querySelector(".editor");
     dom.setAttribute("aria-label", this.getAttribute("label") ?? this.getAttribute("placeholder") ?? "");
     dom.dataset.placeholder = this.getAttribute("placeholder") ?? "";
+    this.popup = root.querySelector(".popup");
     const doc = this.pending ?? schema.nodeFromJSON({ type: "doc", content: [{ type: "paragraph" }] });
+    const host = this;
     this.view = new EditorView(dom, {
       state: new EditorState(doc, Selection.atStart(doc)),
       dispatch: (tr) => this.dispatch(tr),
-      context: { ws: this.getAttribute("ws"), issueKey: this.getAttribute("issue-key"), people: this.people },
+      context: {
+        ws: this.getAttribute("ws"),
+        issueKey: this.getAttribute("issue-key"),
+        get people() {
+          return host.people;
+        },
+      },
       editable: !this.hasAttribute("readonly"),
       inputHandlers: this.inputHandlers(),
       keymap: this.keymap(),
@@ -111,10 +157,24 @@ class HznEditor extends HTMLElement {
       e.preventDefault(); // keep the selection in the editor
       this.command(b.dataset.cmd);
     });
-    dom.addEventListener("hzn-selection", () => this.refreshToolbar());
+    this.popup.addEventListener("mousedown", (e) => {
+      const option = e.target.closest('[role="option"]');
+      if (!option) return;
+      e.preventDefault();
+      this.choose(Number(option.dataset.index));
+    });
+    root.querySelector("[data-file]").addEventListener("change", (e) => {
+      this.upload([...e.target.files]);
+      e.target.value = "";
+    });
+    dom.addEventListener("hzn-selection", () => {
+      this.refreshToolbar();
+      this.suggest();
+    });
     this.addEventListener("focusout", (e) => {
       if (!this.contains(e.relatedTarget) && !root.contains(e.relatedTarget)) {
         this.history.close();
+        this.closePopup();
         this.dispatchEvent(new CustomEvent("hzn-blur", { bubbles: true, composed: true }));
       }
     });
@@ -140,14 +200,11 @@ class HznEditor extends HTMLElement {
       return;
     }
     const sel = this.view.state.selection;
-    const max = doc.content.size;
-    const keep = sel.anchor <= max && sel.head <= max ? sel : Selection.atEnd(doc);
-    let selection;
+    let selection = Selection.atEnd(doc);
     try {
-      doc.resolve(keep.anchor);
-      selection = keep;
+      if (sel.anchor <= doc.content.size && sel.head <= doc.content.size && doc.resolve(sel.head).parent.isTextblock) selection = sel;
     } catch {
-      selection = Selection.atEnd(doc);
+      // keep the end
     }
     this.history = new History();
     this.view.updateState(new EditorState(doc, selection));
@@ -173,12 +230,17 @@ class HznEditor extends HTMLElement {
     this.view?.focus();
   }
 
-  /** Applies a transaction: history, view, change event. */
+  /** Applies a transaction: history, view, input rules, change event. */
   dispatch(tr) {
     const before = this.view.state.selection;
     if (tr.docChanged && !tr.meta.history) this.history.record(tr, before);
     this.view.updateState(this.view.state.apply(tr));
+    if (tr.meta.typing === "insert" && !tr.meta.rule) {
+      const rule = inputRule(this.view.state);
+      if (rule) rule(this.view.state, (rtr) => this.dispatch(rtr.setMeta("rule", true)));
+    }
     this.refreshToolbar();
+    this.suggest();
     if (tr.docChanged) {
       this.dispatchEvent(new CustomEvent("hzn-change", {
         bubbles: true, composed: true, detail: { doc: this.view.state.doc.toJSON(), steps: tr.steps.map((s) => s.toJSON()) },
@@ -219,31 +281,74 @@ class HznEditor extends HTMLElement {
       formatBold: run(toggleMark(schema.marks.bold)),
       formatItalic: run(toggleMark(schema.marks.italic)),
       formatStrikeThrough: run(toggleMark(schema.marks.strike)),
-      insertFromPaste: (view, e) => this.paste(view, e.dataTransfer),
-      insertFromDrop: (view, e) => this.paste(view, e.dataTransfer),
+      insertFromPaste: (view, e) => this.paste(e.dataTransfer),
+      insertFromDrop: (view, e) => this.paste(e.dataTransfer),
     };
   }
 
-  /** Plain text paste: one paragraph per line (rich paste comes with the editor extras). */
-  paste(view, data) {
-    const text = data?.getData("text/plain") ?? "";
-    if (!text) return;
-    const lines = text.replace(/\r\n?/g, "\n").split("\n");
-    view.run(insertText(lines[0]));
-    for (const line of lines.slice(1)) {
-      view.run(splitBlock);
-      if (line) view.run(insertText(line));
+  /** Pastes images (uploaded), HTML, Markdown or plain text. */
+  paste(data) {
+    if (!data) return;
+    const files = [...(data.files ?? [])].filter((f) => f.type.startsWith("image/"));
+    if (files.length) return this.upload(files);
+    const htmlText = data.getData("text/html");
+    const text = data.getData("text/plain") ?? "";
+    const $from = this.view.state.doc.resolve(this.view.state.selection.from);
+    if ($from.parent.type.code) return this.view.run(insertText(text));
+    let blocks;
+    if (htmlText) blocks = fromHTML(htmlText);
+    else if (looksLikeMarkdown(text)) blocks = fromMarkdown(text);
+    else blocks = text.replace(/\r\n?/g, "\n").split("\n").map((line) => schema.nodes.paragraph.create(null, line ? [schema.text(line)] : []));
+    if (!blocks.length) return;
+    if (inlineOnly(blocks)) {
+      const inline = blocks[0].content;
+      if (!inline.size) return;
+      this.view.run((state, dispatch) => {
+        const tr = state.tr;
+        tr.replace(state.selection.from, state.selection.to, new Slice(inline, 0, 0));
+        dispatch(tr.setSelection(new Selection(state.selection.from + inline.size)));
+        return true;
+      });
+      return;
+    }
+    this.view.run(insertBlocks(blocks));
+  }
+
+  /** Uploads images as attachments of the issue, then inserts them. */
+  async upload(files) {
+    const ws = this.getAttribute("ws");
+    const issueKey = this.getAttribute("issue-key");
+    const { api, i18n } = this.context;
+    if (!ws || !issueKey || !files.length) return;
+    const base = `/w/${encodeURIComponent(ws)}/issues/${encodeURIComponent(issueKey)}/attachments`;
+    for (const file of files) {
+      try {
+        const { data } = await api.post(base, { body: { filename: file.name || "image", content_type: file.type, size: file.size } });
+        const put = await fetch(data.upload_url, { method: data.method, body: file });
+        if (!put.ok) throw new Error(`upload failed: ${put.status}`);
+        await api.post(`${base}/${data.attachment.id}/complete`);
+        this.view.run(insertNodes([schema.nodes.image.create({ attachment: data.attachment.id, alt: file.name || "" })]));
+      } catch (err) {
+        globalThis.LDS?.toast?.({ intent: "danger", title: i18n.t("editor.uploadFailed", { name: file.name, error: errorMessage(err, i18n) }) });
+      }
     }
   }
 
   keymap() {
     const run = (cmd) => (view) => view.run(cmd);
-    const inList = (cmd) => (view) => view.run(cmd);
+    const popup = (f) => () => (this.popup.hidden || this.popupMode !== "list" ? false : (f(), true));
     return [
+      // The suggestion list has the keys while open.
+      key("ArrowDown", popup(() => this.moveChoice(1))),
+      key("ArrowUp", popup(() => this.moveChoice(-1))),
+      key("Enter", popup(() => this.choose(this.choice))),
+      key("Tab", popup(() => this.choose(this.choice))),
+      key("Escape", () => (this.popup.hidden ? false : (this.closePopup(), true))),
       key("Mod-b", run(toggleMark(schema.marks.bold))),
       key("Mod-i", run(toggleMark(schema.marks.italic))),
       key("Mod-e", run(toggleMark(schema.marks.code))),
       key("Mod-Shift-x", run(toggleMark(schema.marks.strike))),
+      key("Mod-k", () => (this.editLink(), true)),
       key("Mod-z", () => this.undo()),
       key("Mod-Shift-z", () => this.undo(true)),
       key("Mod-y", () => this.undo(true)),
@@ -254,26 +359,33 @@ class HznEditor extends HTMLElement {
       key("Mod-Shift-Digit7", run(toggleList("ordered_list"))),
       key("Mod-Shift-Digit8", run(toggleList("bullet_list"))),
       key("Mod-Shift-Digit9", run(toggleList("task_list"))),
-      key("Tab", inList(sinkListItem)),
-      key("Shift-Tab", inList(liftListItem)),
+      key("Tab", (view) => view.run(goToCell(1)) || view.run(sinkListItem)),
+      key("Shift-Tab", (view) => view.run(goToCell(-1)) || view.run(liftListItem)),
     ];
   }
 
   /** Runs a toolbar command. */
   command(name) {
+    const toggleBlock = (type, attrs) => (s, d) => (blockActive(s, type, attrs) ? setBlockType("paragraph") : setBlockType(type, attrs))(s, d);
     const commands = {
       bold: toggleMark(schema.marks.bold),
       italic: toggleMark(schema.marks.italic),
       strike: toggleMark(schema.marks.strike),
       code: toggleMark(schema.marks.code),
-      h1: (s, d) => (blockActive(s, "heading", { level: 1 }) ? setBlockType("paragraph") : setBlockType("heading", { level: 1 }))(s, d),
-      h2: (s, d) => (blockActive(s, "heading", { level: 2 }) ? setBlockType("paragraph") : setBlockType("heading", { level: 2 }))(s, d),
+      h1: toggleBlock("heading", { level: 1 }),
+      h2: toggleBlock("heading", { level: 2 }),
       bullet: toggleList("bullet_list"),
       ordered: toggleList("ordered_list"),
       task: toggleList("task_list"),
       quote: toggleWrap("quote"),
-      codeblock: (s, d) => (blockActive(s, "code_block") ? setBlockType("paragraph") : setBlockType("code_block"))(s, d),
+      codeblock: toggleBlock("code_block"),
+      addRow: addRow(1),
+      addColumn: addColumn(1),
+      deleteRow,
+      deleteColumn,
+      deleteTable,
     };
+    if (name === "link") return this.editLink();
     this.view.run(commands[name]);
     this.view.focus();
   }
@@ -282,13 +394,233 @@ class HznEditor extends HTMLElement {
     const s = this.view.state;
     const pressed = {
       bold: markActive(s, schema.marks.bold), italic: markActive(s, schema.marks.italic), strike: markActive(s, schema.marks.strike),
-      code: markActive(s, schema.marks.code), h1: blockActive(s, "heading", { level: 1 }), h2: blockActive(s, "heading", { level: 2 }),
-      codeblock: blockActive(s, "code_block"),
+      code: markActive(s, schema.marks.code), link: markActive(s, schema.marks.link), h1: blockActive(s, "heading", { level: 1 }),
+      h2: blockActive(s, "heading", { level: 2 }), codeblock: blockActive(s, "code_block"),
     };
+    const inTable = !!tableContext(s);
     for (const b of this.shadowRoot.querySelectorAll("[data-cmd]")) {
       if (b.dataset.cmd in pressed) b.setAttribute("aria-pressed", String(pressed[b.dataset.cmd]));
+      if (["addRow", "addColumn", "deleteRow", "deleteColumn", "deleteTable"].includes(b.dataset.cmd)) b.hidden = !inTable;
+    }
+    this.shadowRoot.querySelector("[data-table-tools]").hidden = !inTable;
+  }
+
+  // --- Suggestions -----------------------------------------------------------------------
+
+  /** Opens, updates or closes the suggestion list for the text before the cursor. */
+  suggest() {
+    if (this.popupMode === "link") return;
+    const state = this.view.state;
+    if (!state.selection.empty || !this.view.hasFocus()) return this.closePopup();
+    const $pos = state.doc.resolve(state.selection.head);
+    if (!$pos.parent.isTextblock || $pos.parent.type.code) return this.closePopup();
+    const before = blockText($pos.parent).slice(0, $pos.parentOffset);
+    for (const trigger of TRIGGERS) {
+      const m = trigger.re.exec(before);
+      if (!m) continue;
+      const query = m[1];
+      const from = $pos.pos - query.length - (trigger.kind === "issue" ? 0 : 1);
+      return this.showList(trigger.kind, query, from);
+    }
+    this.closePopup();
+  }
+
+  async showList(kind, query, from) {
+    const { t } = this.context.i18n;
+    const q = query.toLowerCase();
+    let items;
+    switch (kind) {
+      case "slash":
+        items = this.blockItems().filter((it) => it.label.toLowerCase().includes(q) || it.keywords.includes(q));
+        break;
+      case "mention":
+        items = [...this.people.entries()].filter(([, p]) => p.name.toLowerCase().includes(q)).slice(0, 8)
+          .map(([id, p]) => ({ label: `@${p.name}`, nodes: () => [schema.nodes.mention.create({ user: id })] }));
+        break;
+      case "emoji":
+        items = Object.entries(EMOJI).filter(([name]) => name.includes(q)).slice(0, 8)
+          .map(([name, ch]) => ({ label: `${ch} :${name}:`, nodes: () => [schema.nodes.emoji.create({ name })] }));
+        break;
+      case "issue": {
+        const seq = (this.searchSeq = (this.searchSeq ?? 0) + 1);
+        items = await this.searchIssues(query);
+        if (seq !== this.searchSeq) return;
+        break;
+      }
+    }
+    this.popupMode = "list";
+    this.suggestion = { kind, from, items };
+    this.choice = 0;
+    if (!items.length && kind !== "slash") return this.closePopup();
+    this.popup.innerHTML = items.length
+      ? String(html`${items.map((it, i) => html`<div role="option" data-index="${i}" aria-selected="${String(i === 0)}">${it.label}${it.hint ? html`<span class="hint">${it.hint}</span>` : ""}</div>`)}`)
+      : String(html`<div class="none">${t("editor.noMatch")}</div>`);
+    this.placePopup(from);
+  }
+
+  async searchIssues(query) {
+    const ws = this.getAttribute("ws");
+    if (!ws) return [];
+    const exact = /^[A-Z][A-Z0-9]{1,9}-[1-9]\d*$/.test(query);
+    try {
+      const { data } = await this.context.api.get(`/w/${encodeURIComponent(ws)}/search`, { query: { q: exact ? query : query.replace(/-$/, ""), limit: 6 } });
+      const items = data.items.map((r) => ({ label: r.key, hint: r.title, nodes: () => [schema.nodes.issue_ref.create({ key: r.key })] }));
+      if (exact && !items.some((it) => it.label === query)) items.unshift({ label: query, nodes: () => [schema.nodes.issue_ref.create({ key: query })] });
+      return items.slice(0, 6);
+    } catch {
+      return exact ? [{ label: query, nodes: () => [schema.nodes.issue_ref.create({ key: query })] }] : [];
     }
   }
+
+  /** The slash menu: blocks to turn the paragraph into, or insert. */
+  blockItems() {
+    const { t } = this.context.i18n;
+    const block = (label, keywords, command) => ({ label, keywords, command });
+    return [
+      block(t("editor.text"), "paragraph text", setBlockType("paragraph")),
+      block(t("editor.heading", { level: 1 }), "h1 heading title", setBlockType("heading", { level: 1 })),
+      block(t("editor.heading", { level: 2 }), "h2 heading", setBlockType("heading", { level: 2 })),
+      block(t("editor.heading", { level: 3 }), "h3 heading", setBlockType("heading", { level: 3 })),
+      block(t("editor.bulletList"), "bullet list ul", toggleList("bullet_list")),
+      block(t("editor.orderedList"), "numbered ordered list ol", toggleList("ordered_list")),
+      block(t("editor.taskList"), "task todo checkbox", toggleList("task_list")),
+      block(t("editor.quote"), "quote blockquote", toggleWrap("quote")),
+      block(t("editor.callout"), "callout note info", toggleWrap("callout")),
+      block(t("editor.codeBlock"), "code pre", setBlockType("code_block")),
+      block(t("editor.divider"), "divider rule hr", insertNodes([schema.nodes.divider.create()])),
+      block(t("editor.table"), "table grid", insertBlocks([createTable(3, 3)], true)),
+      ...(this.getAttribute("issue-key") ? [block(t("editor.image"), "image picture upload", () => (this.shadowRoot.querySelector("[data-file]").click(), true))] : []),
+    ];
+  }
+
+  moveChoice(delta) {
+    const n = this.suggestion?.items.length ?? 0;
+    if (!n) return;
+    this.choice = (this.choice + delta + n) % n;
+    for (const o of this.popup.querySelectorAll('[role="option"]')) o.setAttribute("aria-selected", String(Number(o.dataset.index) === this.choice));
+    this.popup.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** Applies a suggestion: the typed trigger goes, the choice takes its place. */
+  choose(index) {
+    const s = this.suggestion;
+    const item = s?.items[index];
+    this.closePopup();
+    if (!item) return;
+    const head = this.view.state.selection.head;
+    this.view.run((state, dispatch) => {
+      const tr = state.tr.delete(s.from, head).setSelection(new Selection(s.from));
+      if (item.nodes) {
+        const nodes = item.nodes();
+        tr.insert(s.from, nodes);
+        const after = s.from + Fragment.from(nodes).size;
+        tr.insertText(" ", after, after, []);
+      }
+      dispatch(tr);
+      return true;
+    });
+    if (item.command) this.view.run(item.command);
+    this.view.focus();
+  }
+
+  placePopup(pos) {
+    const frame = this.shadowRoot.querySelector(".frame").getBoundingClientRect();
+    let rect = null;
+    try {
+      const { node, offset } = this.view.domFromPos(pos);
+      const range = document.createRange();
+      range.setStart(node, offset);
+      range.collapse(true);
+      rect = range.getClientRects()[0] ?? (node.nodeType === Node.ELEMENT_NODE ? node.getBoundingClientRect() : node.parentNode.getBoundingClientRect());
+    } catch {
+      rect = null;
+    }
+    this.popup.hidden = false;
+    const left = rect ? rect.left - frame.left : 8;
+    const top = rect ? rect.bottom - frame.top + 4 : 8;
+    // The CSSOM, as the CSP forbids style attributes.
+    this.popup.style.setProperty("left", `${Math.max(0, left)}px`);
+    this.popup.style.setProperty("top", `${top}px`);
+  }
+
+  closePopup() {
+    if (!this.popup) return;
+    this.popup.hidden = true;
+    this.popupMode = null;
+    this.suggestion = null;
+  }
+
+  // --- Links -------------------------------------------------------------------------------
+
+  /** ⌘K: a small field for the link of the selection (or of the link the cursor is in). */
+  editLink() {
+    const { t } = this.context.i18n;
+    const state = this.view.state;
+    let { from, to } = state.selection;
+    const linkType = schema.marks.link;
+    if (from === to) {
+      // The link around the cursor, if any.
+      const $pos = state.doc.resolve(from);
+      const range = linkRange($pos, linkType);
+      if (!range) return;
+      ({ from, to } = range);
+    }
+    let current = "";
+    state.doc.nodesBetween(from, to, (n) => {
+      const m = n.marks?.find((x) => x.type === linkType);
+      if (m) current = m.attrs.href;
+    });
+    this.popupMode = "link";
+    this.popup.innerHTML = String(html`<form><input type="url" placeholder="https://" value="${current}" aria-label="${t("editor.link")}"></form>`);
+    this.placePopup(to);
+    const input = this.popup.querySelector("input");
+    const form = this.popup.querySelector("form");
+    const apply = () => {
+      const href = input.value.trim();
+      this.closePopup();
+      this.view.run((s, dispatch) => {
+        const tr = s.tr;
+        s.doc.nodesBetween(from, to, (n, pos) => {
+          const m = n.marks?.find((x) => x.type === linkType);
+          if (m) tr.removeMark(Math.max(pos, from), Math.min(pos + n.nodeSize, to), m);
+        });
+        if (/^(https?:|mailto:)/i.test(href)) tr.addMark(from, to, linkType.create({ href }));
+        dispatch(tr);
+        return true;
+      });
+      this.view.focus();
+    };
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      apply();
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this.closePopup();
+        this.view.focus();
+      }
+    });
+    requestAnimationFrame(() => input.focus());
+  }
+}
+
+/** The extent of the link mark around a position, within its textblock. */
+function linkRange($pos, linkType) {
+  const parent = $pos.parent;
+  const index = $pos.index();
+  const at = parent.maybeChild(index) ?? parent.maybeChild(index - 1);
+  const mark = at?.marks.find((m) => m.type === linkType);
+  if (!mark) return null;
+  let start = index;
+  let end = index;
+  while (start > 0 && mark.isInSet(parent.child(start - 1).marks)) start--;
+  while (end < parent.childCount && mark.isInSet(parent.child(end).marks)) end++;
+  let from = $pos.start();
+  for (let i = 0; i < start; i++) from += parent.child(i).nodeSize;
+  let to = from;
+  for (let i = start; i < end; i++) to += parent.child(i).nodeSize;
+  return { from, to };
 }
 
 customElements.define("hzn-editor", HznEditor);

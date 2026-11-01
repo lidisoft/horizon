@@ -1085,5 +1085,18 @@
   "editor.orderedList": "Numbered list",
   "editor.taskList": "Task list",
   "editor.quote": "Quote",
-  "editor.codeBlock": "Code block"
+  "editor.codeBlock": "Code block",
+  "editor.link": "Link",
+  "editor.addRow": "Add a row",
+  "editor.addColumn": "Add a column",
+  "editor.deleteRow": "Delete the row",
+  "editor.deleteColumn": "Delete the column",
+  "editor.deleteTable": "Delete the table",
+  "editor.noMatch": "Nothing matches",
+  "editor.text": "Text",
+  "editor.callout": "Callout",
+  "editor.divider": "Divider",
+  "editor.table": "Table",
+  "editor.image": "Image",
+  "editor.uploadFailed": "{name} could not be uploaded: {error}"
 }

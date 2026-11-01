@@ -200,9 +200,17 @@ The pieces, under `web/app/editor/`:
 | `history.js` | Undo and redo of the user's own steps: typing groups, everything else is a step of its own; entries map through others' steps |
 | `view.js` | Renders the document into the `contenteditable` element (reusing the DOM of unchanged nodes), maps DOM points to positions and back (through shadow roots with `getComposedRanges`), replays `beforeinput` events as commands, reads IME composition back once it ends |
 | `render.js` | Read-only HTML of a document (comments, archived issues) |
+| `rules.js` | Markdown shortcuts while typing: `#`–`###`, `-`, `1.`, `[]`, `>`, ```` ``` ````, `---` at a paragraph's start; `` `code` ``, `**bold**`, `~~strike~~`, `:emoji:` inline. Undo puts the typed text back |
+| `clipboard.js` | Paste: HTML (other apps, the editor itself) and Markdown to the schema's nodes; unknown markup is dropped, images aren't fetched |
+| `tables.js` | Insert tables; add and remove rows and columns; Tab and Shift-Tab between cells, a new row past the last |
 
 `<hzn-editor>` puts them together with a small formatting toolbar, shown
-while it has focus. Descriptions save a moment after typing stops and
+while it has focus (with table tools inside a table). Typing `/` opens the
+block menu (text, headings, lists, tasks, quote, callout, code, divider,
+table, image), `@` suggests the project's people, an issue key (`HZN-`)
+suggests issues from search, `:name` emoji; ⌘K edits the link of the
+selection. Pasted or dropped images, and images picked from the menu,
+upload as attachments of the issue and show inline. Descriptions save a moment after typing stops and
 when the editor loses focus (until the step protocol); comments are
 written and edited in it and posted whole.
 

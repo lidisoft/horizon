@@ -1346,3 +1346,65 @@ func TestEditor(t *testing.T) {
 	}
 	pg.logs.failOnErrors(t)
 }
+
+// TestEditorExtras: the slash menu, Markdown shortcuts, mentions, issue
+// references, tables and pasting Markdown, with real keys.
+func TestEditorExtras(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`)
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID string } `json:"issue_types"`
+	}
+	_ = json.Unmarshal([]byte(cfg), &resolved)
+	for _, title := range []string{"Outbox relay", "Replay after reconnect"} {
+		if status, body := pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"`+title+`"}`); status != 201 {
+			t.Fatalf("create issue: %d %s", status, body)
+		}
+	}
+	pg.do(chromedp.Navigate(a.base + "/w/acme/issues/HZN-1"))
+	ed := view + `.querySelector("hzn-issue-detail").shadowRoot.querySelector("[data-description]")`
+	popup := ed + `.shadowRoot.querySelector(".popup")`
+	pg.poll(ed + ` && "editor"`)
+	has := func(what, fragment string) {
+		t.Helper()
+		pg.poll(`JSON.stringify(` + ed + `.value).includes(` + strconv.Quote(fragment) + `) && "` + what + `"`)
+	}
+
+	// Markdown shortcuts.
+	pg.typeInto(ed, "## Plan\r")
+	has("heading", `{"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"Plan"}]}`)
+
+	// A mention and an issue reference from the suggestions.
+	pg.do(chromedp.KeyEvent("Ask @Ad"))
+	pg.poll(`!` + popup + `.hidden && ` + popup + `.textContent.includes("@Ada Lovelace") && "people"`)
+	pg.do(chromedp.KeyEvent("\r"))
+	pg.do(chromedp.KeyEvent("about HZN-2"))
+	pg.poll(`!` + popup + `.hidden && ` + popup + `.textContent.includes("Replay after reconnect") && "issues"`)
+	pg.do(chromedp.KeyEvent("\r"))
+	has("mention", `{"type":"mention","attrs":{"user":"`)
+	has("reference", `{"type":"paragraph","content":[{"type":"text","text":"Ask "},{"type":"mention","attrs":{"user":"`)
+	has("reference", `},{"type":"text","text":" about "},{"type":"issue_ref","attrs":{"key":"HZN-2"}},{"type":"text","text":" "}]}`)
+
+	// The slash menu makes a table; Tab moves through its cells.
+	pg.do(chromedp.KeyEvent("\r/tab"))
+	pg.poll(`!` + popup + `.hidden && ` + popup + `.textContent.includes("Table") && "menu"`)
+	pg.do(chromedp.KeyEvent("\r"))
+	pg.do(chromedp.KeyEvent("A\tB"))
+	has("table", `{"type":"table_cell","attrs":{"header":true},"content":[{"type":"paragraph","content":[{"type":"text","text":"A"}]}]},{"type":"table_cell","attrs":{"header":true},"content":[{"type":"paragraph","content":[{"type":"text","text":"B"}]}]}`)
+
+	// Pasting Markdown at the end makes blocks.
+	pg.eval(`(() => { const e = ` + ed + `; e.view.state = e.view.state; const s = e.state;
+		const dt = new DataTransfer(); dt.setData("text/plain", "- [x] shipped\n- [ ] next");
+		e.view.run((st, d) => { d(st.tr.setSelection(st.selection.constructor.atEnd(st.doc))); return true; });
+		e.shadowRoot.querySelector(".editor").dispatchEvent(new InputEvent("beforeinput", { inputType: "insertFromPaste", dataTransfer: dt, bubbles: true, cancelable: true }));
+	})()`)
+	has("pasted tasks", `{"type":"task_item","attrs":{"checked":true},"content":[{"type":"paragraph","content":[{"type":"text","text":"shipped"}]}]}`)
+	pg.logs.failOnErrors(t)
+}
