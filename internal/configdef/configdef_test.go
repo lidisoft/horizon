@@ -2,10 +2,13 @@ package configdef_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -658,4 +661,50 @@ func TestEstimation(t *testing.T) {
 	}
 	_, err = f.cfg.SetEstimation(ctx, f.ws_(), nil)
 	wantField(t, err, "scale", "required")
+}
+
+func TestCalendar(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	c, err := f.cfg.CalendarSettings(ctx, f.db, f.proj())
+	if err != nil || c.TimeZone.Value != "UTC" || !slices.Equal(c.WorkingDays.Value, []int{1, 2, 3, 4, 5}) || len(c.Holidays.Value) != 0 || c.Holidays.Mode != "inherit" {
+		t.Fatalf("default = %+v, %v", c, err)
+	}
+	raw := func(s string) json.RawMessage { return json.RawMessage(s) }
+	ws, err := f.cfg.SetCalendar(ctx, f.ws_(), configdef.CalendarInput{
+		"working_days": raw(`[5,4,3,2,1,7]`),
+		"holidays":     raw(`[{"date":"2027-01-01","name":"New Year"},{"date":"2026-12-25","name":" Christmas "}]`),
+	})
+	if err != nil || !slices.Equal(ws.WorkingDays.Value, []int{1, 2, 3, 4, 5, 7}) || ws.Holidays.Value[0].Name != "Christmas" {
+		t.Fatalf("workspace = %+v, %v", ws, err)
+	}
+	_, err = f.cfg.SetCalendar(ctx, f.ws_(), configdef.CalendarInput{
+		"time_zone": raw(`"Europe/Paris"`), "working_days": raw(`[0]`), "holidays": raw(`[{"date":"2026-13-01","name":"x"}]`), "holidays_mode": raw(`"add"`), "colour": raw(`1`),
+	})
+	wantField(t, err, "time_zone", "workspace_property")
+	wantField(t, err, "working_days", "invalid")
+	wantField(t, err, "holidays", "invalid")
+	wantField(t, err, "holidays_mode", "invalid")
+	wantField(t, err, "colour", "unknown")
+
+	// The project inherits, then adds a date in its own time zone.
+	p, err := f.cfg.SetCalendar(ctx, f.proj(), configdef.CalendarInput{
+		"time_zone": raw(`"Europe/Paris"`), "holidays": raw(`[{"date":"2026-12-24","name":"Eve"}]`), "holidays_mode": raw(`"add"`),
+	})
+	if err != nil || p.TimeZone.Value != "Europe/Paris" || !p.TimeZone.Overridden || p.TimeZone.Workspace != "UTC" ||
+		len(p.Holidays.Value) != 3 || p.Holidays.Mode != "add" || len(p.Holidays.Own) != 1 || p.WorkingDays.Overridden {
+		t.Fatalf("project = %+v, %v", p, err)
+	}
+	cal := p.Calendar()
+	if cal.Working(time.Date(2026, 12, 24, 0, 0, 0, 0, time.UTC)) || !cal.Working(time.Date(2026, 12, 27, 0, 0, 0, 0, time.UTC)) {
+		t.Error("project calendar: Eve off, Sundays worked")
+	}
+	if p, _ = f.cfg.SetCalendar(ctx, f.proj(), configdef.CalendarInput{"holidays_mode": raw(`"replace"`)}); len(p.Holidays.Value) != 1 {
+		t.Errorf("replace = %+v", p.Holidays)
+	}
+	// Clearing the dates drops the mode; clearing the zone follows the workspace.
+	p, err = f.cfg.SetCalendar(ctx, f.proj(), configdef.CalendarInput{"holidays": raw(`null`), "time_zone": raw(`null`)})
+	if err != nil || p.Holidays.Mode != "inherit" || len(p.Holidays.Value) != 2 || p.TimeZone.Overridden {
+		t.Errorf("cleared = %+v, %v", p, err)
+	}
 }

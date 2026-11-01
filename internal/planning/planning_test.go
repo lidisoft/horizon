@@ -226,6 +226,20 @@ func TestPlanAndSchedule(t *testing.T) {
 	if list.Next != (planning.NextIteration{Name: "Sprint 1", StartDate: "2026-11-04", EndDate: "2026-11-17"}) || !list.CanManage {
 		t.Errorf("next = %+v, can = %v", list.Next, list.CanManage)
 	}
+	// In a project calendar with the 4th off and no Tuesdays, it starts on
+	// the next working day, and still ends on one.
+	target := configdef.Target{Principal: f.owner, WorkspaceID: f.acme.ID, ProjectID: uuid.NullUUID{UUID: f.hzn.ID, Valid: true}}
+	if _, err := f.cfg.SetCalendar(ctx, target, configdef.CalendarInput{
+		"working_days": json.RawMessage(`[1,3,4,5]`), "holidays": json.RawMessage(`[{"date":"2026-11-04","name":"Off"}]`), "holidays_mode": json.RawMessage(`"replace"`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if l, _ := f.svc.Iterations(ctx, pc, false); l.Next != (planning.NextIteration{Name: "Sprint 1", StartDate: "2026-11-05", EndDate: "2026-11-18"}) {
+		t.Errorf("next in the project calendar = %+v", l.Next)
+	}
+	if _, err := f.cfg.SetCalendar(ctx, target, configdef.CalendarInput{"working_days": json.RawMessage(`null`), "holidays": json.RawMessage(`null`)}); err != nil {
+		t.Fatal(err)
+	}
 	if list.Settings.CompletionPolicy.Value != configdef.CompletionRollover || list.Settings.MaxActive.Value != 1 {
 		t.Errorf("settings = %+v", list.Settings)
 	}

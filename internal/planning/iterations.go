@@ -285,36 +285,16 @@ func (s *Service) next(ctx context.Context, pc project.Context, settings configd
 	if err != nil {
 		return NextIteration{}, err
 	}
-	start := today(s.now(), pc.Workspace.TimeZone)
+	cal, err := s.calendar(ctx, s.pool, pc)
+	if err != nil {
+		return NextIteration{}, err
+	}
+	start := cal.Today(s.now())
 	if last.Valid && !last.Time.Before(start) {
 		start = last.Time.AddDate(0, 0, 1)
 	}
-	start, end := span(start, settings.LengthWeeks.Value)
+	start, end := cal.Span(start, settings.LengthWeeks.Value)
 	return NextIteration{Name: fmt.Sprintf("Sprint %d", n+1), StartDate: start.Format(time.DateOnly), EndDate: end.Format(time.DateOnly)}, nil
-}
-
-// today is the date in a time zone (UTC when unknown), at midnight UTC.
-func today(now time.Time, tz string) time.Time {
-	loc, err := time.LoadLocation(tz)
-	if err != nil {
-		loc = time.UTC
-	}
-	y, m, d := now.In(loc).Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
-}
-
-// span starts on the first weekday from start and lasts weeks, ending on
-// the last weekday before the same weekday weeks later. Working calendars
-// (holidays) aren't modelled yet: weekends are the non-working days.
-func span(start time.Time, weeks int) (time.Time, time.Time) {
-	for start.Weekday() == time.Saturday || start.Weekday() == time.Sunday {
-		start = start.AddDate(0, 0, 1)
-	}
-	end := start.AddDate(0, 0, 7*weeks-1)
-	for end.Weekday() == time.Saturday || end.Weekday() == time.Sunday {
-		end = end.AddDate(0, 0, -1)
-	}
-	return start, end
 }
 
 // --- Commands -----------------------------------------------------------------------

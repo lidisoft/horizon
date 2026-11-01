@@ -63,11 +63,12 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   /config/labels  /config/labels/{id}       /merge {into}; projects: /move-to-workspace
   /config/settings/estimation              GET | PUT {scale}; at project scope {scale: null} follows the workspace
   /config/settings/iterations              GET | PUT {completion_policy, max_active_iterations, iteration_length_weeks}: absent keys unchanged, null removes the value
+  /config/settings/calendar                GET | PUT {time_zone (projects), working_days ([1–7], Monday 1), holidays ([{date, name}]), holidays_mode (projects: add | replace)}: same rules
   /projects                                 GET (visible ones) | POST (project.create)
   /projects/{key}                          GET (current or former key; "can" lists the caller's permissions) | PATCH | /archive | /unarchive
                                            DELETE ?confirm={key} (archived projects only)
     /people                                active members who see the project (assignee pickers)
-    /config/resolved                       the configuration its issues use, in one read (switched-off labels flagged)
+    /config/resolved                       the configuration its issues use, in one read (switched-off labels flagged), with its working calendar
     /config/…                              project overrides (same shape), plus …/{id}/disable|enable and issue-types/{id}/copy
     /iterations                            GET (stats, next suggestion, settings, velocity; ?archived=true) | POST (iteration.manage)
     /iterations/{id}                       GET | PATCH (If-Match) | DELETE (not while active)

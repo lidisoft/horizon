@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/lidisoft/horizon/internal/access"
+	"github.com/lidisoft/horizon/internal/calendar"
 	"github.com/lidisoft/horizon/internal/configdef"
 	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/issue"
@@ -59,6 +60,17 @@ func (s *Service) settings(ctx context.Context, conn db.DBTX, pc project.Context
 	return s.config.IterationSettings(ctx, conn, configdef.Target{
 		Principal: pc.Principal, WorkspaceID: pc.Workspace.ID, ProjectID: uuid.NullUUID{UUID: pc.Project.ID, Valid: true},
 	})
+}
+
+// calendar is the project's working calendar (time zone, working days).
+func (s *Service) calendar(ctx context.Context, conn db.DBTX, pc project.Context) (calendar.Calendar, error) {
+	c, err := s.config.CalendarSettings(ctx, conn, configdef.Target{
+		Principal: pc.Principal, WorkspaceID: pc.Workspace.ID, ProjectID: uuid.NullUUID{UUID: pc.Project.ID, Valid: true},
+	})
+	if err != nil {
+		return calendar.Calendar{}, err
+	}
+	return c.Calendar(), nil
 }
 
 // event builds a planning event. Payloads name the project when there is

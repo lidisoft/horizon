@@ -1397,6 +1397,63 @@ func TestTable(t *testing.T) {
 	pg.logs.failOnErrors(t)
 }
 
+// TestCalendarSettings sets the workspace's working days and holidays,
+// then a project's own time zone and extra dates.
+func TestCalendarSettings(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	if status, body := pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`); status != 201 {
+		t.Fatalf("create project: %d %s", status, body)
+	}
+	emit := func(sel, detail string) {
+		pg.eval(`(() => { const s = ` + sel + `; const d = ` + detail + `; if (d.value !== undefined) s.setAttribute("value", d.value);
+			s.dispatchEvent(new CustomEvent("lds-change", { detail: d, bubbles: true, composed: true })); })()`)
+	}
+	addDate := func(date, name string) {
+		pg.eval(view + `.querySelector("[data-new-date]").setAttribute("value", "` + date + `")`)
+		pg.eval(view + `.querySelector("[data-new-name]").setAttribute("value", "` + name + `")`)
+		pg.click(view + `.querySelector('[data-action="add-date"]')`)
+		pg.poll(view + `.querySelector(".dates")?.textContent.includes("` + name + `") && "added"`)
+	}
+	save := func() {
+		pg.click(view + `.querySelector('[data-action="save"]:not([disabled])')`)
+		pg.poll(view + `.querySelector('[data-action="save"][disabled]') && "saved"`)
+	}
+
+	// The workspace: no Fridays, Christmas off.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/calendar"))
+	pg.poll(view + `.querySelector('[data-day="5"]') && "page"`)
+	emit(view+`.querySelector('[data-day="5"]')`, `{ checked: false }`)
+	addDate("2026-12-25", "Christmas")
+	save()
+	_, body := pg.api("GET", "/w/acme/config/settings/calendar", "")
+	if !strings.Contains(body, `"working_days":{"value":[1,2,3,4]`) || !strings.Contains(body, `"name":"Christmas"`) {
+		t.Errorf("workspace calendar = %s", body)
+	}
+
+	// The project: its own time zone, and Christmas Eve as well.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/calendar?project=HZN"))
+	pg.poll(view + `.querySelector('[data-override="zone"]') && "project page"`)
+	emit(view+`.querySelector('[data-override="zone"]')`, `{ checked: true }`)
+	emit(view+`.querySelector("[data-zone]")`, `{ value: "Europe/Paris" }`)
+	emit(view+`.querySelector("[data-mode]")`, `{ value: "add" }`)
+	addDate("2026-12-24", "Eve")
+	pg.poll(view + `.querySelector(".date.inherited")?.textContent.includes("Christmas") && "inherited shown"`)
+	save()
+	_, body = pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	for _, want := range []string{`"time_zone":{"value":"Europe/Paris","workspace":"UTC","overridden":true}`, `"mode":"add"`, `"name":"Eve"`, `"name":"Christmas"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("resolved calendar lacks %s: %s", want, body)
+		}
+	}
+	pg.logs.failOnErrors(t)
+}
+
 // TestReleases creates and ships a release, and plans a milestone with
 // its issues, from the project's Releases page and the workspace's
 // Milestones page.

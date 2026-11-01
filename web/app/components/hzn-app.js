@@ -51,6 +51,7 @@ export const ROUTES = [
   { name: "settings-labels", path: "/w/:ws/settings/labels", view: "hzn-settings-labels", layout: "settings" },
   { name: "settings-estimation", path: "/w/:ws/settings/estimation", view: "hzn-settings-estimation", layout: "settings" },
   { name: "settings-iterations", path: "/w/:ws/settings/iterations", view: "hzn-settings-iterations", layout: "settings" },
+  { name: "settings-calendar", path: "/w/:ws/settings/calendar", view: "hzn-settings-calendar", layout: "settings" },
   { name: "invitation", path: "/invitation", view: "hzn-invitation", public: true },
   { name: "sign-in", path: "/sign-in", view: "hzn-sign-in", public: true },
   { name: "forgot-password", path: "/forgot-password", view: "hzn-forgot-password", public: true },

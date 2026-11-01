@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/lidisoft/horizon/internal/apperr"
+	"github.com/lidisoft/horizon/internal/calendar"
 	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/workspace"
@@ -88,6 +89,8 @@ func (h *HTTP) register(g *gin.RouterGroup) {
 	g.PUT("/settings/estimation", h.setEstimation)
 	g.GET("/settings/iterations", h.iterationSettings)
 	g.PUT("/settings/iterations", h.setIterationSettings)
+	g.GET("/settings/calendar", h.calendarSettings)
+	g.PUT("/settings/calendar", h.setCalendar)
 }
 
 // CategoryList is the body of GET …/config/categories.
@@ -792,6 +795,60 @@ func (h *HTTP) setIterationSettings(c *gin.Context) {
 	}
 }
 
+// CalendarResponse is the working calendar in effect and whether the
+// caller may change it.
+type CalendarResponse struct {
+	CalendarSettings
+	CanManage bool `json:"can_manage"`
+}
+
+// CalendarRequest changes the working calendar. An absent key is left
+// alone; null removes the value, so a project follows the workspace again
+// and the workspace returns to the built-in default.
+type CalendarRequest struct {
+	// TimeZone overrides the workspace's at project scope (the workspace's
+	// is changed with PATCH /w/{ws}).
+	TimeZone *string `json:"time_zone,omitempty" example:"Europe/Paris"`
+	// WorkingDays are ISO weekdays, Monday 1 to Sunday 7.
+	WorkingDays  []int              `json:"working_days,omitempty" example:"1,2,3,4,5"`
+	Holidays     []calendar.Holiday `json:"holidays,omitempty"`
+	HolidaysMode *string            `json:"holidays_mode,omitempty" enums:"add,replace"`
+}
+
+// calendarSettings returns the working calendar in effect.
+//
+//	@Summary		Get the working calendar
+//	@Description	Time zone, working weekdays and non-working dates, each with the workspace's value and whether (or how) the project overrides it.
+//	@Tags			configuration
+//	@Produce		json
+//	@Param			ws	path		string	true	"Workspace slug"
+//	@Success		200	{object}	CalendarResponse
+//	@Router			/api/v1/w/{ws}/config/settings/calendar [get]
+func (h *HTTP) calendarSettings(c *gin.Context) {
+	t := targetOf(c)
+	v, err := h.svc.CalendarSettings(c, h.svc.pool, t)
+	reply(c, http.StatusOK, CalendarResponse{CalendarSettings: v, CanManage: h.svc.CanManage(c, t)}, err)
+}
+
+// setCalendar changes the working calendar.
+//
+//	@Summary		Set the working calendar
+//	@Description	Keys left out are unchanged; null removes a value (at project scope, the project follows the workspace again). A project's holidays add to the workspace's or replace them (holidays_mode).
+//	@Tags			configuration
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws		path		string			true	"Workspace slug"
+//	@Param			body	body		CalendarRequest	true	"Settings to change"
+//	@Success		200		{object}	CalendarSettings
+//	@Router			/api/v1/w/{ws}/config/settings/calendar [put]
+func (h *HTTP) setCalendar(c *gin.Context) {
+	var req CalendarInput
+	if bind(c, &req) {
+		v, err := h.svc.SetCalendar(c, targetOf(c), req)
+		reply(c, http.StatusOK, v, err)
+	}
+}
+
 // --- Requests and helpers -------------------------------------------------------
 
 // CategoryRequest creates or changes a status category.
@@ -920,6 +977,8 @@ type ResolvedConfig struct {
 	// keep them, greyed, but they aren't offered.
 	Labels     []Label    `json:"labels"`
 	Estimation Estimation `json:"estimation"`
+	// Calendar is the project's working calendar.
+	Calendar CalendarSettings `json:"calendar"`
 }
 
 // resolved returns the project's resolved configuration.
@@ -940,6 +999,10 @@ func (h *HTTP) resolved(c *gin.Context) {
 		return
 	}
 	out := ResolvedConfig{IssueTypes: r.IssueTypes, TypeFields: r.TypeFields, Estimation: r.Estimation}
+	if out.Calendar, err = h.svc.CalendarSettings(c, h.svc.pool, t); err != nil {
+		server.WriteError(c, err)
+		return
+	}
 	for _, x := range r.Categories {
 		out.Categories = append(out.Categories, x)
 	}

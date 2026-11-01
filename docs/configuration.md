@@ -203,6 +203,16 @@ working days only, auto-scheduling skips non-working days, and they are shaded
 on the timeline and calendar. Individual availability (absences) is not
 modelled in v1.
 
+The settings page is **Working calendar** (`/w/{ws}/settings/calendar`, with
+`?project=KEY`); the API is `/config/settings/calendar`. A project inherits
+the workspace's non-working dates, adds its own to them, or replaces them
+(`holidays_mode`); dropping its own dates returns it to inheriting.
+`internal/calendar` (with `web/app/components/calendar.js` mirroring it)
+does the arithmetic: working day tests, adding and counting working days,
+and the span of a new iteration (from the first working day, to the last one
+before the same weekday N weeks later). The suggested next iteration and the
+release date set on shipping follow the project's calendar.
+
 ## Estimation scales
 
 | Scale | Values |

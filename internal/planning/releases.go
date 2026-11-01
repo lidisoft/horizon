@@ -324,7 +324,11 @@ func (s *Service) ShipRelease(ctx context.Context, pc project.Context, id uuid.U
 		now := s.now()
 		next.State, next.ReleasedAt = ReleaseReleased, &now
 		if !next.ReleaseDate.Valid {
-			next.ReleaseDate = pgtype.Date{Time: today(now, pc.Workspace.TimeZone), Valid: true}
+			cal, err := s.calendar(ctx, s.pool, pc)
+			if err != nil {
+				return nil, err
+			}
+			next.ReleaseDate = pgtype.Date{Time: cal.Today(now), Valid: true}
 		}
 		return []change{{"ReleaseReleased", map[string]any{"release_date": dateString(next.ReleaseDate)}}}, nil
 	})

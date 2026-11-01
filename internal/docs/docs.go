@@ -1467,6 +1467,74 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/w/{ws}/config/settings/calendar": {
+            "get": {
+                "description": "Time zone, working weekdays and non-working dates, each with the workspace's value and whether (or how) the project overrides it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Get the working calendar",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.CalendarResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Keys left out are unchanged; null removes a value (at project scope, the project follows the workspace again). A project's holidays add to the workspace's or replace them (holidays_mode).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Set the working calendar",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Settings to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.CalendarRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.CalendarSettings"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/config/settings/estimation": {
             "get": {
                 "produces": [
@@ -6146,6 +6214,87 @@ const docTemplate = `{
                 }
             }
         },
+        "calendar.Holiday": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "example": "2026-12-25"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Christmas"
+                }
+            }
+        },
+        "configdef.CalendarRequest": {
+            "type": "object",
+            "properties": {
+                "holidays": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/calendar.Holiday"
+                    }
+                },
+                "holidays_mode": {
+                    "type": "string",
+                    "enum": [
+                        "add",
+                        "replace"
+                    ]
+                },
+                "time_zone": {
+                    "description": "TimeZone overrides the workspace's at project scope (the workspace's\nis changed with PATCH /w/{ws}).",
+                    "type": "string",
+                    "example": "Europe/Paris"
+                },
+                "working_days": {
+                    "description": "WorkingDays are ISO weekdays, Monday 1 to Sunday 7.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        1,
+                        2,
+                        3,
+                        4,
+                        5
+                    ]
+                }
+            }
+        },
+        "configdef.CalendarResponse": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "type": "boolean"
+                },
+                "holidays": {
+                    "$ref": "#/definitions/configdef.HolidaysSetting"
+                },
+                "time_zone": {
+                    "$ref": "#/definitions/configdef.ZoneSetting"
+                },
+                "working_days": {
+                    "$ref": "#/definitions/configdef.WeekdaysSetting"
+                }
+            }
+        },
+        "configdef.CalendarSettings": {
+            "type": "object",
+            "properties": {
+                "holidays": {
+                    "$ref": "#/definitions/configdef.HolidaysSetting"
+                },
+                "time_zone": {
+                    "$ref": "#/definitions/configdef.ZoneSetting"
+                },
+                "working_days": {
+                    "$ref": "#/definitions/configdef.WeekdaysSetting"
+                }
+            }
+        },
         "configdef.Category": {
             "type": "object",
             "properties": {
@@ -6480,6 +6629,37 @@ const docTemplate = `{
                 },
                 "unit": {
                     "type": "string"
+                }
+            }
+        },
+        "configdef.HolidaysSetting": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": [
+                        "inherit",
+                        "add",
+                        "replace"
+                    ]
+                },
+                "own": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/calendar.Holiday"
+                    }
+                },
+                "value": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/calendar.Holiday"
+                    }
+                },
+                "workspace": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/calendar.Holiday"
+                    }
                 }
             }
         },
@@ -6847,6 +7027,14 @@ const docTemplate = `{
         "configdef.ResolvedConfig": {
             "type": "object",
             "properties": {
+                "calendar": {
+                    "description": "Calendar is the project's working calendar.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/configdef.CalendarSettings"
+                        }
+                    ]
+                },
                 "categories": {
                     "type": "array",
                     "items": {
@@ -7016,6 +7204,26 @@ const docTemplate = `{
                 }
             }
         },
+        "configdef.WeekdaysSetting": {
+            "type": "object",
+            "properties": {
+                "overridden": {
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "workspace": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "configdef.Workflow": {
             "type": "object",
             "properties": {
@@ -7096,6 +7304,22 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/configdef.Workflow"
                     }
+                }
+            }
+        },
+        "configdef.ZoneSetting": {
+            "type": "object",
+            "properties": {
+                "overridden": {
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "string",
+                    "example": "Europe/Paris"
+                },
+                "workspace": {
+                    "type": "string",
+                    "example": "UTC"
                 }
             }
         },

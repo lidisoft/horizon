@@ -26,6 +26,7 @@ import "horizon/views/hzn-settings-estimation.js";
 import "horizon/views/hzn-settings-general.js";
 import "horizon/views/hzn-settings-issue-types.js";
 import "horizon/views/hzn-settings-iterations.js";
+import "horizon/views/hzn-settings-calendar.js";
 import "horizon/views/hzn-settings-labels.js";
 import "horizon/views/hzn-settings-members.js";
 import "horizon/views/hzn-settings-project.js";
