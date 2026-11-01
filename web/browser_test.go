@@ -42,6 +42,7 @@ import (
 	"github.com/lidisoft/horizon/internal/search"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/testenv"
+	views "github.com/lidisoft/horizon/internal/view"
 	"github.com/lidisoft/horizon/internal/workspace"
 	"github.com/lidisoft/horizon/web"
 )
@@ -273,6 +274,7 @@ func appServer(t *testing.T) app {
 	issues := issue.NewHTTP(issueSvc, projectSvc)
 	planningSvc := planning.New(pool, acc, config, projectSvc, issueSvc, nil)
 	plans := planning.NewHTTP(planningSvc)
+	viewsHTTP := views.NewHTTP(views.New(pool, acc, projectSvc))
 	searchHTTP := search.NewHTTP(search.New(pool, acc, projectSvc, issueSvc))
 
 	// Events reach sockets as in production: outbox relay, JetStream, hub.
@@ -295,7 +297,7 @@ func appServer(t *testing.T) app {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
 		hub.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace,
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register,
 			func(ws *gin.RouterGroup) {
 				projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject)
 			})
@@ -1190,6 +1192,104 @@ func TestBoard(t *testing.T) {
 		s.dispatchEvent(new CustomEvent("lds-change", { detail: { value: "all" }, bubbles: true, composed: true })); })()`)
 	pg.poll(view + `.querySelector('.card[data-key="HZN-3"]') && "all issues"`)
 	pg.poll(`location.search === "?iteration=all" && "remembered"`)
+	pg.logs.failOnErrors(t)
+}
+
+// TestViews filters the list from the view bar, saves the filter as a
+// view, and sets a WIP limit on a board view.
+func TestViews(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	if status, body := pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`); status != 201 {
+		t.Fatalf("create project: %d %s", status, body)
+	}
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID, Name string } `json:"issue_types"`
+	}
+	if err := json.Unmarshal([]byte(cfg), &resolved); err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Outbox relay", "Replay after reconnect", "Saved views"} {
+		if status, body := pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"`+title+`"}`); status != 201 {
+			t.Fatalf("create issue: %d %s", status, body)
+		}
+	}
+	pg.api("POST", "/w/acme/issues/HZN-2/prioritize", `{"priority":"high"}`)
+	pg.api("POST", "/w/acme/issues/HZN-3/prioritize", `{"priority":"high"}`)
+
+	bar := view + `.querySelector("hzn-view-bar").shadowRoot`
+	keys := func() string {
+		return pg.poll(`[...` + view + `.querySelectorAll(".row")].map((r) => r.dataset.key).join(",") || "none"`)
+	}
+	pick := func(sel, value string) {
+		pg.eval(`(() => { const s = ` + bar + `.querySelector("` + sel + `"); s.setAttribute("value", "` + value + `");
+			s.dispatchEvent(new CustomEvent("lds-change", { detail: { value: "` + value + `" }, bubbles: true, composed: true })); })()`)
+	}
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/issues"))
+	pg.poll(view + `.querySelectorAll(".row").length === 3 && "list"`)
+
+	// Priority is High: two rows, a chip, and the filter in the address.
+	pg.click(bar + `.querySelector("[data-add]")`)
+	pg.poll(bar + `.querySelector("[data-builder]").hasAttribute("open") && "builder"`)
+	pick("[data-field]", "priority")
+	pick("[data-value]", "1") // urgent, high, …
+	pg.click(bar + `.querySelector('[data-action="apply"]')`)
+	pg.poll(bar + `.querySelector(".chip")?.textContent.replace(/\s+/g, " ").includes("Priority is High") && "chip"`)
+	pg.poll(view + `.querySelectorAll(".row").length === 2 && "filtered"`)
+	if got := keys(); got != "HZN-2,HZN-3" {
+		t.Errorf("filtered = %s", got)
+	}
+	pg.poll(`new URLSearchParams(location.search).get("filter")?.includes("priority") && "in address"`)
+
+	// Words narrow it further.
+	pg.eval(`(() => { const i = ` + bar + `.querySelector("[data-text]");
+		i.dispatchEvent(new CustomEvent("lds-input", { detail: { value: "replay" }, bubbles: true, composed: true })); })()`)
+	pg.poll(view + `.querySelectorAll(".row").length === 1 && "searched"`)
+	if got := keys(); got != "HZN-2" {
+		t.Errorf("searched = %s", got)
+	}
+
+	// Save as a view: the address names the view, not the filter.
+	pg.eval(bar + `.querySelector('[data-action="save-as"]').click()`)
+	pg.poll(bar + `.querySelector("[data-save]").hasAttribute("open") && "dialog"`)
+	pg.typeInto(bar+`.querySelector('[data-save] [name="name"]')`, "Urgent replays\r")
+	pg.poll(`new URLSearchParams(location.search).has("view") && !new URLSearchParams(location.search).has("filter") && "saved"`)
+	_, list := pg.api("GET", "/w/acme/views?project=HZN", "")
+	if !strings.Contains(list, `"Urgent replays"`) || !strings.Contains(list, `"layout":"list"`) {
+		t.Errorf("views = %s", list)
+	}
+
+	// Picking "All issues" clears it.
+	pg.eval(bar + `.querySelector('[data-action="pick"][data-id=""]').click()`)
+	pg.poll(view + `.querySelectorAll(".row").length === 3 && "all"`)
+
+	// A board view with a WIP limit: the column is over it, and the limit can be changed.
+	status, body := pg.api("POST", "/w/acme/views", `{"project":"HZN","name":"Flow","layout":"board","display":{"wip":{"Backlog":2}}}`)
+	if status != 201 {
+		t.Fatalf("create view: %d %s", status, body)
+	}
+	var flow struct{ ID string }
+	_ = json.Unmarshal([]byte(body), &flow)
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/board?view=" + flow.ID))
+	head := view + `.querySelector('[data-column-head="0"]')`
+	pg.poll(head + `?.classList.contains("over") && "over"`)
+	if got := pg.poll(head + `.querySelector(".count").textContent.trim()`); got != "3 / 2" {
+		t.Errorf("count = %s", got)
+	}
+	pg.click(head + `.querySelector('[data-action="wip"]')`)
+	pg.poll(view + `.querySelector("[data-wip]").hasAttribute("open") && "wip dialog"`)
+	pg.eval(view + `.querySelector('[data-wip] [name="wip"]').setAttribute("value", "5")`)
+	pg.click(view + `.querySelector('[data-action="wip-save"]')`)
+	pg.poll(head + `?.querySelector(".count").textContent.trim() === "3 / 5" && !` + head + `.classList.contains("over") && "raised"`)
+	if _, body := pg.api("GET", "/w/acme/views/"+flow.ID, ""); !strings.Contains(body, `"Backlog":5`) {
+		t.Errorf("view = %s", body)
+	}
 	pg.logs.failOnErrors(t)
 }
 

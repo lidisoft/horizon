@@ -57,7 +57,7 @@ export function forgetProjects() {
 }
 
 /** Aggregates whose events leave projectData as it is. */
-const KEEPS_PROJECT_DATA = new Set(["issue", "role_grant", "iteration", "release", "milestone"]);
+const KEEPS_PROJECT_DATA = new Set(["issue", "role_grant", "iteration", "release", "milestone", "view"]);
 
 /** Events that change what projectData holds. */
 export function changesProjectData(event) {

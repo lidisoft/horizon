@@ -63,8 +63,8 @@ usable exists early.
 
 ## Phase 6 — Views
 
-- [ ] Filter AST → SQL compiler, filter bar, saved views (personal / shared)
-- [ ] Board configuration in saved views: WIP limits per column
+- [x] Filter AST → SQL compiler, filter bar, saved views (personal / shared)
+- [x] Board configuration in saved views: WIP limits per column
 - [ ] Table view with inline editing
 - [ ] Working calendars (weekdays, holidays) and time zone settings
 - [ ] Timeline / Gantt with dependencies, auto-scheduling in working days, milestones

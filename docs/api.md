@@ -213,6 +213,25 @@ and custom fields. Every value is a bind parameter (`internal/query`); a
 query that doesn't compile answers 422 with the place (`filter.and[1].op:
 bad_op`). At most 50 conditions, 6 levels deep, 500 issues a page.
 
+## Saved views
+
+A view stores a query (as above, without `projects` and `cursor`), a
+layout (`list`, `board`, `table`, `timeline`, `calendar`) and `display`
+options the client owns (at most 16 KB of JSON; the board keeps `lanes` and
+`wip`, its WIP limits by column name).
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `GET` | `/w/{ws}/views[?project=KEY]` | The workspace's shared views, those of visible projects, and the caller's own; with `project`, the workspace's and that project's |
+| `POST` | `/w/{ws}/views` | `{ name, layout, project?, shared?, query?, display? }`. Personal by default; `shared` needs `view.share` on the project (or the workspace without one) |
+| `GET` | `/w/{ws}/views/{id}` | 404 for someone else's personal view or a view of a project the caller doesn't see |
+| `PATCH` | `/w/{ws}/views/{id}` | Fields left out stay; `If-Match`. Its owner edits a personal view, `view.share` a shared one; sharing or unsharing needs `view.share` |
+| `DELETE` | `/w/{ws}/views/{id}` | Same rule; a `ViewDeleted` tombstone remains |
+
+The query is compiled when it is saved: one that wouldn't run answers 422
+naming the place (`query.filter.field: unknown_field`). Each view answers
+`can_edit`. Events of personal views are pushed to their owner only.
+
 ## Domain event format
 
 Used for the activity feed, WebSocket pushes and webhook payloads:

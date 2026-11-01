@@ -27,6 +27,7 @@ import (
 	"github.com/lidisoft/horizon/internal/realtime"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/testenv"
+	"github.com/lidisoft/horizon/internal/view"
 	"github.com/lidisoft/horizon/internal/workspace"
 )
 
@@ -40,6 +41,7 @@ type env struct {
 	ws       *workspace.Service
 	projects *project.Service
 	issues   *issue.Service
+	views    *view.Service
 	cfg      *configdef.Service
 	relay    *eventlog.Relay
 	srv      *httptest.Server
@@ -62,6 +64,7 @@ func setup(t *testing.T) *env {
 		OnCreate: []workspace.CreateHook{e.cfg.SeedDefaults}})
 	e.projects = project.New(pool, acc, nil)
 	e.issues = issue.New(pool, acc, e.cfg, e.projects, nil)
+	e.views = view.New(pool, acc, e.projects)
 	e.relay = &eventlog.Relay{Pool: pool, JetStream: bus.JetStream, Stream: bus.Stream, Log: zerolog.Nop(), BatchSize: 100}
 	hub := realtime.New(realtime.Options{Log: zerolog.Nop(), Pool: pool, NATS: bus.Conn, Stream: bus.Stream, Identity: e.ids, Access: acc,
 		Workspaces: e.ws, Projects: e.projects, Issues: e.issues})
@@ -299,11 +302,45 @@ func TestPushes(t *testing.T) {
 	if got := late.events(); keys(got) != "issue.prioritized HZN-1" {
 		t.Errorf("replay: %s", keys(got))
 	}
+	// A personal view is pushed to its owner only; a shared one to everyone.
+	// (A socket whose read timed out is closed: take fresh ones.)
+	a, o = e.dial("ann@example.com"), e.dial("owner@example.com")
+	a.sub([]string{"ws:acme"}, "")
+	o.sub([]string{"ws:acme"}, "")
+	name, layout, shared := "Mine", "list", true
+	if _, err := e.views.Create(ctx, e.wc(ann), view.Input{Name: &name, Layout: &layout}); err != nil {
+		t.Fatal(err)
+	}
+	name = "Team"
+	if _, err := e.views.Create(ctx, e.wc(e.owner), view.Input{Name: &name, Layout: &layout, Shared: &shared}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.relay.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got := names(a.events()); got != "Mine,Team" {
+		t.Errorf("ann got views %s", got)
+	}
+	if got := names(o.events()); got != "Team" {
+		t.Errorf("owner got views %s", got)
+	}
+
 	late2 := e.dial("ann@example.com")
 	late2.sub([]string{"issue:acme/HZN-1"}, oldV7().String())
 	if f := late2.next(5 * time.Second); f.T != "resync" {
 		t.Errorf("old since answered %+v", f)
 	}
+}
+
+// names lists the view names in view events.
+func names(events []pushed) string {
+	var out []string
+	for _, ev := range events {
+		if ev.Aggregate.Type == "view" {
+			out = append(out, ev.Payload["name"].(string))
+		}
+	}
+	return strings.Join(out, ",")
 }
 
 // oldV7 is a UUIDv7 from two days ago: its first 48 bits are the time.

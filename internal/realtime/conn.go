@@ -335,7 +335,7 @@ func (c *conn) offer(ctx context.Context, r routed) {
 	}
 	wc, entered := c.wcs[ws]
 	c.mu.Unlock()
-	if !match || !entered {
+	if !match || !entered || (r.onlyUser != uuid.Nil && r.onlyUser != c.principal.User.ID) {
 		return
 	}
 	if c.allowed(ctx, wc, r) {

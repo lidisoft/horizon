@@ -114,6 +114,7 @@ type routed struct {
 	data     []byte      // the "event" message
 	projects []uuid.UUID // whose viewers may see it; none: workspace-wide
 	issueID  uuid.UUID   // for issue topics
+	onlyUser uuid.UUID   // a personal thing (a personal view): its owner only
 }
 
 // dispatch offers e to the sockets watching its workspace (only to one
@@ -184,6 +185,11 @@ func (h *Hub) route(ctx context.Context, e eventlog.Event) (routed, bool, error)
 		}
 		if e.ActorID.Valid {
 			pe.Actor = &issue.Ref{ID: e.ActorID.UUID}
+		}
+		if owner, ok := payload["owner_id"].(string); ok && e.AggregateType == "view" {
+			if id, err := uuid.Parse(owner); err == nil {
+				r.onlyUser = id
+			}
 		}
 		switch {
 		case e.AggregateType == "project" && changesVisibility(e.Type, payload):

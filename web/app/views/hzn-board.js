@@ -5,7 +5,10 @@
 // Dragging a card to another column moves it to its own workflow's status
 // of that name, when a transition allows it; within a column it ranks.
 // Swimlanes group cards by assignee, parent or priority, remembered per
-// project in this browser.
+// project in this browser. The view bar filters the cards and picks saved
+// views, which keep the swimlanes and WIP limits per column (display.lanes,
+// display.wip by column name): a column over its limit is highlighted, and
+// whoever can edit the view sets the limits from the column headers.
 //
 // Keyboard: j/k move within a column, h/l between columns; Alt+←/→ moves
 // the current card to the column before or after, Alt+↑/↓ up or down;
@@ -13,14 +16,15 @@
 
 import "horizon/components/hzn-issue-create.js";
 import "horizon/components/hzn-issue-detail.js";
+import "horizon/components/hzn-view-bar.js";
 import {
   PRIORITIES, avatar, changesProjectData, forgetProjects, issueHref, issueStyles, labelChips, priorityGlyph, projectData, statusGlyph,
 } from "horizon/components/issue-ui.js";
-import { daysLeft, loadIterations, planningStyles, stateBadge, viewSwitch } from "horizon/components/planning-ui.js";
+import { daysLeft, fetchIssues, loadIterations, planningStyles, stateBadge, viewSwitch } from "horizon/components/planning-ui.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
-import { errorMessage } from "horizon/core/forms.js";
+import { errorMessage, submitOnEnter } from "horizon/core/forms.js";
 
 const LANES = ["none", "assignee", "parent", "priority"];
 const ALL = "all";
@@ -42,7 +46,13 @@ const styles = sheet(`
   .grid { display: grid; grid-template-columns: repeat(var(--columns), minmax(15rem, 1fr)); gap: var(--lds-space-3); min-inline-size: min-content; }
   .colhead { display: flex; align-items: center; gap: var(--lds-space-2); padding: var(--lds-space-1) var(--lds-space-2);
     font-size: var(--lds-font-size-sm); font-weight: var(--lds-font-weight-semibold); position: sticky; top: 0; background: var(--lds-color-bg-canvas); z-index: 1; }
-  .colhead .count { color: var(--lds-color-fg-muted); font-weight: normal; }
+  .colhead .count { color: var(--lds-color-fg-muted); font-weight: normal; font-variant-numeric: tabular-nums; }
+  .colhead.over { background: var(--lds-color-danger-subtle); border-radius: var(--lds-radius-sm); }
+  .colhead.over .count { color: var(--lds-color-danger-fg); font-weight: var(--lds-font-weight-semibold); }
+  .colhead .wip { margin-inline-start: auto; }
+  .controls { display: flex; align-items: center; gap: var(--lds-space-3); }
+  form { display: grid; gap: var(--lds-space-4); }
+  .actions { display: flex; justify-content: flex-end; gap: var(--lds-space-3); }
   .lane { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--lds-space-2); padding: var(--lds-space-2) var(--lds-space-1) 0;
     font-size: var(--lds-font-size-sm); font-weight: var(--lds-font-weight-semibold); border-block-start: 1px solid var(--lds-color-border-subtle); }
   .lane .count { color: var(--lds-color-fg-muted); font-weight: normal; }
@@ -96,6 +106,10 @@ class HznBoard extends HTMLElement {
       if (card) this.open(card.dataset.key);
     });
     root.addEventListener("lds-change", (e) => this.onChange(e));
+    root.addEventListener("hzn-view-change", () => {
+      this.applyView();
+      this.refresh();
+    });
     root.addEventListener("dragstart", (e) => this.onDragStart(e));
     root.addEventListener("dragover", (e) => this.onDragOver(e));
     root.addEventListener("drop", (e) => this.onDrop(e));
@@ -166,7 +180,22 @@ class HznBoard extends HTMLElement {
     this.laneId = `${this.ws}/${this.data.project.key}`;
     this.lanes = LANES.includes(storedLanes(this.laneId)) ? storedLanes(this.laneId) : "none";
     this.columns = this.columnsOf();
+    this.renderFrame();
+    this.bar = this.shadowRoot.querySelector("hzn-view-bar");
+    await this.bar.setup({ ws: this.ws, data: this.data, layout: "board", display: () => ({ ...this.bar.view?.display, lanes: this.lanes, wip: this.wip }) });
+    this.applyView();
     await this.refresh();
+  }
+
+  /** A saved view's swimlanes. */
+  applyView() {
+    const lanes = this.bar?.view?.display?.lanes;
+    if (LANES.includes(lanes)) this.lanes = lanes;
+  }
+
+  /** WIP limits by column name, from the view in force. */
+  get wip() {
+    return this.bar?.view?.display?.wip ?? {};
   }
 
   /**
@@ -200,31 +229,19 @@ class HznBoard extends HTMLElement {
   /** Fetches the iterations and the issues, then renders. */
   async refresh() {
     if (!this.data) return;
-    const { api, i18n } = this.context;
+    const { i18n } = this.context;
     const key = this.data.project.key;
     try {
-      const items = [];
-      const [list] = await Promise.all([
-        loadIterations(this.context, this.ws, key),
-        (async () => {
-          let cursor = "";
-          do {
-            const { data } = await api.get(`/w/${encodeURIComponent(this.ws)}/projects/${key}/issues`, { query: { limit: 500, cursor: cursor || undefined } });
-            items.push(...data.items);
-            cursor = data.next_cursor;
-          } while (cursor);
-        })(),
-      ]);
+      const [list, items] = await Promise.all([loadIterations(this.context, this.ws, key), fetchIssues(this.context, this.ws, key, this.bar?.filter)]);
       this.active = list.items.filter((it) => it.state === "active");
       this.items = items;
     } catch (err) {
-      this.shadowRoot.innerHTML = String(html`<lds-alert intent="danger">${errorMessage(err, i18n)}</lds-alert>`);
+      this.shadowRoot.querySelector("[data-board]").innerHTML = String(html`<lds-alert intent="danger">${errorMessage(err, i18n)}</lds-alert>`);
       return;
     }
     // The scope: ?iteration=, else the first active iteration, else all.
     const wanted = this.context.router.current?.query.get("iteration");
     this.scope = wanted === ALL ? ALL : this.active.find((it) => it.id === wanted)?.id ?? this.active[0]?.id ?? ALL;
-    if (!this.framed) this.renderFrame();
     this.renderBoard();
   }
 
@@ -246,14 +263,29 @@ class HznBoard extends HTMLElement {
         ${p.can.includes("issue.create") && !p.archived_at ? html`<lds-button variant="primary" size="sm" data-action="create"><lds-icon slot="start" name="plus" size="sm"></lds-icon>${t("issues.new")}</lds-button>` : ""}
       </header>
       ${p.archived_at ? html`<lds-alert intent="warning">${t("projects.isArchived")}</lds-alert>` : ""}
-      <div class="toolbar" data-toolbar></div>
-      <div class="board" data-board></div>
+      <div class="toolbar">${viewSwitch(t, this.ws, p.key, "board")}<hzn-view-bar></hzn-view-bar><span class="controls" data-controls></span></div>
+      <div class="board" data-board><lds-skeleton></lds-skeleton></div>
+      <lds-modal size="sm" data-wip>
+        <span slot="header" data-wip-title></span>
+        <form novalidate>
+          <lds-field label="${t("board.wip")}" hint="${t("board.wipHint")}"><lds-input name="wip" type="number" min="1" max="999"></lds-input></lds-field>
+        </form>
+        <div slot="footer" class="actions">
+          <lds-button variant="ghost" data-action="wip-cancel">${t("tokens.cancel")}</lds-button>
+          <lds-button variant="primary" data-action="wip-save">${t("account.save")}</lds-button>
+        </div>
+      </lds-modal>
       <lds-drawer non-modal size="md" data-peek>
         <span slot="header" data-peek-title></span>
         <lds-button slot="actions" variant="ghost" size="sm" data-action="open" label="${t("issues.openPage")}"><lds-icon name="external-link" size="sm"></lds-icon></lds-button>
       </lds-drawer>
       <hzn-issue-create></hzn-issue-create>`);
-    this.framed = true;
+    const wipForm = this.shadowRoot.querySelector("[data-wip] form");
+    submitOnEnter(wipForm);
+    wipForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      this.saveWip();
+    });
     this.shadowRoot.querySelector("[data-peek]").addEventListener("lds-close", () => {
       this.peeked = null;
       this.markCards();
@@ -270,9 +302,7 @@ class HznBoard extends HTMLElement {
       <span class="swatch" data-colour="${p.colour}"></span><strong>${p.name}</strong>
       <lds-icon name="chevron-right" size="sm"></lds-icon><span>${it ? it.name : t("board.allIssues")}</span>
       ${it ? html`${stateBadge(t, it.state)}${left !== null ? html`<span class="muted">${left >= 0 ? t("board.daysLeft", { count: left }) : t("board.overdue", { count: -left })}</span>` : ""}` : ""}`);
-    this.shadowRoot.querySelector("[data-toolbar]").innerHTML = String(html`
-      ${viewSwitch(t, this.ws, p.key, "board")}
-      <span class="grow"></span>
+    this.shadowRoot.querySelector("[data-controls]").innerHTML = String(html`
       <lds-select size="sm" data-scope value="${this.scope}" label="${t("board.scope")}">
         ${this.active.map((x) => html`<option value="${x.id}">${x.name}</option>`)}
         <option value="${ALL}">${t("board.allIssues")}</option>
@@ -283,11 +313,19 @@ class HznBoard extends HTMLElement {
     const cards = this.cards();
     const lanes = this.laneGroups(cards);
     const board = this.shadowRoot.querySelector("[data-board]");
+    const editWip = !!this.bar?.view?.can_edit;
     board.innerHTML = String(html`
       <div class="grid" role="grid" aria-label="${t("board.label")}">
-        ${this.columns.map((c, ci) => html`
-          <div class="colhead" role="columnheader">${statusGlyph(this.data, c.statuses[0].id)}<span>${c.name}</span>
-            <span class="count">${cards.filter((i) => this.columnOf(i.status_id) === ci).length}</span></div>`)}
+        ${this.columns.map((c, ci) => {
+          const count = cards.filter((i) => this.columnOf(i.status_id) === ci).length;
+          const limit = this.wip[c.name];
+          const over = limit && count > limit;
+          return html`
+          <div class="colhead${over ? " over" : ""}" role="columnheader" data-column-head="${ci}">${statusGlyph(this.data, c.statuses[0].id)}<span>${c.name}</span>
+            <span class="count" ${over ? html`title="${t("board.wipOver")}"` : ""}>${limit ? `${count} / ${limit}` : count}</span>
+            ${editWip ? html`<lds-button class="wip" variant="ghost" size="sm" data-action="wip" data-column="${ci}" label="${t("board.wipFor", { column: c.name })}"><lds-icon name="sliders-horizontal" size="sm"></lds-icon></lds-button>` : ""}
+          </div>`;
+        })}
         ${lanes.map((lane) => html`
           ${lane.id === null ? "" : html`<div class="lane" role="rowheader">${lane.label}<span class="count">${lane.cards.length}</span></div>`}
           ${this.columns.map((c, ci) => html`
@@ -577,11 +615,36 @@ class HznBoard extends HTMLElement {
     const action = e.target.closest?.("[data-action]")?.dataset.action;
     if (action === "create") return this.shadowRoot.querySelector("hzn-issue-create").show({ ws: this.ws, project: this.data.project.key });
     if (action === "open") return this.open(this.peeked);
+    if (action === "wip") return this.editWip(Number(e.target.closest("[data-action]").dataset.column));
+    if (action === "wip-cancel") return this.shadowRoot.querySelector("[data-wip]").removeAttribute("open");
+    if (action === "wip-save") return this.shadowRoot.querySelector("[data-wip] form").requestSubmit();
     const card = e.target.closest?.(".card");
     if (card) {
       this.focusCard(card.dataset.key);
       this.peek(card.dataset.key);
     }
+  }
+
+  /** Opens the WIP limit dialog for a column. */
+  editWip(column) {
+    const c = this.columns[column];
+    if (!c) return;
+    this.wipColumn = c.name;
+    const modal = this.shadowRoot.querySelector("[data-wip]");
+    modal.querySelector("[data-wip-title]").textContent = this.context.i18n.t("board.wipFor", { column: c.name });
+    modal.querySelector('[name="wip"]').setAttribute("value", String(this.wip[c.name] ?? ""));
+    modal.setAttribute("open", "");
+  }
+
+  /** Saves the column's limit (none when empty) in the view in force. */
+  async saveWip() {
+    const modal = this.shadowRoot.querySelector("[data-wip]");
+    const n = Number.parseInt(modal.querySelector('[name="wip"]').getAttribute("value") ?? "", 10);
+    const wip = { ...this.wip };
+    if (n > 0) wip[this.wipColumn] = Math.min(n, 999);
+    else delete wip[this.wipColumn];
+    modal.removeAttribute("open");
+    await this.bar.saveDisplay({ ...this.bar.view.display, wip });
   }
 
   peek(key) {
@@ -614,7 +677,6 @@ class HznBoard extends HTMLElement {
     if (m.t === "event" && changesProjectData(m.d)) {
       forgetProjects();
       clearTimeout(this.timer);
-      this.framed = false;
       this.timer = setTimeout(() => this.load(), 200);
       return;
     }

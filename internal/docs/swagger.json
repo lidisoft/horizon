@@ -5658,6 +5658,194 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/views": {
+            "get": {
+                "description": "Shared views of the workspace and of visible projects, and the caller's own; ?project=KEY narrows to the workspace's and that project's.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "views"
+                ],
+                "summary": "List views",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "project",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/view.ViewList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Personal by default; shared needs view.share on its project (or the workspace). The query must compile (422 query.\u003cpath\u003e).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "views"
+                ],
+                "summary": "Create a view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Name and layout required",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/view.Request"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/view.View"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/views/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "views"
+                ],
+                "summary": "Get a view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "View id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/view.View"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "views"
+                ],
+                "summary": "Delete a view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "View id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "description": "Its owner, or view.share for a shared one; sharing or unsharing needs view.share.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "views"
+                ],
+                "summary": "Update a view",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "View id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "View version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/view.Request"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/view.View"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/ws": {
             "get": {
                 "description": "WebSocket (docs/realtime.md): subscribe to ws:\u003cslug\u003e, project:\u003cslug\u003e/\u003cKEY\u003e and issue:\u003cslug\u003e/\u003cKEY-n\u003e and receive their domain events. Session cookie, or an API token in the token query parameter.",
@@ -8575,6 +8763,31 @@
                 }
             }
         },
+        "query.Query": {
+            "type": "object",
+            "properties": {
+                "archived": {
+                    "description": "Archived includes archived issues.",
+                    "type": "boolean"
+                },
+                "filter": {
+                    "$ref": "#/definitions/query.Node"
+                },
+                "group_by": {
+                    "type": "string",
+                    "example": "status"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/query.Sort"
+                    }
+                }
+            }
+        },
         "query.Sort": {
             "type": "object",
             "properties": {
@@ -8723,6 +8936,94 @@
                 "status": {
                     "type": "string",
                     "example": "ready"
+                }
+            }
+        },
+        "view.Request": {
+            "type": "object",
+            "properties": {
+                "display": {
+                    "type": "object"
+                },
+                "layout": {
+                    "type": "string",
+                    "enum": [
+                        "list",
+                        "board",
+                        "table",
+                        "timeline",
+                        "calendar"
+                    ]
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Open bugs"
+                },
+                "project": {
+                    "type": "string",
+                    "example": "HZN"
+                },
+                "query": {
+                    "$ref": "#/definitions/query.Query"
+                },
+                "shared": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "view.View": {
+            "type": "object",
+            "properties": {
+                "can_edit": {
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "display": {
+                    "description": "Display holds the layout's options: columns, grouping, swimlanes,\nboard WIP limits…, as the client stores them.",
+                    "type": "object"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "layout": {
+                    "type": "string",
+                    "enum": [
+                        "list",
+                        "board",
+                        "table",
+                        "timeline",
+                        "calendar"
+                    ]
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Open bugs"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "query": {
+                    "$ref": "#/definitions/query.Query"
+                },
+                "shared": {
+                    "description": "Shared views are seen by everyone who sees their scope; others by\ntheir owner only.",
+                    "type": "boolean"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "view.ViewList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/view.View"
+                    }
                 }
             }
         },

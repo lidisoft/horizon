@@ -90,3 +90,21 @@ export function progress(stats, i18n) {
     : t("planning.progressIssues", { done: done.issues, count: stats.issues });
   return html`<span class="progress"><lds-progress value="${max ? Math.round((value / max) * 100) : 0}" max="100" label="${text}"></lds-progress><span class="muted">${text}</span></span>`;
 }
+
+/**
+ * Every issue of a project in rank order, or those a filter (a query AST)
+ * matches, a page of 500 at a time.
+ */
+export async function fetchIssues(context, ws, key, filter) {
+  const { api } = context;
+  const items = [];
+  let cursor = "";
+  do {
+    const { data } = filter
+      ? await api.post(`/w/${encodeURIComponent(ws)}/issues/query`, { body: { projects: [key], filter, sort: [{ field: "rank" }], limit: 500, cursor: cursor || undefined } })
+      : await api.get(`/w/${encodeURIComponent(ws)}/projects/${encodeURIComponent(key)}/issues`, { query: { limit: 500, cursor: cursor || undefined } });
+    items.push(...data.items);
+    cursor = data.next_cursor;
+  } while (cursor);
+  return items;
+}

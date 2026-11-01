@@ -87,3 +87,18 @@ function render(value) {
   if (value === false || value == null) return "";
   return escapeHtml(value);
 }
+
+/** The composed path of the last pointerdown, seen before any overlay sees it. */
+let pressed = [];
+globalThis.addEventListener?.("pointerdown", (e) => (pressed = e.composedPath()), true);
+
+/**
+ * Keeps an lds-popover open when its own panel is pressed. LDS (v0.0.5)
+ * judges "outside" by the event target at the document, which a shadow root
+ * retargets to its host: inside Horizon's views every press looked outside.
+ */
+export function keepOpenOnInsidePress(popover) {
+  popover.addEventListener("lds-close", (e) => {
+    if (e.detail?.reason === "outside" && pressed.includes(popover)) e.preventDefault();
+  });
+}

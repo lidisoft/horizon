@@ -231,8 +231,13 @@ milestone links any issue the person sees. Progress counts only the linked
 issues the reader sees.
 
 ### View
-Owner, scope (personal, project or workspace), layout, filter tree, grouping,
-sorting, display options.
+Scope (a project, or the workspace), owner (none for a shared view), name,
+layout, query (filter tree, grouping, sorting) and display options (the
+board's swimlanes and WIP limits per column). Events: `ViewCreated`,
+`ViewUpdated`, `ViewDeleted`. A personal view is its owner's: seeing its
+scope is enough to save one. A shared view is seen by everyone who sees its
+scope and changed with `view.share` on it. The query is compiled on save, so
+a saved view always runs.
 
 ### Configuration aggregates
 Issue types, workflows, custom fields, estimation scales, labels and policy

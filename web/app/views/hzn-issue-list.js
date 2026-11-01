@@ -2,13 +2,15 @@
 // status, in rank order (wireframes: Main, IssuePeek). A row opens the peek
 // panel beside the list; o or a double click opens the issue's page. j/k
 // move between rows, Enter peeks, c creates. Pushed events refresh it.
+// The view bar filters it and picks saved views (?view=, ?filter=).
 
 import "horizon/components/hzn-issue-create.js";
 import "horizon/components/hzn-issue-detail.js";
+import "horizon/components/hzn-view-bar.js";
 import {
   avatar, changesProjectData, forgetProjects, issueHref, issueStyles, labelChips, priorityGlyph, projectData, shortDate, statusGlyph,
 } from "horizon/components/issue-ui.js";
-import { planningStyles, viewSwitch } from "horizon/components/planning-ui.js";
+import { fetchIssues, planningStyles, viewSwitch } from "horizon/components/planning-ui.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
@@ -72,6 +74,7 @@ class HznIssueList extends HTMLElement {
       if (e.detail?.key?.startsWith(`${this.data?.project.key}-`)) this.reload();
     };
     document.addEventListener("hzn-issue-changed", this.onCreated);
+    root.addEventListener("hzn-view-change", () => this.reload());
     this.load();
   }
 
@@ -109,20 +112,17 @@ class HznIssueList extends HTMLElement {
       return;
     }
     this.renderFrame();
+    this.bar = this.shadowRoot.querySelector("hzn-view-bar");
+    await this.bar.setup({ ws: this.ws, data: this.data, layout: "list" });
     await this.reload();
   }
 
-  /** Fetches every page of the list. */
+  /** Fetches every page of the list: the project's issues, or those the filter matches. */
   async reload() {
-    const { api, i18n } = this.context;
-    const items = [];
+    const { i18n } = this.context;
+    let items;
     try {
-      let cursor = "";
-      do {
-        const { data } = await api.get(`/w/${encodeURIComponent(this.ws)}/projects/${this.data.project.key}/issues`, { query: { limit: 500, cursor: cursor || undefined } });
-        items.push(...data.items);
-        cursor = data.next_cursor;
-      } while (cursor);
+      items = await fetchIssues(this.context, this.ws, this.data.project.key, this.bar?.filter);
     } catch (err) {
       this.shadowRoot.querySelector("[data-list]").innerHTML = String(html`<lds-alert intent="danger">${errorMessage(err, i18n)}</lds-alert>`);
       return;
@@ -144,7 +144,7 @@ class HznIssueList extends HTMLElement {
         ${canCreate ? html`<lds-button variant="primary" size="sm" data-action="create"><lds-icon slot="start" name="plus" size="sm"></lds-icon>${t("issues.new")}</lds-button>` : ""}
       </header>
       ${p.archived_at ? html`<lds-alert intent="warning">${t("projects.isArchived")}</lds-alert>` : ""}
-      <div class="toolbar">${viewSwitch(t, this.ws, p.key, "issues")}</div>
+      <div class="toolbar">${viewSwitch(t, this.ws, p.key, "issues")}<hzn-view-bar></hzn-view-bar></div>
       <div role="list" aria-label="${t("issues.byStatus")}" data-list><lds-skeleton></lds-skeleton></div>
       <lds-drawer non-modal size="md" data-peek>
         <span slot="header" data-peek-title></span>
@@ -165,9 +165,10 @@ class HznIssueList extends HTMLElement {
     const box = this.shadowRoot.querySelector("[data-list]");
     if (!this.items.length) {
       box.innerHTML = String(html`
-        <lds-empty-state class="empty"><lds-icon slot="icon" name="list"></lds-icon>
-          <h2 slot="title">${t("issues.empty")}</h2>${t("issues.emptyHint")}
+        <lds-empty-state class="empty"><lds-icon slot="icon" name="${this.bar?.filter ? "filter" : "list"}"></lds-icon>
+          <h2 slot="title">${this.bar?.filter ? t("views.noMatch") : t("issues.empty")}</h2>${this.bar?.filter ? "" : t("issues.emptyHint")}
         </lds-empty-state>`);
+      this.rows = [];
       return;
     }
     const groups = new Map();

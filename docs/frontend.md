@@ -132,6 +132,11 @@ asked LDS for have all shipped:
 | Chart tokens | `--lds-color-chart-completed` / `started` / `unstarted` / `abandoned` (fixed stacking order), `-reference`, `-marker`, `-annotation`, `--lds-chart-bar-radius`, `--lds-chart-segment-gap` — see [reports.md](reports.md#charts) |
 | `lds-icon` | 68 Lucide icons, including status (`circle-dashed`, `circle`, `circle-dot`, `circle-check`, `circle-x`), priority (`signal-*`, `octagon-alert`), layouts and git |
 
+`lds-popover` in v0.0.5 decides a press is outside its panel from the
+event target at the document, which shadow roots retarget to their host, so
+inside a view every press closed it: `keepOpenOnInsidePress` (core/dom.js)
+cancels those closes from the press's composed path.
+
 The combobox exposes its highlighted option through ARIA element reflection;
 browsers without it still filter and select but do not announce the highlight.
 
@@ -146,7 +151,7 @@ semantic tokens only, `:host` display):
 | `hzn-issue-create` | New issue dialog (button, `C`, ⌘K) |
 | `hzn-move-issue` | Move to another project, with the server's preview of matches and gaps |
 | `hzn-search` (view) | Search page (`/w/{ws}/search?q=`): results with highlighted snippets; ⌘K shows the first matches as you type and "Search for …" leads here |
-| `hzn-board` (view) | `/w/{ws}/p/{key}/board`: kanban. Columns are statuses, one per name across the project's workflows, in category order; a card dropped on a column moves to its own workflow's status of that name when a transition allows it (columns it can't reach dim while dragging), and ranks within a column. Shows the active iteration (a picker when several are; `?iteration=all` for every issue; all issues when none is active). Swimlanes by assignee, parent or priority, remembered per project in the browser; moving a card across lanes changes that field. `h`/`l`, `j`/`k` move between cards, `Alt+←/→` and `Alt+↑/↓` move the card. WIP limits come with saved views (phase 6) |
+| `hzn-board` (view) | `/w/{ws}/p/{key}/board`: kanban. Columns are statuses, one per name across the project's workflows, in category order; a card dropped on a column moves to its own workflow's status of that name when a transition allows it (columns it can't reach dim while dragging), and ranks within a column. Shows the active iteration (a picker when several are; `?iteration=all` for every issue; all issues when none is active). Swimlanes by assignee, parent or priority, remembered per project in the browser; moving a card across lanes changes that field. `h`/`l`, `j`/`k` move between cards, `Alt+←/→` and `Alt+↑/↓` move the card. A saved board view keeps its swimlanes and WIP limits per column: a column over its limit shows `count / limit` highlighted, and whoever can edit the view sets limits from the column headers |
 | `hzn-backlog` (view) | `/w/{ws}/p/{key}/backlog`: the open iterations (active first) and the backlog (unfinished issues in no open iteration), with each bucket's issues, points and load against velocity. Drag issues between buckets and up and down; `Alt+↑/↓` reorders, `Alt+Shift+↑/↓` moves to the bucket above or below, ⌘K lists where the current issue can go. Plan, edit, start, complete and delete iterations |
 | `hzn-releases` (view) | `/w/{ws}/p/{key}/releases`: the project's releases with the progress of their issues (each can list them), then the project's and the workspace's milestones. Create, edit, release, archive and delete releases; issues are targeted from the issue's Release property |
 | `hzn-milestones` (view) | `/w/{ws}/milestones`: every milestone the user sees, by date |
@@ -156,7 +161,7 @@ semantic tokens only, `:host` display):
 | `hzn-grid` | Table view with field columns and inline editing |
 | `hzn-timeline` | Gantt: bars, dependencies, drag to reschedule, milestones |
 | `hzn-calendar` | Month and week calendar |
-| `hzn-filter-bar` | Filter chips and builder |
+| `hzn-view-bar` | On the list and the board: the saved views picker (save as new, save changes, delete; picking a view of another layout goes there), the filter as chips (an AND of conditions built field → condition → value in an `lds-popover`) and text search. The address carries `?view=` and, while it differs from the view's, `?filter=` (JSON); a filter switches the layout to `POST /issues/query` |
 | `hzn-editor` | Block editor: descriptions, comments ([Block editor](#block-editor)) |
 | `hzn-*-picker` | Status, priority, assignee, labels, estimate, iteration, release pickers: `lds-combobox` wrappers that load options from the store and apply mutations |
 | `hzn-inbox` | Notifications |

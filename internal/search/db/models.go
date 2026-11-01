@@ -412,6 +412,20 @@ type User struct {
 	Version         int32
 }
 
+type View struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	ProjectID   uuid.NullUUID
+	OwnerID     uuid.NullUUID
+	Name        string
+	Layout      string
+	Query       json.RawMessage
+	Display     json.RawMessage
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
 type Workflow struct {
 	WorkspaceID    uuid.UUID
 	ID             uuid.UUID

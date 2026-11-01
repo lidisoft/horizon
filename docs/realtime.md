@@ -62,7 +62,7 @@ before it is sent: a project's events need its visibility (and `issue.view`
 for issue events); workspace-wide events (members, roles, configuration) need
 a workspace grant, so guests don't receive them. Events that change who sees
 a project (a visibility change, a deletion) go to every member, so sidebars
-update. Pushed issue events name statuses, types, labels, fields and people
+update. Events of a personal view go to its owner only. Pushed issue events name statuses, types, labels, fields and people
 like the activity feed, but leave other issues as ids, as recipients differ.
 
 Sockets close after an hour (`1001 reconnect`); the client reconnects, which
