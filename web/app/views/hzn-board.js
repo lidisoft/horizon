@@ -228,14 +228,17 @@ class HznBoard extends HTMLElement {
 
   /** Fetches the iterations and the issues, then renders. */
   async refresh() {
+    const seq = (this.seq = (this.seq ?? 0) + 1); // a later reload wins over this one
     if (!this.data) return;
     const { i18n } = this.context;
     const key = this.data.project.key;
     try {
       const [list, items] = await Promise.all([loadIterations(this.context, this.ws, key), fetchIssues(this.context, this.ws, key, this.bar?.filter)]);
+      if (seq !== this.seq) return;
       this.active = list.items.filter((it) => it.state === "active");
       this.items = items;
     } catch (err) {
+      if (seq !== this.seq) return;
       this.shadowRoot.querySelector("[data-board]").innerHTML = String(html`<lds-alert intent="danger">${errorMessage(err, i18n)}</lds-alert>`);
       return;
     }

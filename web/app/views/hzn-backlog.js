@@ -164,6 +164,7 @@ class HznBacklog extends HTMLElement {
   /** Fetches the iterations and every unarchived issue, then renders. */
   async refresh() {
     if (!this.data) return;
+    const seq = (this.seq = (this.seq ?? 0) + 1); // a later refresh wins over this one
     const { api, i18n } = this.context;
     const key = this.data.project.key;
     try {
@@ -179,9 +180,11 @@ class HznBacklog extends HTMLElement {
           } while (cursor);
         })(),
       ]);
+      if (seq !== this.seq) return;
       this.list = list;
       this.items = items;
     } catch (err) {
+      if (seq !== this.seq) return;
       this.shadowRoot.querySelector("[data-buckets]").innerHTML = String(html`<lds-alert intent="danger">${errorMessage(err, i18n)}</lds-alert>`);
       return;
     }

@@ -165,6 +165,7 @@ class HznTimeline extends HTMLElement {
   }
 
   async reload() {
+    const seq = (this.seq = (this.seq ?? 0) + 1); // a later reload wins over this one
     const { api, i18n } = this.context;
     const key = this.data.project.key;
     const p = `${this.base}/projects/${encodeURIComponent(key)}`;
@@ -176,8 +177,10 @@ class HznTimeline extends HTMLElement {
         loadReleases(this.context, this.ws, key).then((r) => r.items).catch(() => []),
         api.get(`${p}/milestones`).then((r) => r.data.items).catch(() => []),
       ]);
+      if (seq !== this.seq) return;
       Object.assign(this, { items, deps, iterations, releases, milestones });
     } catch (err) {
+      if (seq !== this.seq) return;
       this.shadowRoot.querySelector("[data-gantt]").innerHTML = String(html`<lds-alert intent="danger">${errorMessage(err, i18n)}</lds-alert>`);
       return;
     }

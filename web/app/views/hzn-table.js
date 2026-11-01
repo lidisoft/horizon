@@ -223,10 +223,14 @@ class HznTable extends HTMLElement {
   }
 
   async reload() {
+    const seq = (this.seq = (this.seq ?? 0) + 1); // a later reload wins over this one
     const { i18n } = this.context;
     try {
-      this.items = await fetchIssues(this.context, this.ws, this.data.project.key, this.bar?.filter, this.sort);
+      const items = await fetchIssues(this.context, this.ws, this.data.project.key, this.bar?.filter, this.sort);
+      if (seq !== this.seq) return;
+      this.items = items;
     } catch (err) {
+      if (seq !== this.seq) return;
       this.shadowRoot.querySelector("[data-grid]").innerHTML = String(html`<lds-alert intent="danger">${errorMessage(err, i18n)}</lds-alert>`);
       return;
     }

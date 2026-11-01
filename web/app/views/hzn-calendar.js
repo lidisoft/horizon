@@ -155,6 +155,7 @@ class HznCalendar extends HTMLElement {
   }
 
   async reload() {
+    const seq = (this.seq = (this.seq ?? 0) + 1); // a later reload wins over this one
     const { api, i18n } = this.context;
     const key = this.data.project.key;
     try {
@@ -164,8 +165,10 @@ class HznCalendar extends HTMLElement {
         loadReleases(this.context, this.ws, key).then((r) => r.items).catch(() => []),
         api.get(`${this.base}/projects/${encodeURIComponent(key)}/milestones`).then((r) => r.data.items).catch(() => []),
       ]);
+      if (seq !== this.seq) return;
       Object.assign(this, { items, iterations, releases, milestones });
     } catch (err) {
+      if (seq !== this.seq) return;
       this.shadowRoot.querySelector("[data-cal]").innerHTML = String(html`<lds-alert intent="danger">${errorMessage(err, i18n)}</lds-alert>`);
       return;
     }
