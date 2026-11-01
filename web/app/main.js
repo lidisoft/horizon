@@ -7,6 +7,7 @@
 import "horizon/components/hzn-api-tokens.js";
 import { HznApp, applyStoredTheme } from "horizon/components/hzn-app.js";
 import "horizon/views/hzn-account.js";
+import "horizon/views/hzn-backlog.js";
 import "horizon/views/hzn-forgot-password.js";
 import "horizon/views/hzn-home.js";
 import "horizon/views/hzn-invitation.js";
@@ -20,6 +21,7 @@ import "horizon/views/hzn-settings-categories.js";
 import "horizon/views/hzn-settings-estimation.js";
 import "horizon/views/hzn-settings-general.js";
 import "horizon/views/hzn-settings-issue-types.js";
+import "horizon/views/hzn-settings-iterations.js";
 import "horizon/views/hzn-settings-labels.js";
 import "horizon/views/hzn-settings-members.js";
 import "horizon/views/hzn-settings-project.js";

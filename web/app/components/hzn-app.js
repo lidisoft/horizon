@@ -38,6 +38,7 @@ export const ROUTES = [
   { name: "settings-project", path: "/w/:ws/settings/projects/:key", view: "hzn-settings-project", layout: "settings" },
   { name: "project", path: "/w/:ws/p/:key", view: "hzn-project-home" },
   { name: "project-issues", path: "/w/:ws/p/:key/issues", view: "hzn-issue-list" },
+  { name: "project-backlog", path: "/w/:ws/p/:key/backlog", view: "hzn-backlog" },
   { name: "issue", path: "/w/:ws/issues/:issue", view: "hzn-issue" },
   { name: "search", path: "/w/:ws/search", view: "hzn-search" },
   { name: "settings-issue-types", path: "/w/:ws/settings/issue-types", view: "hzn-settings-issue-types", layout: "settings" },
@@ -45,6 +46,7 @@ export const ROUTES = [
   { name: "settings-categories", path: "/w/:ws/settings/categories", view: "hzn-settings-categories", layout: "settings" },
   { name: "settings-labels", path: "/w/:ws/settings/labels", view: "hzn-settings-labels", layout: "settings" },
   { name: "settings-estimation", path: "/w/:ws/settings/estimation", view: "hzn-settings-estimation", layout: "settings" },
+  { name: "settings-iterations", path: "/w/:ws/settings/iterations", view: "hzn-settings-iterations", layout: "settings" },
   { name: "invitation", path: "/invitation", view: "hzn-invitation", public: true },
   { name: "sign-in", path: "/sign-in", view: "hzn-sign-in", public: true },
   { name: "forgot-password", path: "/forgot-password", view: "hzn-forgot-password", public: true },
@@ -455,7 +457,7 @@ export class HznApp extends HTMLElement {
 
   markProject() {
     for (const item of this.shadowRoot.querySelectorAll("lds-nav-item[data-project]")) {
-      item.toggleAttribute("active", item.dataset.project === this.currentProject && ["project", "project-issues", "issue"].includes(this.context.router.current?.route?.name));
+      item.toggleAttribute("active", item.dataset.project === this.currentProject && ["project", "project-issues", "project-backlog", "project-board", "issue"].includes(this.context.router.current?.route?.name));
     }
   }
 

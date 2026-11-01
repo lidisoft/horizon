@@ -147,7 +147,8 @@ semantic tokens only, `:host` display):
 | `hzn-move-issue` | Move to another project, with the server's preview of matches and gaps |
 | `hzn-search` (view) | Search page (`/w/{ws}/search?q=`): results with highlighted snippets; ⌘K shows the first matches as you type and "Search for …" leads here |
 | `hzn-board` | Kanban with drag and drop between columns and rank |
-| `hzn-backlog` | Backlog plus iteration buckets, drag to plan |
+| `hzn-backlog` (view) | `/w/{ws}/p/{key}/backlog`: the open iterations (active first) and the backlog (unfinished issues in no open iteration), with each bucket's issues, points and load against velocity. Drag issues between buckets and up and down; `Alt+↑/↓` reorders, `Alt+Shift+↑/↓` moves to the bucket above or below, ⌘K lists where the current issue can go. Plan, edit, start, complete and delete iterations |
+| `hzn-iteration-dialog` | Plan or edit an iteration (name, goal, dates, prefilled with the suggested next one); complete one, saying what the policy will do and where unfinished issues go |
 | `hzn-grid` | Table view with field columns and inline editing |
 | `hzn-timeline` | Gantt: bars, dependencies, drag to reschedule, milestones |
 | `hzn-calendar` | Month and week calendar |
@@ -200,7 +201,9 @@ corpus ([roadmap.md](roadmap.md)).
   key offers to open it.
 - The peek panel keeps focus on the list: `J`/`K` move the peek along.
 - Board and backlog drag and drop have keyboard equivalents (move with
-  `alt+arrow`, or via the command palette).
+  `alt+arrow`, or via the command palette). In the backlog, `Alt+↑/↓`
+  moves the current issue within its bucket and `Alt+Shift+↑/↓` to the
+  bucket above or below.
 - LDS conventions apply (focus rings, ARIA wiring, contrast checked by eye in
   both themes).
 

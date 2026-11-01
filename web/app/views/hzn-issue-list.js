@@ -8,6 +8,7 @@ import "horizon/components/hzn-issue-detail.js";
 import {
   avatar, changesProjectData, forgetProjects, issueHref, issueStyles, labelChips, priorityGlyph, projectData, shortDate, statusGlyph,
 } from "horizon/components/issue-ui.js";
+import { planningStyles, viewSwitch } from "horizon/components/planning-ui.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
@@ -52,7 +53,7 @@ class HznIssueList extends HTMLElement {
     if (this.shadowRoot) return;
     this.context = requestContext(this);
     const root = this.attachShadow({ mode: "open" });
-    root.adoptedStyleSheets = [issueStyles, styles];
+    root.adoptedStyleSheets = [issueStyles, planningStyles, styles];
     root.addEventListener("click", (e) => this.onClick(e));
     root.addEventListener("dblclick", (e) => {
       const row = e.target.closest?.(".row");
@@ -143,6 +144,7 @@ class HznIssueList extends HTMLElement {
         ${canCreate ? html`<lds-button variant="primary" size="sm" data-action="create"><lds-icon slot="start" name="plus" size="sm"></lds-icon>${t("issues.new")}</lds-button>` : ""}
       </header>
       ${p.archived_at ? html`<lds-alert intent="warning">${t("projects.isArchived")}</lds-alert>` : ""}
+      <div class="toolbar">${viewSwitch(t, this.ws, p.key, "issues")}</div>
       <div role="list" aria-label="${t("issues.byStatus")}" data-list><lds-skeleton></lds-skeleton></div>
       <lds-drawer non-modal size="md" data-peek>
         <span slot="header" data-peek-title></span>

@@ -56,10 +56,13 @@ export function forgetProjects() {
   projects.clear();
 }
 
+/** Aggregates whose events leave projectData as it is. */
+const KEEPS_PROJECT_DATA = new Set(["issue", "role_grant", "iteration", "release", "milestone"]);
+
 /** Events that change what projectData holds. */
 export function changesProjectData(event) {
   const type = event.aggregate?.type;
-  return type && type !== "issue" && type !== "role_grant";
+  return type && !KEEPS_PROJECT_DATA.has(type);
 }
 
 function indexProject(project, config, people) {

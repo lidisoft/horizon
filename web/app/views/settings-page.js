@@ -44,6 +44,7 @@ const GROUPS = [
       { name: "categories", icon: "circle-dot", label: "settings.categories" },
       { name: "labels", icon: "tag", label: "settings.labels" },
       { name: "estimation", icon: "signal-medium", label: "settings.estimation" },
+      { name: "iterations", icon: "repeat", label: "settings.iterations" },
     ],
   },
 ];

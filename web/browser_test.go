@@ -18,12 +18,14 @@ import (
 	"os/signal"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/kb"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -33,6 +35,7 @@ import (
 	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/issue"
+	"github.com/lidisoft/horizon/internal/planning"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
 	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/realtime"
@@ -265,6 +268,8 @@ func appServer(t *testing.T) app {
 	projectSvc.OnDelete(config.DeleteProject)
 	issueSvc := issue.New(pool, acc, config, projectSvc, nil)
 	issues := issue.NewHTTP(issueSvc, projectSvc)
+	planningSvc := planning.New(pool, acc, config, projectSvc, issueSvc, nil)
+	plans := planning.NewHTTP(planningSvc)
 	searchHTTP := search.NewHTTP(search.New(pool, acc, projectSvc, issueSvc))
 
 	// Events reach sockets as in production: outbox relay, JetStream, hub.
@@ -279,6 +284,7 @@ func appServer(t *testing.T) app {
 	t.Cleanup(cancel)
 	go func() { _ = hub.Run(ctx) }()
 	go func() { _ = relay.Run(ctx) }()
+	go func() { _ = bus.Stream.Consume(ctx, bus.JetStream, planningSvc.PolicyConsumer(), zerolog.Nop()) }()
 
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
@@ -286,9 +292,10 @@ func appServer(t *testing.T) app {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
 		hub.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, func(ws *gin.RouterGroup) {
-			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject)
-		})
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace,
+			func(ws *gin.RouterGroup) {
+				projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject)
+			})
 	}}))
 	return a
 }
@@ -967,5 +974,136 @@ func TestIssues(t *testing.T) {
 	pg.poll(`location.pathname === "/w/acme/p/HZN/issues" && "back"`)
 	pg.poll(`!` + view + `.querySelector('.row[data-key="HZN-2"]') && ` + view + `.querySelector('.row[data-key="HZN-1"]') && "gone"`)
 
+	pg.logs.failOnErrors(t)
+}
+
+// api calls the API from the page, as the signed-in user, and returns the
+// status and the body.
+func (p *page) api(method, path, body string) (int, string) {
+	p.t.Helper()
+	js := `fetch("/api/v1` + path + `", { method: "` + method + `", headers: { "Content-Type": "application/json", "X-CSRF-Token": ` +
+		`document.querySelector("hzn-app").context.session.csrf }` + map[bool]string{true: `, body: ` + strconv.Quote(body), false: ""}[body != ""] + ` })` +
+		`.then(async (r) => JSON.stringify([r.status, await r.text()]))`
+	out, err := chromedp.Run(p.ctx, chromedp.Evaluate[string](js, chromedp.EvalAwaitPromise))
+	if err != nil {
+		p.t.Fatalf("%s %s: %v", method, path, err)
+	}
+	var res [2]any
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		p.t.Fatal(err)
+	}
+	return int(res[0].(float64)), res[1].(string)
+}
+
+// TestBacklog plans an iteration, fills it by keyboard and by dragging,
+// starts it and completes it, the policy worker moving what is left back.
+func TestBacklog(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	if status, body := pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`); status != 201 {
+		t.Fatalf("create project: %d %s", status, body)
+	}
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID, Name string } `json:"issue_types"`
+		Workflows  []struct {
+			Statuses []struct{ ID, Name string } `json:"statuses"`
+		} `json:"workflows"`
+	}
+	if err := json.Unmarshal([]byte(cfg), &resolved); err != nil {
+		t.Fatal(err)
+	}
+	task := resolved.IssueTypes[0].ID
+	for _, it := range resolved.IssueTypes {
+		if it.Name == "Task" {
+			task = it.ID
+		}
+	}
+	for _, title := range []string{"Outbox relay", "Replay after reconnect", "Rank with fractional keys"} {
+		if status, body := pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+task+`","title":"`+title+`","estimate":"3"}`); status != 201 {
+			t.Fatalf("create issue: %d %s", status, body)
+		}
+	}
+
+	// The backlog holds them all; the switcher leads there from the list.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/issues"))
+	pg.click(view + `.querySelector('nav.views a[href$="/backlog"]')`)
+	pg.poll(`location.pathname === "/w/acme/p/HZN/backlog" && "backlog"`)
+	bucket := func(name string) string {
+		return `[...` + view + `.querySelectorAll("section.bucket")].find((b) => b.getAttribute("aria-label") === "` + name + `")`
+	}
+	keys := func(name string) string {
+		return pg.poll(`(() => { const b = ` + bucket(name) + `; return b ? [...b.querySelectorAll(".row")].map((r) => r.dataset.key).join(",") || "-" : false; })()`)
+	}
+	pg.poll(`(` + bucket("Backlog") + `)?.querySelectorAll(".row").length === 3 && "listed"`)
+
+	// Plan an iteration: the dialog suggests its name and dates.
+	pg.click(view + `.querySelector('[data-action="plan"]')`)
+	dialog := view + `.querySelector("hzn-iteration-dialog").shadowRoot`
+	pg.poll(dialog + `.querySelector("lds-modal").hasAttribute("open") && "open"`)
+	if got := pg.poll(dialog + `.querySelector('[name="name"]').getAttribute("value")`); got != "Sprint 1" {
+		t.Errorf("suggested name = %q", got)
+	}
+	pg.click(dialog + `.querySelector("[data-submit]")`)
+	pg.poll(`(` + bucket("Sprint 1") + `)?.querySelector("lds-badge")?.textContent === "Scheduled" && "planned"`)
+
+	// Alt+Shift+↑ moves the current issue to the iteration above.
+	pg.eval(`document.activeElement?.blur()`)
+	pg.do(chromedp.KeyEvent("j"))
+	pg.poll(view + `.querySelector('.row[aria-current="true"]')?.dataset.key === "HZN-1" && "current"`)
+	pg.do(chromedp.KeyEvent(kb.ArrowUp, chromedp.KeyModifiers(chromedp.ModifierAlt|chromedp.ModifierShift)))
+	pg.poll(`(` + bucket("Sprint 1") + `)?.querySelector('.row[data-key="HZN-1"]') && "moved"`)
+
+	// Dragging HZN-2 above HZN-1, into the iteration.
+	pg.eval(`(() => {
+		const from = ` + view + `.querySelector('.row[data-key="HZN-2"]');
+		const to = ` + view + `.querySelector('.row[data-key="HZN-1"]');
+		const dt = new DataTransfer();
+		const y = to.getBoundingClientRect().top + 2;
+		from.dispatchEvent(new DragEvent("dragstart", { dataTransfer: dt, bubbles: true, composed: true }));
+		to.dispatchEvent(new DragEvent("dragover", { dataTransfer: dt, clientY: y, bubbles: true, composed: true, cancelable: true }));
+		to.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, clientY: y, bubbles: true, composed: true, cancelable: true }));
+		from.dispatchEvent(new DragEvent("dragend", { dataTransfer: dt, bubbles: true, composed: true }));
+	})()`)
+	pg.poll(`(() => { const b = ` + bucket("Sprint 1") + `; return b && [...b.querySelectorAll(".row")].map((r) => r.dataset.key).join() === "HZN-2,HZN-1" && "dragged"; })()`)
+	if got := keys("Backlog"); got != "HZN-3" {
+		t.Errorf("backlog = %s", got)
+	}
+
+	// Start it; finish HZN-2; complete it: HZN-2 is archived, HZN-1 goes
+	// back to the backlog (the policy worker).
+	pg.click(bucket("Sprint 1") + `.querySelector('[data-action="start"]')`)
+	pg.poll(`(` + bucket("Sprint 1") + `)?.querySelector("lds-badge")?.textContent === "Active" && "started"`)
+	for _, name := range []string{"Todo", "In progress", "Done"} {
+		var id string
+		for _, st := range resolved.Workflows[0].Statuses {
+			if st.Name == name {
+				id = st.ID
+			}
+		}
+		if status, body := pg.api("POST", "/w/acme/issues/HZN-2/transition", `{"status_id":"`+id+`"}`); status != 200 {
+			t.Fatalf("transition to %s: %d %s", name, status, body)
+		}
+	}
+	pg.poll(`(` + bucket("Sprint 1") + `)?.querySelector(".summary")?.textContent.includes("1 done") && "done"`)
+	pg.click(bucket("Sprint 1") + `.querySelector('[data-action="complete"]')`)
+	pg.poll(dialog + `.querySelector("lds-modal").hasAttribute("open") && ` + dialog + `.querySelector(".summary") && "complete dialog"`)
+	pg.click(dialog + `.querySelector("[data-submit]")`)
+	pg.poll(`!(` + bucket("Sprint 1") + `) && "completed"`)
+	pg.poll(`(() => { const b = ` + bucket("Backlog") + `; return b && [...b.querySelectorAll(".row")].map((r) => r.dataset.key).join() === "HZN-1,HZN-3" && "rolled over"; })()`)
+	if status, body := pg.api("GET", "/w/acme/issues/HZN-2", ""); status != 200 || !strings.Contains(body, `"archived_at":"`) {
+		t.Errorf("HZN-2 not archived: %s", body)
+	}
+
+	// The iteration settings page shows the policy in effect.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/iterations"))
+	if got := pg.poll(view + `.querySelector('[data-setting="completion_policy"]')?.getAttribute("value")`); got != "archive_done_rollover_rest" {
+		t.Errorf("policy = %q", got)
+	}
 	pg.logs.failOnErrors(t)
 }

@@ -10,6 +10,7 @@ import "horizon/components/hzn-move-issue.js";
 import {
   PRIORITIES, avatar, issueHref, issueStyles, priorityIcon, projectData, statusGlyph,
 } from "horizon/components/issue-ui.js";
+import { isOpen } from "horizon/components/planning-ui.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
@@ -165,11 +166,15 @@ class HznIssueDetail extends HTMLElement {
     const base = `/w/${enc}/issues/${encodeURIComponent(issue.key)}`;
     const projectKey = issue.key.slice(0, issue.key.lastIndexOf("-"));
     try {
-      const [data, children, links, comments, attachments, activity, transitions] = await Promise.all([
+      const plans = `/w/${enc}/projects/${encodeURIComponent(projectKey)}`;
+      const [data, children, links, comments, attachments, activity, transitions, iterations, releases] = await Promise.all([
         projectData(this.context, this.ws, projectKey),
         api.get(`${base}/children`), api.get(`${base}/links`), api.get(`${base}/comments`),
         api.get(`${base}/attachments`), api.get(`${base}/activity`), api.get(`${base}/transitions`),
+        api.get(`${plans}/iterations`), api.get(`${plans}/releases`),
       ]);
+      this.iterations = iterations.data.items;
+      this.releases = releases.data.items;
       this.data = data;
       this.subIssues = children.data.items;
       this.links = links.data.items;
@@ -304,6 +309,16 @@ class HznIssueDetail extends HTMLElement {
           <lds-option value="">${t("issues.noEstimate")}</lds-option>
           ${scale.values.map((v) => html`<lds-option value="${v.label}">${v.label}</lds-option>`)}
         </lds-combobox>`) : ""}
+      ${prop(t("issues.iteration"), html`
+        <lds-combobox data-prop="iteration" value="${i.iteration_id ?? ""}" placeholder="${t("issues.noIteration")}" label="${t("issues.iteration")}" ${off("iteration.manage")}>
+          <lds-option value="">${t("issues.noIteration")}</lds-option>
+          ${this.iterations.filter((it) => isOpen(it) || it.id === i.iteration_id).map((it) => html`<lds-option value="${it.id}">${it.name}<span slot="end">${t(`iterations.state.${it.state}`)}</span></lds-option>`)}
+        </lds-combobox>`)}
+      ${prop(t("issues.release"), html`
+        <lds-combobox data-prop="release" value="${i.release_id ?? ""}" placeholder="${t("issues.noRelease")}" label="${t("issues.release")}" ${off("issue.edit")}>
+          <lds-option value="">${t("issues.noRelease")}</lds-option>
+          ${this.releases.filter((r) => r.state !== "archived" || r.id === i.release_id).map((r) => html`<lds-option value="${r.id}">${r.name}</lds-option>`)}
+        </lds-combobox>`)}
       ${prop(t("issues.dates"), html`
         <div class="dates">
           <lds-date-picker data-prop="start_date" value="${i.start_date ?? ""}" aria-label="${t("issues.startDate")}" ${off("issue.edit")}></lds-date-picker>
@@ -441,7 +456,9 @@ class HznIssueDetail extends HTMLElement {
     const { t } = this.context.i18n;
     const name = (v) => (v && typeof v === "object" ? v.key ? `${v.key} ${v.name ?? ""}`.trim() : v.name ?? "" : v ?? "");
     const p = e.payload;
-    const kind = e.type.replace(/^issue\./, "");
+    let kind = e.type.replace(/^issue\./, "");
+    // In or out of an iteration or a release.
+    if (kind === "iteration_changed" || kind === "release_changed") kind = `${kind.split("_")[0]}_${p.to ? "set" : "cleared"}`;
     const key = `activity.${kind}`;
     return this.context.i18n.has(key)
       ? t(key, { from: name(p.from), to: name(p.to), issue: name(p.issue_id), type: p.type ? t(`link.${p.type}`) : "",
@@ -549,6 +566,12 @@ class HznIssueDetail extends HTMLElement {
       case "estimate":
         if (value !== (this.issue.estimate ?? "")) this.post("estimate", { estimate: value });
         break;
+      case "iteration":
+        if (value !== (this.issue.iteration_id ?? "")) this.setIteration(value);
+        break;
+      case "release":
+        if (value !== (this.issue.release_id ?? "")) this.post("release", { release_id: value || null });
+        break;
       case "start_date":
       case "due_date":
         if (value !== (this.issue[prop] ?? "")) this.patch({ [prop]: value });
@@ -582,6 +605,20 @@ class HznIssueDetail extends HTMLElement {
         v = detail.value === "" ? null : detail.value;
     }
     this.patch({ fields: { [id]: v } });
+  }
+
+  /** Loads the issue into an iteration, or takes it out of its own. */
+  async setIteration(id) {
+    const { api, i18n } = this.context;
+    const i = this.issue;
+    const base = `/w/${encodeURIComponent(this.ws)}/projects/${encodeURIComponent(this.data.project.key)}/iterations`;
+    try {
+      if (id) await api.post(`${base}/${id}/issues`, { body: { add: [i.key] } });
+      else await api.post(`${base}/${i.iteration_id}/issues`, { body: { remove: [i.key] } });
+    } catch (err) {
+      globalThis.LDS?.toast?.({ intent: "danger", title: errorMessage(err, i18n) });
+    }
+    await this.load();
   }
 
   /** A type with another workflow needs a status in it: same name, else same outcome, else its initial one. */
