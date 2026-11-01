@@ -29,6 +29,7 @@ func (h *HTTP) Register(ws *gin.RouterGroup, more ...func(p *gin.RouterGroup)) {
 	p.PATCH("", h.update)
 	p.POST("/archive", h.archive)
 	p.POST("/unarchive", h.unarchive)
+	p.DELETE("", h.delete)
 	for _, register := range more {
 		register(p)
 	}
@@ -194,6 +195,26 @@ func (h *HTTP) archive(c *gin.Context) { h.setArchived(c, true) }
 //	@Success	200	{object}	Project
 //	@Router		/api/v1/w/{ws}/projects/{key}/unarchive [post]
 func (h *HTTP) unarchive(c *gin.Context) { h.setArchived(c, false) }
+
+// delete hard-deletes an archived project.
+//
+//	@Summary		Delete a project
+//	@Description	Archived projects only, with project.manage. Its issues, their history, configuration overrides and grants go; a ProjectDeleted tombstone remains.
+//	@Tags			projects
+//	@Param			ws		path	string	true	"Workspace slug"
+//	@Param			key		path	string	true	"Project key"
+//	@Param			confirm	query	string	true	"The project's current key, typed by the user"
+//	@Success		204
+//	@Failure		409	{object}	server.Problem	"project_not_archived"
+//	@Failure		422	{object}	server.Problem	"confirm: mismatch"
+//	@Router			/api/v1/w/{ws}/projects/{key} [delete]
+func (h *HTTP) delete(c *gin.Context) {
+	if err := h.svc.Delete(c, Current(c), c.Query("confirm")); err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
 
 func (h *HTTP) setArchived(c *gin.Context, archived bool) {
 	p, err := h.svc.SetArchived(c, Current(c), archived)

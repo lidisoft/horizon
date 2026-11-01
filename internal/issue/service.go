@@ -50,6 +50,7 @@ func New(pool *pgxpool.Pool, acc *access.Service, config *configdef.Service, pro
 	}
 	s := &Service{pool: pool, access: acc, config: config, projects: projects, now: func() time.Time { return now().UTC().Truncate(time.Microsecond) }}
 	config.SetIssues(s)
+	projects.OnDelete(s.deleteProject)
 	return s
 }
 
@@ -83,9 +84,19 @@ func (s *Service) Enter(ctx context.Context, wc workspace.Context, key string) (
 	if err != nil {
 		return Context{}, err
 	}
-	i, err := db.New(s.pool).IssueByNumber(ctx, db.IssueByNumberParams{WorkspaceID: wc.Workspace.ID, ProjectID: pc.Project.ID, Number: n})
+	q := db.New(s.pool)
+	i, err := q.IssueByNumber(ctx, db.IssueByNumberParams{WorkspaceID: wc.Workspace.ID, ProjectID: pc.Project.ID, Number: n})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Context{}, apperr.NotFound("issue_not_found")
+		// A key the issue left behind when it moved: enter it by its
+		// current key, in its current project.
+		moved, err := q.IssueByAlias(ctx, db.IssueByAliasParams{WorkspaceID: wc.Workspace.ID, ProjectID: pc.Project.ID, Number: n})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Context{}, apperr.NotFound("issue_not_found")
+		}
+		if err != nil {
+			return Context{}, err
+		}
+		return s.enterByID(ctx, wc, moved)
 	}
 	if err != nil {
 		return Context{}, err

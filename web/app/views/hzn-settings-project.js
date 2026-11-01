@@ -16,6 +16,8 @@ const styles = sheet(`
     border: 1px solid var(--lds-color-border-default); border-radius: var(--lds-radius-md); }
   .danger h3 { margin-bottom: var(--lds-space-2); }
   .danger p { margin: 0 0 var(--lds-space-3); }
+  .danger + .danger { margin-top: var(--lds-space-4); }
+  [slot="footer"].actions { display: flex; justify-content: flex-end; gap: var(--lds-space-3); }
   .dot { display: inline-block; width: 0.625rem; height: 0.625rem; border-radius: var(--lds-radius-xs); }
 `);
 
@@ -102,7 +104,23 @@ class HznSettingsProject extends HTMLElement {
           <h3 id="archive-title">${t(p.archived_at ? "projects.restoreTitle" : "projects.archiveTitle")}</h3>
           <p class="muted">${t(p.archived_at ? "projects.restoreBody" : "projects.archiveBody", { name: p.name })}</p>
           <lds-button variant="secondary" data-action="${p.archived_at ? "unarchive" : "archive"}">${t(p.archived_at ? "projects.restore" : "projects.archive")}</lds-button>
-        </section>` : ""}`;
+        </section>
+        ${p.archived_at ? html`
+          <section class="danger" aria-labelledby="delete-title">
+            <h3 id="delete-title">${t("projects.deleteTitle")}</h3>
+            <p class="muted">${t("projects.deleteBody", { name: p.name })}</p>
+            <lds-button variant="danger" data-action="delete">${t("projects.delete")}</lds-button>
+          </section>
+          <lds-modal data-dialog="delete" size="sm">
+            <span slot="header">${t("projects.delete")}</span>
+            <p>${t("projects.deleteBody", { name: p.name })}</p>
+            <lds-field label="${t("projects.deleteConfirm", { key: p.key })}"><lds-input name="confirm" autocomplete="off"></lds-input></lds-field>
+            <lds-alert intent="danger" role="alert"></lds-alert>
+            <div slot="footer" class="actions">
+              <lds-button variant="ghost" data-close>${t("tokens.cancel")}</lds-button>
+              <lds-button variant="danger" data-action="confirm-delete" disabled>${t("projects.delete")}</lds-button>
+            </div>
+          </lds-modal>` : ""}` : ""}`;
     const actions = canEdit ? html`<span class="muted" role="status" data-saved></span><lds-button data-action="save">${t("account.save")}</lds-button>` : "";
     this.shadowRoot.innerHTML = String(settingsPage(t, this.ws, "projects", body, actions,
       html`<span class="dot" data-colour="${p.colour}"></span> ${p.name}`));
@@ -123,6 +141,30 @@ class HznSettingsProject extends HTMLElement {
     });
     this.shadowRoot.querySelector('[data-action="save"]').addEventListener("click", () => form.requestSubmit());
     this.shadowRoot.querySelector("[data-action=archive], [data-action=unarchive]").addEventListener("click", (e) => this.archive(e.currentTarget));
+    const modal = this.shadowRoot.querySelector('[data-dialog="delete"]');
+    if (!modal) return;
+    const confirmButton = modal.querySelector('[data-action="confirm-delete"]');
+    this.shadowRoot.querySelector('[data-action="delete"]').addEventListener("click", () => modal.setAttribute("open", ""));
+    modal.querySelector("[data-close]").addEventListener("click", () => modal.removeAttribute("open"));
+    modal.querySelector("lds-input").addEventListener("lds-input", (e) => {
+      confirmButton.toggleAttribute("disabled", e.detail.value.trim() !== p.key);
+    });
+    confirmButton.addEventListener("click", () => this.remove(modal, confirmButton));
+  }
+
+  async remove(modal, button) {
+    const { api, i18n, projects, router } = this.context;
+    const p = this.project;
+    try {
+      await busy(button, () => api.delete(`/w/${encodeURIComponent(this.ws.slug)}/projects/${p.key}`, { query: { confirm: p.key } }));
+    } catch (err) {
+      modal.querySelector("lds-alert").textContent = errorMessage(err, i18n);
+      return;
+    }
+    modal.removeAttribute("open");
+    await projects.refresh();
+    globalThis.LDS?.toast?.({ intent: "success", title: i18n.t("projects.deleted", { name: p.name }) });
+    router.navigate(`/w/${this.ws.slug}/settings/projects`, { replace: true });
   }
 
   async save(form) {

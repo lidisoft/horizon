@@ -14,6 +14,7 @@ import (
 	"github.com/lidisoft/horizon/internal/configdef/db"
 	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/identity"
+	"github.com/lidisoft/horizon/internal/project"
 )
 
 // Issues is what configuration needs from the issue module: counting and
@@ -379,4 +380,27 @@ func actor(t Target) uuid.NullUUID {
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// DeleteProject scrubs the history of a deleted project's overrides; the
+// rows cascade with the project. It fits project.DeleteHook.
+func (s *Service) DeleteProject(ctx context.Context, tx pgx.Tx, pc project.Context) error {
+	ws := uuid.NullUUID{UUID: pc.Workspace.ID, Valid: true}
+	for aggregate, table := range map[string]string{
+		TypeCategory: "status_categories", TypeWorkflow: "workflows", TypeIssueType: "issue_types",
+		TypeCustomField: "custom_fields", TypeLabel: "labels",
+	} {
+		rows, err := tx.Query(ctx, `SELECT id FROM `+table+` WHERE workspace_id = $1 AND project_id = $2`, pc.Workspace.ID, pc.Project.ID)
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return err
+		}
+		if err := eventlog.Scrub(ctx, tx, ws, aggregate, ids); err != nil {
+			return err
+		}
+	}
+	return nil
 }

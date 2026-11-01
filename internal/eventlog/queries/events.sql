@@ -32,3 +32,28 @@ SELECT *
 FROM events
 WHERE aggregate_type = sqlc.arg(aggregate_type) AND aggregate_id = sqlc.arg(aggregate_id)
 ORDER BY aggregate_version, id;
+
+-- name: DeleteAggregateEvents :exec
+-- Scrubs the history of hard-deleted aggregates (ADR-0012).
+DELETE FROM events WHERE aggregate_type = sqlc.arg(aggregate_type) AND aggregate_id = ANY(sqlc.arg(ids)::uuid[]);
+
+-- name: QueuePurge :exec
+INSERT INTO purges (id, workspace_id, aggregate_type, aggregate_id, tombstone_id, objects, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
+
+-- name: ClaimPurges :many
+-- Purges whose tombstone (if any) the relay has published; other workers
+-- skip the locked ones.
+SELECT p.*, coalesce((SELECT e.type FROM events e WHERE e.id = p.tombstone_id), '')::text AS tombstone_type
+FROM purges p
+WHERE p.tombstone_id IS NULL
+   OR NOT EXISTS (SELECT 1 FROM events e WHERE e.id = p.tombstone_id AND e.published_at IS NULL)
+ORDER BY p.id
+LIMIT sqlc.arg(batch_size)
+FOR UPDATE SKIP LOCKED;
+
+-- name: DonePurge :exec
+DELETE FROM purges WHERE id = $1;
+
+-- name: FailedPurge :exec
+UPDATE purges SET attempts = attempts + 1 WHERE id = $1;

@@ -34,6 +34,9 @@ func (h *HTTP) RegisterWorkspace(ws *gin.RouterGroup) {
 	g := ws.Group("/issues/:issue", h.enter)
 	g.GET("", h.get)
 	g.PATCH("", h.update)
+	g.DELETE("", h.delete)
+	g.GET("/move/preview", h.previewMove)
+	g.POST("/move", h.move)
 	g.GET("/transitions", h.transitions)
 	g.POST("/transition", h.transition)
 	g.POST("/assign", h.assign)
@@ -517,4 +520,87 @@ func (h *HTTP) removeLink(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// delete hard-deletes an issue.
+//
+//	@Summary		Delete an issue
+//	@Description	Needs issue.delete. Its content and history go; an IssueDeleted tombstone remains. children is required when it has any: reparent moves them to its parent, cascade deletes the subtree (403 unless the caller may delete every descendant).
+//	@Tags			issues
+//	@Param			ws			path	string	true	"Workspace slug"
+//	@Param			issue		path	string	true	"Issue key"
+//	@Param			children	query	string	false	"reparent or cascade"	Enums(reparent, cascade)
+//	@Success		204
+//	@Failure		422	{object}	server.Problem	"children_choice_required"
+//	@Router			/api/v1/w/{ws}/issues/{issue} [delete]
+func (h *HTTP) delete(c *gin.Context) {
+	if err := h.svc.Delete(c, current(c), c.Query("children")); err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// previewMove shows what a move would map.
+//
+//	@Summary	Preview moving an issue
+//	@Tags		issues
+//	@Produce	json
+//	@Param		ws			path		string	true	"Workspace slug"
+//	@Param		issue		path		string	true	"Issue key"
+//	@Param		project		query		string	true	"Target project key"
+//	@Param		children	query		string	false	"move (default) or leave"	Enums(move, leave)
+//	@Success	200			{object}	MovePreview
+//	@Router		/api/v1/w/{ws}/issues/{issue}/move/preview [get]
+func (h *HTTP) previewMove(c *gin.Context) {
+	p, err := h.svc.PreviewMove(c, current(c), c.Query("project"), c.Query("children"))
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, p)
+}
+
+// MoveMapping overrides the automatic matches, by source id.
+type MoveMapping struct {
+	Types    map[uuid.UUID]uuid.UUID  `json:"types,omitempty"`
+	Statuses map[uuid.UUID]uuid.UUID  `json:"statuses,omitempty"`
+	Fields   map[uuid.UUID]*uuid.UUID `json:"fields,omitempty"`
+}
+
+// MoveRequest is the body of POST …/move.
+type MoveRequest struct {
+	Project  string      `json:"project" example:"OPS"`
+	Children string      `json:"children,omitempty" enums:"move,leave"`
+	Mapping  MoveMapping `json:"mapping"`
+}
+
+// move moves an issue to another project.
+//
+//	@Summary		Move an issue to another project
+//	@Description	Needs issue.move, and issue.create on the target. Types and statuses that match neither by id nor by name must be mapped (422 mapping_required lists them); a field mapped to null drops its values. The response carries the new key; the old one keeps resolving.
+//	@Tags			issues
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws		path		string		true	"Workspace slug"
+//	@Param			issue	path		string		true	"Issue key"
+//	@Param			body	body		MoveRequest	true	"Target and mapping"
+//	@Success		200		{object}	Issue
+//	@Failure		422		{object}	server.Problem	"mapping_required"
+//	@Router			/api/v1/w/{ws}/issues/{issue}/move [post]
+func (h *HTTP) move(c *gin.Context) {
+	var req MoveRequest
+	if !bind(c, &req) {
+		return
+	}
+	in := MoveInput{Project: req.Project, Children: req.Children, Types: req.Mapping.Types, Statuses: req.Mapping.Statuses,
+		Fields: map[uuid.UUID]uuid.UUID{}}
+	for from, to := range req.Mapping.Fields {
+		in.Fields[from] = uuid.Nil
+		if to != nil {
+			in.Fields[from] = *to
+		}
+	}
+	i, err := h.svc.Move(c, current(c), in)
+	reply(c, http.StatusOK, i, err)
 }

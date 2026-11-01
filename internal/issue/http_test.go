@@ -129,6 +129,18 @@ func TestHTTPIssues(t *testing.T) {
 	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-1/prioritize", `{"priority":"low"}`), http.StatusConflict, "issue_archived")
 	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-1/unarchive", ""), http.StatusOK, `"archived_at":null`)
 
+	// Move and delete.
+	f.project("OPS", "Operations", "workspace")
+	c.want(c.do("GET", "/api/v1/w/acme/issues/HZN-2/move/preview?project=OPS", ""), http.StatusOK, `"project":"OPS"`)
+	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-2/move", `{"project":"OPS","mapping":{"fields":{"`+task+`":null}}}`), http.StatusOK, `"key":"OPS-1"`)
+	c.want(c.do("GET", "/api/v1/w/acme/issues/HZN-2", ""), http.StatusOK, `"key":"OPS-1"`)
+	c.want(c.do("DELETE", "/api/v1/w/acme/issues/OPS-1", ""), http.StatusNoContent, "")
+	c.want(c.do("GET", "/api/v1/w/acme/issues/OPS-1", ""), http.StatusNotFound, "issue_not_found")
+	c.want(c.do("DELETE", "/api/v1/w/acme/projects/OPS?confirm=OPS", ""), http.StatusConflict, "project_not_archived")
+	c.want(c.do("POST", "/api/v1/w/acme/projects/OPS/archive", ""), http.StatusOK, `"archived_at":"`)
+	c.want(c.do("DELETE", "/api/v1/w/acme/projects/OPS?confirm=ops", ""), http.StatusUnprocessableEntity, "mismatch")
+	c.want(c.do("DELETE", "/api/v1/w/acme/projects/OPS?confirm=OPS", ""), http.StatusNoContent, "")
+
 	// A member who can't see the project gets 404, not 403.
 	f.project("SEC", "Secret", "private")
 	c.want(c.do("POST", "/api/v1/w/acme/issues", `{"project":"SEC","type_id":"`+task+`","title":"Hidden"}`), http.StatusCreated, `"SEC-1"`)

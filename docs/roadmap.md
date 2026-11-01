@@ -38,7 +38,8 @@ usable exists early.
       custom fields, labels, estimation scales — with defaults
 - [x] Issues: create, field edits, transition, assign, estimate, prioritise,
       rank, parent/child, links, archive
-- [ ] Issues: move between projects, hard delete with scrubbing
+- [x] Issues: move between projects, hard delete with scrubbing (and
+      project deletion)
 - [ ] Comments (plain text first), attachments via S3
 - [ ] Activity feed from `events`
 - [ ] WebSocket pushes for domain events (no collab yet)

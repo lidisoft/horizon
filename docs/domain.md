@@ -96,8 +96,8 @@ sequence counter.
   other project can take a current or former key; a project can take one of
   its own former keys back.
 - Archiving makes a project read-only and hides it from the sidebar; it can
-  be restored. Deleting a project waits for the issue deletion rules
-  (phase 3).
+  be restored. Only an archived project can be deleted
+  (see [Deletion](#deletion)).
 
 ### Issue
 | Field | Notes |
@@ -250,4 +250,4 @@ hidden from active views by default, and still searchable.
 only an **archived** project can be deleted, with `project.manage`, typing
 its key to confirm. Its issues and their content are removed as above, its
 configuration overrides and grants with it, and one tombstone event
-(`ProjectDeleted`: id, key, actor, time) remains.
+(`ProjectDeleted`: id, key, actor, time) remains. Its key becomes free.

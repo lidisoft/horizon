@@ -46,9 +46,17 @@ func Run(ctx context.Context, deps Deps) error {
 		Metrics:   eventlog.NewRelayMetrics(deps.Metrics),
 	}
 
+	purger := &eventlog.Purger{
+		Pool:      deps.Pool,
+		JetStream: deps.JetStream,
+		Stream:    deps.Stream,
+		Log:       logging.WithSystem(deps.Log, "purge"),
+	}
+	jobs := append([]Job{{Name: "purge", Every: 15 * time.Second, Run: purger.Run}}, deps.Jobs...)
+
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return relay.Run(ctx) })
-	for _, job := range deps.Jobs {
+	for _, job := range jobs {
 		g.Go(func() error {
 			runJob(ctx, job, logging.WithSystem(deps.Log, "job").With().Str("job", job.Name).Logger())
 			return nil

@@ -64,12 +64,13 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   /config/settings/estimation              GET | PUT {scale}; at project scope {scale: null} follows the workspace
   /projects                                 GET (visible ones) | POST (project.create)
   /projects/{key}                          GET (current or former key; "can" lists the caller's permissions) | PATCH | /archive | /unarchive
+                                           DELETE ?confirm={key} (archived projects only)
     /config/…                              project overrides (same shape), plus …/{id}/disable|enable and issue-types/{id}/copy
     /iterations  /iterations/{id}/start|complete|archive
     /releases  /milestones
   /projects/{key}/issues                   GET in rank order (?cursor, ?limit, ?archived=true)
   /issues                                  POST {project, type_id, title, …}; filter via view query (POST /issues/query)
-  /issues/{key}                            GET (former keys resolve) | PATCH (If-Match: version)
+  /issues/{key}                            GET (former keys resolve) | PATCH (If-Match: version) | DELETE ?children=
     /transitions                           GET those available from the current status ("blocked" when not allowed)
     /transition  /assign  /estimate  /prioritize  /rank  /archive  /unarchive   POST (If-Match optional)
     /links  /links/{id}                    GET | POST {type, target, lag_days?} | DELETE; seen from the issue (blocks / blocked_by …)
@@ -105,10 +106,21 @@ if the caller lacks `issue.delete` on any descendant.
 }
 ```
 
-`GET …/move/preview?project=OPS` returns the automatic matches and what is
-left to map. `children` (`move` or `leave`) is required when the issue has
-children. The response contains the new key; requests for the old key resolve
-to it.
+Without a mapping, a type, status, field or label matches the same
+definition when the target project sees it, else one of the same name
+(field: same name and type; select options by name). Types and statuses
+that match nothing must be mapped (`422 mapping_required`, one
+`mapping.types.<id>` or `mapping.statuses.<id>` per gap); field values and
+labels that match nothing are dropped, and so are estimates outside the
+target scale.
+
+`GET …/move/preview?project=OPS&children=move` returns the matches (`match:
+null` for gaps), the number of issues that move and the estimates that
+would be cleared. `children` (`move` or `leave`) is required when the issue
+has children. Moving needs `issue.move` on what moves and `issue.create` on
+the target. The response contains the new key; requests for the old key
+resolve to it. Iteration and release are cleared; links, comments and
+history stay.
 
 ## Querying issues
 

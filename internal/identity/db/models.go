@@ -110,6 +110,14 @@ type Issue struct {
 	Version     int32
 }
 
+type IssueKeyAlias struct {
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	Number      int64
+	IssueID     uuid.UUID
+	CreatedAt   time.Time
+}
+
 type IssueLabel struct {
 	WorkspaceID uuid.UUID
 	IssueID     uuid.UUID
@@ -195,6 +203,17 @@ type ProjectKeyAlias struct {
 	ProjectID   uuid.UUID
 	OldKey      string
 	CreatedAt   time.Time
+}
+
+type Purge struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.NullUUID
+	AggregateType string
+	AggregateID   uuid.UUID
+	TombstoneID   uuid.NullUUID
+	Objects       []string
+	CreatedAt     time.Time
+	Attempts      int32
 }
 
 type Role struct {

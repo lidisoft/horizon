@@ -2187,6 +2187,50 @@ const docTemplate = `{
                     }
                 }
             },
+            "delete": {
+                "description": "Needs issue.delete. Its content and history go; an IssueDeleted tombstone remains. children is required when it has any: reparent moves them to its parent, cascade deletes the subtree (403 unless the caller may delete every descendant).",
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Delete an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "reparent",
+                            "cascade"
+                        ],
+                        "type": "string",
+                        "description": "reparent or cascade",
+                        "name": "children",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "422": {
+                        "description": "children_choice_required",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            },
             "patch": {
                 "description": "Needs issue.edit. \"\" clears dates and the parent; null removes a custom field value. A type whose workflow differs needs status_id in it.",
                 "consumes": [
@@ -2553,6 +2597,112 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/move": {
+            "post": {
+                "description": "Needs issue.move, and issue.create on the target. Types and statuses that match neither by id nor by name must be mapped (422 mapping_required lists them); a field mapped to null drops its values. The response carries the new key; the old one keeps resolving.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Move an issue to another project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Target and mapping",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.MoveRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    },
+                    "422": {
+                        "description": "mapping_required",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/move/preview": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Preview moving an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Target project key",
+                        "name": "project",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "move",
+                            "leave"
+                        ],
+                        "type": "string",
+                        "description": "move (default) or leave",
+                        "name": "children",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.MovePreview"
+                        }
                     }
                 }
             }
@@ -3010,6 +3160,53 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "project_not_found",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Archived projects only, with project.manage. Its issues, their history, configuration overrides and grants go; a ProjectDeleted tombstone remains.",
+                "tags": [
+                    "projects"
+                ],
+                "summary": "Delete a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "The project's current key, typed by the user",
+                        "name": "confirm",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "409": {
+                        "description": "project_not_archived",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "confirm: mismatch",
                         "schema": {
                             "$ref": "#/definitions/server.Problem"
                         }
@@ -5280,6 +5477,108 @@ const docTemplate = `{
                         "precedes",
                         "follows"
                     ]
+                }
+            }
+        },
+        "issue.MoveMapping": {
+            "type": "object",
+            "properties": {
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "statuses": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "types": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "issue.MoveMatch": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "issues": {
+                    "type": "integer"
+                },
+                "match": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.MovePreview": {
+            "type": "object",
+            "properties": {
+                "children": {
+                    "type": "integer"
+                },
+                "estimates_cleared": {
+                    "type": "integer"
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.MoveMatch"
+                    }
+                },
+                "issues": {
+                    "type": "integer"
+                },
+                "labels": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.MoveMatch"
+                    }
+                },
+                "project": {
+                    "type": "string",
+                    "example": "OPS"
+                },
+                "statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.MoveMatch"
+                    }
+                },
+                "types": {
+                    "description": "The lists cover the issue and, with children=move, its subtree.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.MoveMatch"
+                    }
+                }
+            }
+        },
+        "issue.MoveRequest": {
+            "type": "object",
+            "properties": {
+                "children": {
+                    "type": "string",
+                    "enum": [
+                        "move",
+                        "leave"
+                    ]
+                },
+                "mapping": {
+                    "$ref": "#/definitions/issue.MoveMapping"
+                },
+                "project": {
+                    "type": "string",
+                    "example": "OPS"
                 }
             }
         },

@@ -53,6 +53,7 @@ func newFixture(t *testing.T) *fixture {
 		OnCreate: []workspace.CreateHook{f.cfg.SeedDefaults}})
 	f.projects = project.New(f.pool, f.acc, nil)
 	f.svc = issue.New(f.pool, f.acc, f.cfg, f.projects, nil)
+	f.projects.OnDelete(f.cfg.DeleteProject)
 	f.owner = f.principal("owner@example.com")
 	var err error
 	if f.acme, err = f.ws.Create(context.Background(), uuid.NullUUID{}, workspace.NewWorkspace{Slug: "acme", Name: "Acme", OwnerID: f.owner.User.ID}); err != nil {

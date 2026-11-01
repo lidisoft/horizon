@@ -62,10 +62,19 @@ func projectFrom(p db.Project, aliases []string) Project {
 
 // Service implements the project commands and queries.
 type Service struct {
-	pool   *pgxpool.Pool
-	access *access.Service
-	now    func() time.Time
+	pool     *pgxpool.Pool
+	access   *access.Service
+	now      func() time.Time
+	onDelete []DeleteHook
 }
+
+// DeleteHook removes, in tx, what another module keeps for a project being
+// deleted, and scrubs its events (eventlog.Scrub). Rows that reference the
+// project cascade anyway; hooks exist for the history.
+type DeleteHook func(ctx context.Context, tx pgx.Tx, pc Context) error
+
+// OnDelete registers a hook run by Delete.
+func (s *Service) OnDelete(h DeleteHook) { s.onDelete = append(s.onDelete, h) }
 
 // New returns a Service; now defaults to time.Now.
 func New(pool *pgxpool.Pool, acc *access.Service, now func() time.Time) *Service {
@@ -442,6 +451,40 @@ func (s *Service) SetArchived(ctx context.Context, pc Context, archived bool) (P
 		return Project{}, err
 	}
 	return projectFrom(updated, pc.Project.Aliases), nil
+}
+
+// Delete hard-deletes an archived project (project.manage) with its issues,
+// configuration overrides and grants; confirm must be its current key. One
+// tombstone remains: ProjectDeleted (docs/domain.md#deletion).
+func (s *Service) Delete(ctx context.Context, pc Context, confirm string) error {
+	if err := s.Require(ctx, pc, access.ProjectManage); err != nil {
+		return err
+	}
+	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		q := db.New(tx)
+		cur, err := q.LockProject(ctx, db.LockProjectParams{WorkspaceID: pc.Workspace.ID, ID: pc.Project.ID})
+		if err != nil {
+			return err
+		}
+		if cur.ArchivedAt == nil {
+			return apperr.Conflict("project_not_archived")
+		}
+		if confirm != cur.Key {
+			return apperr.Invalid(apperr.Field{Field: "confirm", Code: "mismatch"})
+		}
+		for _, h := range s.onDelete {
+			if err := h(ctx, tx, pc); err != nil {
+				return err
+			}
+		}
+		if err := s.access.ScrubProjectGrants(ctx, tx, cur.WorkspaceID, cur.ID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM projects WHERE workspace_id = $1 AND id = $2`, cur.WorkspaceID, cur.ID); err != nil {
+			return err
+		}
+		return eventlog.Tombstone(ctx, tx, s.event(pc.Context, cur.ID, int64(cur.Version)+1, "ProjectDeleted", map[string]any{"key": cur.Key}))
+	})
 }
 
 func (s *Service) event(wc workspace.Context, id uuid.UUID, version int64, typ string, payload map[string]any) eventlog.Event {

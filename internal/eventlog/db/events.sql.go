@@ -69,6 +69,60 @@ type AppendEventsParams struct {
 	Payload          json.RawMessage
 }
 
+const claimPurges = `-- name: ClaimPurges :many
+SELECT p.id, p.workspace_id, p.aggregate_type, p.aggregate_id, p.tombstone_id, p.objects, p.created_at, p.attempts, coalesce((SELECT e.type FROM events e WHERE e.id = p.tombstone_id), '')::text AS tombstone_type
+FROM purges p
+WHERE p.tombstone_id IS NULL
+   OR NOT EXISTS (SELECT 1 FROM events e WHERE e.id = p.tombstone_id AND e.published_at IS NULL)
+ORDER BY p.id
+LIMIT $1
+FOR UPDATE SKIP LOCKED
+`
+
+type ClaimPurgesRow struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.NullUUID
+	AggregateType string
+	AggregateID   uuid.UUID
+	TombstoneID   uuid.NullUUID
+	Objects       []string
+	CreatedAt     time.Time
+	Attempts      int32
+	TombstoneType string
+}
+
+// Purges whose tombstone (if any) the relay has published; other workers
+// skip the locked ones.
+func (q *Queries) ClaimPurges(ctx context.Context, batchSize int32) ([]ClaimPurgesRow, error) {
+	rows, err := q.db.Query(ctx, claimPurges, batchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClaimPurgesRow
+	for rows.Next() {
+		var i ClaimPurgesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.AggregateType,
+			&i.AggregateID,
+			&i.TombstoneID,
+			&i.Objects,
+			&i.CreatedAt,
+			&i.Attempts,
+			&i.TombstoneType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const claimUnpublished = `-- name: ClaimUnpublished :many
 SELECT id, workspace_id, aggregate_type, aggregate_id, aggregate_version,
        type, actor_id, occurred_at, payload
@@ -122,6 +176,39 @@ func (q *Queries) ClaimUnpublished(ctx context.Context, batchSize int32) ([]Clai
 	return items, nil
 }
 
+const deleteAggregateEvents = `-- name: DeleteAggregateEvents :exec
+DELETE FROM events WHERE aggregate_type = $1 AND aggregate_id = ANY($2::uuid[])
+`
+
+type DeleteAggregateEventsParams struct {
+	AggregateType string
+	Ids           []uuid.UUID
+}
+
+// Scrubs the history of hard-deleted aggregates (ADR-0012).
+func (q *Queries) DeleteAggregateEvents(ctx context.Context, arg DeleteAggregateEventsParams) error {
+	_, err := q.db.Exec(ctx, deleteAggregateEvents, arg.AggregateType, arg.Ids)
+	return err
+}
+
+const donePurge = `-- name: DonePurge :exec
+DELETE FROM purges WHERE id = $1
+`
+
+func (q *Queries) DonePurge(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, donePurge, id)
+	return err
+}
+
+const failedPurge = `-- name: FailedPurge :exec
+UPDATE purges SET attempts = attempts + 1 WHERE id = $1
+`
+
+func (q *Queries) FailedPurge(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, failedPurge, id)
+	return err
+}
+
 const markPublished = `-- name: MarkPublished :exec
 UPDATE events SET published_at = now() WHERE id = ANY($1::uuid[])
 `
@@ -149,4 +236,32 @@ func (q *Queries) OutboxBacklog(ctx context.Context) (OutboxBacklogRow, error) {
 	var i OutboxBacklogRow
 	err := row.Scan(&i.Pending, &i.OldestSeconds)
 	return i, err
+}
+
+const queuePurge = `-- name: QueuePurge :exec
+INSERT INTO purges (id, workspace_id, aggregate_type, aggregate_id, tombstone_id, objects, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+`
+
+type QueuePurgeParams struct {
+	ID            uuid.UUID
+	WorkspaceID   uuid.NullUUID
+	AggregateType string
+	AggregateID   uuid.UUID
+	TombstoneID   uuid.NullUUID
+	Objects       []string
+	CreatedAt     time.Time
+}
+
+func (q *Queries) QueuePurge(ctx context.Context, arg QueuePurgeParams) error {
+	_, err := q.db.Exec(ctx, queuePurge,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.AggregateType,
+		arg.AggregateID,
+		arg.TombstoneID,
+		arg.Objects,
+		arg.CreatedAt,
+	)
+	return err
 }

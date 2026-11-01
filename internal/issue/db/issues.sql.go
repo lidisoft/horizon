@@ -14,6 +14,29 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addIssueAlias = `-- name: AddIssueAlias :exec
+INSERT INTO issue_key_aliases (workspace_id, project_id, number, issue_id, created_at) VALUES ($1, $2, $3, $4, $5)
+`
+
+type AddIssueAliasParams struct {
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	Number      int64
+	IssueID     uuid.UUID
+	CreatedAt   time.Time
+}
+
+func (q *Queries) AddIssueAlias(ctx context.Context, arg AddIssueAliasParams) error {
+	_, err := q.db.Exec(ctx, addIssueAlias,
+		arg.WorkspaceID,
+		arg.ProjectID,
+		arg.Number,
+		arg.IssueID,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const addIssueLabel = `-- name: AddIssueLabel :exec
 INSERT INTO issue_labels (workspace_id, issue_id, label_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING
 `
@@ -306,6 +329,121 @@ func (q *Queries) CreateIssue(ctx context.Context, arg CreateIssueParams) (Issue
 	return i, err
 }
 
+const deleteIssue = `-- name: DeleteIssue :exec
+DELETE FROM issues WHERE workspace_id = $1 AND id = $2
+`
+
+type DeleteIssueParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+}
+
+func (q *Queries) DeleteIssue(ctx context.Context, arg DeleteIssueParams) error {
+	_, err := q.db.Exec(ctx, deleteIssue, arg.WorkspaceID, arg.ID)
+	return err
+}
+
+const descendants = `-- name: Descendants :many
+WITH RECURSIVE tree AS (
+    SELECT c.id, 1 AS depth FROM issues c WHERE c.parent_id = $1
+    UNION ALL
+    SELECT c.id, t.depth + 1 FROM issues c JOIN tree t ON c.parent_id = t.id WHERE t.depth < 100
+)
+SELECT i.workspace_id, i.id, i.project_id, i.number, i.type_id, i.title, i.description, i.status_id, i.priority, i.rank, i.estimate, i.assignee_id, i.reporter_id, i.parent_id, i.iteration_id, i.release_id, i.start_date, i.due_date, i.fields, i.started_at, i.resolved_at, i.archived_at, i.created_at, i.updated_at, i.version FROM tree JOIN issues i ON i.id = tree.id ORDER BY tree.depth DESC, i.rank
+`
+
+// Every descendant of an issue, deepest first (for cascading deletes).
+func (q *Queries) Descendants(ctx context.Context, rootID uuid.NullUUID) ([]Issue, error) {
+	rows, err := q.db.Query(ctx, descendants, rootID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Issue
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.ID,
+			&i.ProjectID,
+			&i.Number,
+			&i.TypeID,
+			&i.Title,
+			&i.Description,
+			&i.StatusID,
+			&i.Priority,
+			&i.Rank,
+			&i.Estimate,
+			&i.AssigneeID,
+			&i.ReporterID,
+			&i.ParentID,
+			&i.IterationID,
+			&i.ReleaseID,
+			&i.StartDate,
+			&i.DueDate,
+			&i.Fields,
+			&i.StartedAt,
+			&i.ResolvedAt,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const issueByAlias = `-- name: IssueByAlias :one
+SELECT i.workspace_id, i.id, i.project_id, i.number, i.type_id, i.title, i.description, i.status_id, i.priority, i.rank, i.estimate, i.assignee_id, i.reporter_id, i.parent_id, i.iteration_id, i.release_id, i.start_date, i.due_date, i.fields, i.started_at, i.resolved_at, i.archived_at, i.created_at, i.updated_at, i.version FROM issue_key_aliases a JOIN issues i ON i.id = a.issue_id
+WHERE a.workspace_id = $1 AND a.project_id = $2 AND a.number = $3
+`
+
+type IssueByAliasParams struct {
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+	Number      int64
+}
+
+// An issue by a key it left behind when it moved.
+func (q *Queries) IssueByAlias(ctx context.Context, arg IssueByAliasParams) (Issue, error) {
+	row := q.db.QueryRow(ctx, issueByAlias, arg.WorkspaceID, arg.ProjectID, arg.Number)
+	var i Issue
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.ID,
+		&i.ProjectID,
+		&i.Number,
+		&i.TypeID,
+		&i.Title,
+		&i.Description,
+		&i.StatusID,
+		&i.Priority,
+		&i.Rank,
+		&i.Estimate,
+		&i.AssigneeID,
+		&i.ReporterID,
+		&i.ParentID,
+		&i.IterationID,
+		&i.ReleaseID,
+		&i.StartDate,
+		&i.DueDate,
+		&i.Fields,
+		&i.StartedAt,
+		&i.ResolvedAt,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
 const issueByID = `-- name: IssueByID :one
 SELECT workspace_id, id, project_id, number, type_id, title, description, status_id, priority, rank, estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields, started_at, resolved_at, archived_at, created_at, updated_at, version FROM issues WHERE workspace_id = $1 AND id = $2
 `
@@ -536,6 +674,79 @@ func (q *Queries) LockIssue(ctx context.Context, arg LockIssueParams) (Issue, er
 	return i, err
 }
 
+const moveIssue = `-- name: MoveIssue :one
+UPDATE issues
+SET project_id = $3, number = $4, type_id = $5, status_id = $6, rank = $7, estimate = $8, fields = $9,
+    parent_id = $10, iteration_id = NULL, release_id = NULL, started_at = $11, resolved_at = $12,
+    updated_at = $13, version = version + 1
+WHERE workspace_id = $1 AND id = $2
+RETURNING workspace_id, id, project_id, number, type_id, title, description, status_id, priority, rank, estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields, started_at, resolved_at, archived_at, created_at, updated_at, version
+`
+
+type MoveIssueParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	ProjectID   uuid.UUID
+	Number      int64
+	TypeID      uuid.UUID
+	StatusID    uuid.UUID
+	Rank        string
+	Estimate    *string
+	Fields      json.RawMessage
+	ParentID    uuid.NullUUID
+	StartedAt   *time.Time
+	ResolvedAt  *time.Time
+	UpdatedAt   time.Time
+}
+
+// Writes an issue into another project under its new number.
+func (q *Queries) MoveIssue(ctx context.Context, arg MoveIssueParams) (Issue, error) {
+	row := q.db.QueryRow(ctx, moveIssue,
+		arg.WorkspaceID,
+		arg.ID,
+		arg.ProjectID,
+		arg.Number,
+		arg.TypeID,
+		arg.StatusID,
+		arg.Rank,
+		arg.Estimate,
+		arg.Fields,
+		arg.ParentID,
+		arg.StartedAt,
+		arg.ResolvedAt,
+		arg.UpdatedAt,
+	)
+	var i Issue
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.ID,
+		&i.ProjectID,
+		&i.Number,
+		&i.TypeID,
+		&i.Title,
+		&i.Description,
+		&i.StatusID,
+		&i.Priority,
+		&i.Rank,
+		&i.Estimate,
+		&i.AssigneeID,
+		&i.ReporterID,
+		&i.ParentID,
+		&i.IterationID,
+		&i.ReleaseID,
+		&i.StartDate,
+		&i.DueDate,
+		&i.Fields,
+		&i.StartedAt,
+		&i.ResolvedAt,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
+}
+
 const neighbourRanks = `-- name: NeighbourRanks :one
 SELECT coalesce((SELECT max(i.rank) FROM issues i WHERE i.workspace_id = $1 AND i.project_id = $2 AND i.rank < $3::text), '')::text AS before,
        coalesce((SELECT min(i.rank) FROM issues i WHERE i.workspace_id = $1 AND i.project_id = $2 AND i.rank > $3::text), '')::text AS after
@@ -577,6 +788,35 @@ func (q *Queries) NextIssueNumber(ctx context.Context, arg NextIssueNumberParams
 	return issue_seq, err
 }
 
+const projectIssueIDs = `-- name: ProjectIssueIDs :many
+SELECT id FROM issues WHERE workspace_id = $1 AND project_id = $2
+`
+
+type ProjectIssueIDsParams struct {
+	WorkspaceID uuid.UUID
+	ProjectID   uuid.UUID
+}
+
+func (q *Queries) ProjectIssueIDs(ctx context.Context, arg ProjectIssueIDsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, projectIssueIDs, arg.WorkspaceID, arg.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const projectIssues = `-- name: ProjectIssues :many
 SELECT workspace_id, id, project_id, number, type_id, title, description, status_id, priority, rank, estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields, started_at, resolved_at, archived_at, created_at, updated_at, version FROM issues
 WHERE workspace_id = $1 AND project_id = $2
@@ -603,6 +843,65 @@ func (q *Queries) ProjectIssues(ctx context.Context, arg ProjectIssuesParams) ([
 		arg.After,
 		arg.PageSize,
 	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Issue
+	for rows.Next() {
+		var i Issue
+		if err := rows.Scan(
+			&i.WorkspaceID,
+			&i.ID,
+			&i.ProjectID,
+			&i.Number,
+			&i.TypeID,
+			&i.Title,
+			&i.Description,
+			&i.StatusID,
+			&i.Priority,
+			&i.Rank,
+			&i.Estimate,
+			&i.AssigneeID,
+			&i.ReporterID,
+			&i.ParentID,
+			&i.IterationID,
+			&i.ReleaseID,
+			&i.StartDate,
+			&i.DueDate,
+			&i.Fields,
+			&i.StartedAt,
+			&i.ResolvedAt,
+			&i.ArchivedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const reparentChildren = `-- name: ReparentChildren :many
+UPDATE issues SET parent_id = $1, updated_at = $2, version = version + 1
+WHERE parent_id = $3
+RETURNING workspace_id, id, project_id, number, type_id, title, description, status_id, priority, rank, estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields, started_at, resolved_at, archived_at, created_at, updated_at, version
+`
+
+type ReparentChildrenParams struct {
+	NewParent uuid.NullUUID
+	UpdatedAt time.Time
+	OldParent uuid.NullUUID
+}
+
+// Moves an issue's children to its parent (or to the top level).
+func (q *Queries) ReparentChildren(ctx context.Context, arg ReparentChildrenParams) ([]Issue, error) {
+	rows, err := q.db.Query(ctx, reparentChildren, arg.NewParent, arg.UpdatedAt, arg.OldParent)
 	if err != nil {
 		return nil, err
 	}

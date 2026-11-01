@@ -54,7 +54,7 @@ PostgreSQL schema outline. Authoritative definitions live in
 | Table | Key columns |
 |-------|-------------|
 | `issues` | workspace_id, project_id, number, type_id, title, description, status_id, priority, rank (text, collate "C"), estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields JSONB, started_at, resolved_at, description_doc_id, search tsvector, archived_at, version |
-| `issue_key_aliases` | workspace_id, issue_id, old_key — keys left behind by moves (and by project key renames, through `project_key_aliases`) |
+| `issue_key_aliases` | workspace_id, project_id, number, issue_id — keys left behind by moves; a former project key resolves to the project first (`project_key_aliases`), then here |
 | `issue_labels` | issue_id, label_id |
 | `issue_links` | workspace_id, source_id, target_id, type (`relates_to`, `blocks`, `duplicates`, `precedes`), lag_days (`precedes` only) — inverse types (`blocked_by` …) are the same row read from its target |
 | `comments` | issue_id, author_id, document_id, edited_at |
@@ -103,6 +103,7 @@ away. See [realtime.md](realtime.md).
 | Table | Key columns |
 |-------|-------------|
 | `events` | id (UUIDv7), workspace_id (null = instance-level), aggregate_type, aggregate_id, aggregate_version, type, actor_id (null = system), occurred_at, payload JSONB, published_at |
+| `purges` | workspace_id, aggregate_type, aggregate_id, tombstone_id, objects text[], attempts — the `purge` job's queue after hard deletes |
 | `subscriptions` | user_id, issue_id, reason (creator, assignee, mention, manual) |
 | `inbox_items` | user_id, workspace_id, event_id, issue_id, read_at, snoozed_until, archived_at |
 | `webhooks` | workspace_id, project_id (nullable), url, secret, event_types text[], active |
@@ -133,14 +134,23 @@ Deleting an issue, in one transaction:
 
 1. Handle children as requested (`reparent`, or `cascade`: repeat these steps
    for each descendant, deepest first); remove it from its iteration (emits
-   `IterationLoaded`).
-2. `DELETE FROM issues` — cascades remove labels, links, comments, documents,
-   steps, attachment rows, subscriptions, inbox items, VCS links.
+   `IterationLoaded`). Linked issues record `IssueUnlinked`.
+2. `DELETE FROM issues` — cascades remove labels, links, key aliases,
+   comments, documents, steps, attachment rows, subscriptions, inbox items,
+   VCS links.
 3. `DELETE FROM events WHERE aggregate_type='issue' AND aggregate_id=$1`, and
-   delete `webhook_deliveries` that referenced those events.
-4. Insert the tombstone `IssueDeleted` event.
+   delete `webhook_deliveries` that referenced those events
+   (`eventlog.Tombstone`).
+4. Insert the tombstone `IssueDeleted` event, and a `purges` row naming the
+   aggregate, the tombstone and the object keys.
 
-The `purge` worker then purges the JetStream subject
-`horizon.<ws>.issue.<id>.>` and deletes the S3 objects. Events emitted by
+The `purge` job then waits until the relay has published the tombstone,
+purges the JetStream subject `horizon.<ws>.issue.<id>.*` up to it (the
+tombstone stays) and deletes the S3 objects.
+
+Deleting a project runs the same per issue, without per-issue tombstones,
+scrubs the history of its configuration overrides and grants, and leaves one
+`ProjectDeleted` tombstone. Issues of other projects whose parent was there
+become top-level. Events emitted by
 **other** aggregates may mention the deleted issue by id (e.g. an iteration's
 `IterationLoaded`); their payloads carry ids only, never issue content.

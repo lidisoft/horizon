@@ -258,6 +258,7 @@ func appServer(t *testing.T) app {
 	projectSvc := project.New(pool, acc, nil)
 	projects := project.NewHTTP(projectSvc)
 	configHTTP := configdef.NewHTTP(config)
+	projectSvc.OnDelete(config.DeleteProject)
 	issues := issue.NewHTTP(issue.New(pool, acc, config, projectSvc, nil), projectSvc)
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
@@ -669,6 +670,27 @@ func TestProjects(t *testing.T) {
 	}
 	if got := grace.poll(`String(!!` + appRoot + `.querySelector('lds-nav-item[data-project="LDS"]'))`); got != "false" {
 		t.Error("the private project is still in Grace's sidebar")
+	}
+
+	// Archived, it can be deleted by typing its key.
+	admin.do(chromedp.Navigate(a.base + "/w/acme/settings/projects/LDS"))
+	admin.poll(view + `.querySelector('[data-action="archive"]') && "form"`)
+	admin.click(view + `.querySelector('[data-action="archive"]')`)
+	admin.poll(view + `.querySelector('[data-action="delete"]') && "archived"`)
+	admin.click(view + `.querySelector('[data-action="delete"]')`)
+	admin.poll(view + `.querySelector('[data-dialog="delete"]').hasAttribute("open") && "open"`)
+	confirm := view + `.querySelector('[data-action="confirm-delete"]')`
+	admin.typeInto(view+`.querySelector('[data-dialog="delete"] [name="confirm"]')`, "LD")
+	if got := admin.poll(`String(` + confirm + `.hasAttribute("disabled"))`); got != "true" {
+		t.Error("delete enabled before the key is typed")
+	}
+	admin.typeInto(view+`.querySelector('[data-dialog="delete"] [name="confirm"]')`, "S")
+	admin.poll(`!` + confirm + `.hasAttribute("disabled") && "enabled"`)
+	admin.click(confirm)
+	admin.poll(`location.pathname === "/w/acme/settings/projects" && "deleted"`)
+	admin.do(chromedp.Navigate(a.base + "/w/acme/p/LDS"))
+	if got := admin.poll(view + `.querySelector("h2")?.textContent.trim()`); got != "This project doesn't exist, or you can't see it." {
+		t.Errorf("deleted project: %q", got)
 	}
 
 	admin.logs.failOnErrors(t)

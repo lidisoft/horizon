@@ -164,7 +164,7 @@ JetStream durable consumers, one per concern, each idempotent:
 | `webhook` | Matches subscriptions, POSTs signed payloads (HMAC-SHA256), retries with backoff, logs deliveries |
 | `vcs` | Processes forge webhooks: links branches/PRs/commits, applies merge transitions |
 | `policy` | Runs cross-aggregate policies (e.g. iteration completion) as new commands |
-| `purge` | Scrubs JetStream subjects and S3 objects after hard deletes |
+| `purge` | Scrubs JetStream subjects and S3 objects after hard deletes (a periodic job over the `purges` queue; it keeps tombstones) |
 | `reports` | Maintains report projections ([reports.md](reports.md), [ADR-0021](adr/0021-report-projections.md)) |
 
 ## Object storage

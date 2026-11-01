@@ -498,6 +498,20 @@ func (s *Service) RemoveGrant(ctx context.Context, workspaceID uuid.UUID, actor 
 
 // --- Helpers --------------------------------------------------------------------
 
+// ScrubProjectGrants scrubs the history of the grants on a project being
+// deleted (the rows cascade with it).
+func (s *Service) ScrubProjectGrants(ctx context.Context, tx pgx.Tx, workspaceID, projectID uuid.UUID) error {
+	rows, err := tx.Query(ctx, `SELECT id FROM role_grants WHERE workspace_id = $1 AND project_id = $2`, workspaceID, projectID)
+	if err != nil {
+		return err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	return eventlog.Scrub(ctx, tx, uuid.NullUUID{UUID: workspaceID, Valid: true}, "role_grant", ids)
+}
+
 func (s *Service) event(workspaceID uuid.UUID, actor uuid.NullUUID, aggregate string, id uuid.UUID, version int64, typ string, payload map[string]any) eventlog.Event {
 	if payload == nil {
 		payload = map[string]any{}

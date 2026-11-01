@@ -85,3 +85,41 @@ SELECT id, workspace_id FROM issues WHERE status_id = $1 AND (sqlc.narg(type_id)
 
 -- name: ScrubField :exec
 UPDATE issues SET fields = fields - sqlc.arg(field)::text WHERE workspace_id = $1 AND fields ? sqlc.arg(field)::text;
+
+-- name: IssueByAlias :one
+-- An issue by a key it left behind when it moved.
+SELECT i.* FROM issue_key_aliases a JOIN issues i ON i.id = a.issue_id
+WHERE a.workspace_id = $1 AND a.project_id = $2 AND a.number = $3;
+
+-- name: AddIssueAlias :exec
+INSERT INTO issue_key_aliases (workspace_id, project_id, number, issue_id, created_at) VALUES ($1, $2, $3, $4, $5);
+
+-- name: Descendants :many
+-- Every descendant of an issue, deepest first (for cascading deletes).
+WITH RECURSIVE tree AS (
+    SELECT c.id, 1 AS depth FROM issues c WHERE c.parent_id = sqlc.arg(root_id)
+    UNION ALL
+    SELECT c.id, t.depth + 1 FROM issues c JOIN tree t ON c.parent_id = t.id WHERE t.depth < 100
+)
+SELECT i.* FROM tree JOIN issues i ON i.id = tree.id ORDER BY tree.depth DESC, i.rank;
+
+-- name: ReparentChildren :many
+-- Moves an issue's children to its parent (or to the top level).
+UPDATE issues SET parent_id = sqlc.narg(new_parent), updated_at = sqlc.arg(updated_at), version = version + 1
+WHERE parent_id = sqlc.arg(old_parent)
+RETURNING *;
+
+-- name: DeleteIssue :exec
+DELETE FROM issues WHERE workspace_id = $1 AND id = $2;
+
+-- name: ProjectIssueIDs :many
+SELECT id FROM issues WHERE workspace_id = $1 AND project_id = $2;
+
+-- name: MoveIssue :one
+-- Writes an issue into another project under its new number.
+UPDATE issues
+SET project_id = $3, number = $4, type_id = $5, status_id = $6, rank = $7, estimate = $8, fields = $9,
+    parent_id = $10, iteration_id = NULL, release_id = NULL, started_at = $11, resolved_at = $12,
+    updated_at = $13, version = version + 1
+WHERE workspace_id = $1 AND id = $2
+RETURNING *;
