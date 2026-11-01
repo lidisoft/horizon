@@ -159,7 +159,7 @@ semantic tokens only, `:host` display):
 | `hzn-release-dialog`, `hzn-milestone-dialog` | Create and edit releases; create, edit and link milestones |
 | `hzn-iteration-dialog` | Plan or edit an iteration (name, goal, dates, prefilled with the suggested next one); complete one, saying what the policy will do and where unfinished issues go |
 | `hzn-table` (view) | `/w/{ws}/p/{key}/table`: the issues as a grid. Columns from the built-in fields and the project's custom fields (a picker in an `lds-popover`); headers sort through the query (`?sort=key:desc`). A saved table view keeps its columns (`display.columns`) and sort; without one, columns are remembered per project in the browser. Cells edit in place (Enter or double click; Enter or a choice saves with `If-Match`, Escape cancels; title, status, priority, assignee, estimate, dates and text, number, date, select and checkbox fields); arrow keys move between cells, Space selects the row. Selected rows take a status (by name, in each issue's workflow), a priority, an assignee or archiving, one request per issue, with a summary of what was skipped or failed |
-| `hzn-timeline` | Gantt: bars, dependencies, drag to reschedule, milestones |
+| `hzn-timeline` (view) | `/w/{ws}/p/{key}/timeline`: Gantt of the project's issues ([Timeline](#timeline)) |
 | `hzn-calendar` | Month and week calendar |
 | `hzn-view-bar` | On the list, the board and the table: the saved views picker (save as new, save changes, delete; picking a view of another layout goes there), the filter as chips (an AND of conditions built field → condition → value in an `lds-popover`) and text search. The address carries `?view=` and, while it differs from the view's, `?filter=` (JSON); a filter switches the layout to `POST /issues/query` |
 | `hzn-editor` | Block editor: descriptions, comments ([Block editor](#block-editor)) |
@@ -177,6 +177,29 @@ not from globals. A view calls `requestContext(this)` when connected: it
 dispatches a composed `hzn-context` event that the nearest provider answers.
 `hzn-app` provides the context in standalone mode (`provideContext`); a future
 shell adapter would provide the same object.
+
+## Timeline
+
+`hzn-timeline` draws each issue from its start to its due date (a due date
+alone is a one-day bar, dashed), in rows sorted by start, with issues
+without dates last: a click in their row gives them that working day.
+Arrows are `precedes` links (`GET /projects/{key}/dependencies`), red when
+the successor starts too early for the lag. The project's non-working days
+are shaded (holidays in the warning tone), its iterations form a band
+under the dates, milestones and release dates are dashed markers, and
+today is a solid one. Zoom is weeks, months or quarters (remembered in the
+browser and in a saved timeline view).
+
+Dragging a bar moves it, dragging an end moves that date; on a focused bar
+`Alt+←/→` moves it by a working day and `Alt+Shift+←/→` its due date. Every
+change first asks the server for a plan (`POST /issues/{key}/schedule`):
+the issues the bar precedes that would start too early move to the
+working day after it ends (plus the lag), keeping their length in working
+days of their own project, never earlier. With nothing to move the change
+is saved; otherwise a dialog lists each issue and its shift, with those
+that can't move (no `issue.edit`, archived), and offers to move them all,
+the issue alone, or nothing. Confirming applies the plan, each successor
+at the version it was planned from.
 
 ## Block editor
 

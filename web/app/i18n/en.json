@@ -885,6 +885,7 @@
   "planning.layouts.issues": "List",
   "planning.layouts.board": "Board",
   "planning.layouts.table": "Table",
+  "planning.layouts.timeline": "Timeline",
   "planning.layouts.backlog": "Backlog",
   "planning.backlog": "Backlog",
   "planning.velocity": "Velocity (last 3)",
@@ -1117,6 +1118,34 @@
   "table.col.due_date": "Due",
   "table.col.created": "Created",
   "table.col.updated": "Updated",
+  "timeline.zoom": "Zoom",
+  "timeline.zooms.week": "Weeks",
+  "timeline.zooms.month": "Months",
+  "timeline.zooms.quarter": "Quarters",
+  "timeline.today": "Today",
+  "timeline.iterations": "Iterations",
+  "timeline.clickToSchedule": "Click a day to schedule it",
+  "timeline.barLabel": "{key} {title}, {start} to {due}. Alt+arrows move it; with Shift, its due date.",
+  "timeline.planTitle": "Reschedule {key}",
+  "timeline.planIntro": {
+    "one": "{key} precedes an issue that would have to move:",
+    "other": "{key} precedes {count} issues that would have to move:"
+  },
+  "timeline.shift": {
+    "one": "{count} working day later",
+    "other": "{count} working days later"
+  },
+  "timeline.blocked.forbidden": "You can't edit it: it stays",
+  "timeline.blocked.archived": "Archived: it stays",
+  "timeline.moveAlone": "Move {key} only",
+  "timeline.moveAll": {
+    "one": "Move it",
+    "other": "Move all {count}"
+  },
+  "timeline.notMoved": {
+    "one": "{count} issue changed meanwhile and wasn't moved.",
+    "other": "{count} issues changed meanwhile and weren't moved."
+  },
   "shortcut.columnLeft": "Previous column",
   "shortcut.columnRight": "Next column",
   "shortcut.moveLeft": "Move the issue to the previous column",

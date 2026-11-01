@@ -56,6 +56,7 @@ func (h *HTTP) RegisterWorkspace(ws *gin.RouterGroup) {
 	g.POST("/release", h.release)
 	g.POST("/prioritize", h.prioritize)
 	g.POST("/rank", h.rank)
+	g.POST("/schedule", h.schedule)
 	g.POST("/archive", h.archive)
 	g.POST("/unarchive", h.unarchive)
 	g.GET("/children", h.children)
@@ -67,6 +68,7 @@ func (h *HTTP) RegisterWorkspace(ws *gin.RouterGroup) {
 // RegisterProject mounts the project's issue list on /w/:ws/projects/:key.
 func (h *HTTP) RegisterProject(p *gin.RouterGroup) {
 	p.GET("/issues", h.list)
+	p.GET("/dependencies", h.dependencies)
 }
 
 func (h *HTTP) enter(c *gin.Context) {
@@ -584,6 +586,70 @@ func (h *HTTP) addLink(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, l)
+}
+
+// ScheduleRequest moves an issue's dates; "" clears one.
+type ScheduleRequest struct {
+	StartDate string `json:"start_date" example:"2026-11-09"`
+	DueDate   string `json:"due_date" example:"2026-11-13"`
+	// Confirm applies the plan; without it, it is only proposed.
+	Confirm bool `json:"confirm"`
+}
+
+// schedule proposes, or applies, new dates and the moves they cause.
+//
+//	@Summary		Reschedule an issue
+//	@Description	Needs issue.edit. Proposes the issue's new dates and the moves of the issues it precedes (in working days of each one's project, keeping their length; only later). With confirm it applies them, each successor at the version it was planned from. If-Match on the issue.
+//	@Tags			issues
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws			path		string			true	"Workspace slug"
+//	@Param			issue		path		string			true	"Issue key"
+//	@Param			If-Match	header		string			false	"Issue version"
+//	@Param			body		body		ScheduleRequest	true	"New dates"
+//	@Success		200			{object}	SchedulePlan
+//	@Router			/api/v1/w/{ws}/issues/{issue}/schedule [post]
+func (h *HTTP) schedule(c *gin.Context) {
+	var req ScheduleRequest
+	if !bind(c, &req) {
+		return
+	}
+	v, err := server.IfMatch(c)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	plan, err := h.svc.Schedule(c, current(c), v, req.StartDate, req.DueDate, req.Confirm)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, plan)
+}
+
+// DependencyList is the body of GET /dependencies.
+type DependencyList struct {
+	Items []Dependency `json:"items"`
+}
+
+// dependencies lists the precedes links of a project's issues.
+//
+//	@Summary		List a project's dependencies
+//	@Description	The precedes links touching the project's issues, both ends visible to the caller, for the timeline.
+//	@Tags			issues
+//	@Produce		json
+//	@Param			ws	path		string	true	"Workspace slug"
+//	@Param			key	path		string	true	"Project key"
+//	@Success		200	{object}	DependencyList
+//	@Router			/api/v1/w/{ws}/projects/{key}/dependencies [get]
+func (h *HTTP) dependencies(c *gin.Context) {
+	pc := project.Current(c)
+	items, err := h.svc.Dependencies(c, pc.Context, pc.Project.ID)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, DependencyList{Items: items})
 }
 
 // removeLink deletes a link.

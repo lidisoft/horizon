@@ -214,6 +214,21 @@ and custom fields. Every value is a bind parameter (`internal/query`); a
 query that doesn't compile answers 422 with the place (`filter.and[1].op:
 bad_op`). At most 50 conditions, 6 levels deep, 500 issues a page.
 
+## Rescheduling
+
+`POST /w/{ws}/issues/{key}/schedule {start_date, due_date, confirm}` (with
+`If-Match`) answers the plan for the issue's new dates: `issue` (from, to)
+and `moves`, the issues it precedes, directly or not, that would start too
+early: each with `from`, `to`, `shift` (working days later), `after` (the
+issue pushing it) and `blocked` (`forbidden`, `archived`) when it can't
+move. Successors keep their length in working days of their own project's
+calendar and never move earlier; a lag counts working days too. Without
+`confirm` nothing changes. With it the plan is applied: the issue, then
+each successor at the `version` it was planned from, each `result` being
+`moved` or the error code that stopped it. `GET /w/{ws}/projects/{key}/dependencies`
+lists the `precedes` links touching the project's issues whose ends the
+caller sees.
+
 ## Saved views
 
 A view stores a query (as above, without `projects` and `cursor`), a

@@ -67,7 +67,7 @@ usable exists early.
 - [x] Board configuration in saved views: WIP limits per column
 - [x] Table view with inline editing
 - [x] Working calendars (weekdays, holidays) and time zone settings
-- [ ] Timeline / Gantt with dependencies, auto-scheduling in working days, milestones
+- [x] Timeline / Gantt with dependencies, auto-scheduling in working days, milestones
 - [ ] Calendar view
 - [ ] Workspace roadmap across projects
 

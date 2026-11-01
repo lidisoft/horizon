@@ -1454,6 +1454,103 @@ func TestCalendarSettings(t *testing.T) {
 	pg.logs.failOnErrors(t)
 }
 
+// TestTimeline moves bars with the keyboard: alone when nothing follows,
+// through the plan dialog when an issue it precedes has to move; and
+// schedules an issue from its empty lane.
+func TestTimeline(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	if status, body := pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`); status != 201 {
+		t.Fatalf("create project: %d %s", status, body)
+	}
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID, Name string } `json:"issue_types"`
+	}
+	if err := json.Unmarshal([]byte(cfg), &resolved); err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Design", "Build", "Someday"} {
+		if status, body := pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"`+title+`"}`); status != 201 {
+			t.Fatalf("create issue: %d %s", status, body)
+		}
+	}
+	// Monday 2 to Wednesday 4 November, then Thursday 5 to Friday 6.
+	pg.api("PATCH", "/w/acme/issues/HZN-1", `{"start_date":"2026-11-02","due_date":"2026-11-04"}`)
+	pg.api("PATCH", "/w/acme/issues/HZN-2", `{"start_date":"2026-11-05","due_date":"2026-11-06"}`)
+	if status, body := pg.api("POST", "/w/acme/issues/HZN-1/links", `{"type":"precedes","target":"HZN-2"}`); status != 201 {
+		t.Fatalf("link: %d %s", status, body)
+	}
+	dates := func(key string) string {
+		_, body := pg.api("GET", "/w/acme/issues/"+key, "")
+		var v struct {
+			Start *string `json:"start_date"`
+			Due   *string `json:"due_date"`
+		}
+		_ = json.Unmarshal([]byte(body), &v)
+		s := func(p *string) string {
+			if p == nil {
+				return "-"
+			}
+			return *p
+		}
+		return s(v.Start) + ".." + s(v.Due)
+	}
+	bar := func(key string) string { return view + `.querySelector('[data-bar="` + key + `"]')` }
+
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/timeline"))
+	pg.poll(view + `.querySelectorAll(".gbar").length === 2 && ` + view + `.querySelectorAll(".lane.unscheduled").length === 1 && "timeline"`)
+	pg.poll(view + `.querySelectorAll("[data-links] path").length === 1 && "arrow"`)
+
+	// Build follows nothing: Alt+→ moves it a working day, at once.
+	pg.eval(bar("HZN-2") + `.focus()`)
+	pg.do(chromedp.KeyEvent(kb.ArrowRight, chromedp.KeyModifiers(chromedp.ModifierAlt)))
+	pg.poll(bar("HZN-2") + `?.dataset.x === "2026-11-06" && "moved"`)
+	if got := dates("HZN-2"); got != "2026-11-06..2026-11-09" {
+		t.Errorf("Build = %s", got)
+	}
+
+	// Design's due date to Thursday leaves Build room; to Friday it pushes
+	// Build, and the plan asks first.
+	pg.eval(bar("HZN-1") + `.focus()`)
+	pg.do(chromedp.KeyEvent(kb.ArrowRight, chromedp.KeyModifiers(chromedp.ModifierAlt|chromedp.ModifierShift)))
+	pg.poll(bar("HZN-1") + `?.dataset.to === "2026-11-05" && document.activeElement && "due moved"`)
+	pg.eval(bar("HZN-1") + `.focus()`)
+	pg.do(chromedp.KeyEvent(kb.ArrowRight, chromedp.KeyModifiers(chromedp.ModifierAlt|chromedp.ModifierShift)))
+	pg.poll(view + `.querySelector("[data-plan]").hasAttribute("open") && "plan"`)
+	if got := pg.poll(view + `.querySelector('[data-move="HZN-2"]')?.textContent.replace(/\s+/g, " ").trim()`); !strings.Contains(got, "1 working day later") {
+		t.Errorf("plan row = %s", got)
+	}
+	if got := dates("HZN-1"); got != "2026-11-02..2026-11-05" {
+		t.Errorf("Design moved before confirming: %s", got)
+	}
+	pg.click(view + `.querySelector('[data-action="plan-all"]')`)
+	pg.poll(bar("HZN-2") + `?.dataset.x === "2026-11-09" && "pushed"`)
+	if got := dates("HZN-1") + " " + dates("HZN-2"); got != "2026-11-02..2026-11-06 2026-11-09..2026-11-10" {
+		t.Errorf("after confirming = %s", got)
+	}
+
+	// A click in an empty lane schedules that issue.
+	at := pg.poll(`(() => { const l = ` + view + `.querySelector(".lane.unscheduled"); l.scrollIntoView({ block: "center" });
+		const r = l.getBoundingClientRect(); const n = ` + view + `.querySelector(".names").getBoundingClientRect();
+		return JSON.stringify([Math.max(r.left, n.right) + 40, r.top + r.height / 2]); })()`)
+	var xy [2]float64
+	if err := json.Unmarshal([]byte(at), &xy); err != nil {
+		t.Fatal(err)
+	}
+	pg.do(chromedp.MouseClickXY(xy[0], xy[1]))
+	pg.poll(view + `.querySelectorAll(".gbar").length === 3 && "scheduled"`)
+	if got := dates("HZN-3"); strings.Contains(got, "-..") {
+		t.Errorf("Someday = %s", got)
+	}
+	pg.logs.failOnErrors(t)
+}
+
 // TestReleases creates and ships a release, and plans a milestone with
 // its issues, from the project's Releases page and the workspace's
 // Milestones page.

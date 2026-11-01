@@ -3489,6 +3489,60 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/w/{ws}/issues/{issue}/schedule": {
+            "post": {
+                "description": "Needs issue.edit. Proposes the issue's new dates and the moves of the issues it precedes (in working days of each one's project, keeping their length; only later). With confirm it applies them, each successor at the version it was planned from. If-Match on the issue.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Reschedule an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "New dates",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.ScheduleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.SchedulePlan"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/issues/{issue}/transition": {
             "post": {
                 "description": "Through an allowed transition of the workflow: 409 transition_not_allowed, children_open; 403 transition_forbidden (roles); 422 transition_requires_fields lists missing fields.",
@@ -4370,6 +4424,42 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/configdef.ResolvedConfig"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/dependencies": {
+            "get": {
+                "description": "The precedes links touching the project's issues, both ends visible to the caller, for the timeline.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "List a project's dependencies",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.DependencyList"
                         }
                     }
                 }
@@ -7799,6 +7889,36 @@ const docTemplate = `{
                 }
             }
         },
+        "issue.Dependency": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string",
+                    "example": "HZN-6"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lag_days": {
+                    "type": "integer"
+                },
+                "to": {
+                    "type": "string",
+                    "example": "HZN-7"
+                }
+            }
+        },
+        "issue.DependencyList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.Dependency"
+                    }
+                }
+            }
+        },
         "issue.EstimateRequest": {
             "type": "object",
             "properties": {
@@ -8013,6 +8133,50 @@ const docTemplate = `{
                         "precedes",
                         "follows"
                     ]
+                }
+            }
+        },
+        "issue.Move": {
+            "type": "object",
+            "properties": {
+                "after": {
+                    "description": "After is the issue whose new dates push it.",
+                    "type": "string",
+                    "example": "HZN-6"
+                },
+                "blocked": {
+                    "description": "Blocked says why it can't move: forbidden (no issue.edit), archived.\nIts own successors are left as they are.",
+                    "type": "string",
+                    "enum": [
+                        "forbidden",
+                        "archived"
+                    ]
+                },
+                "from": {
+                    "$ref": "#/definitions/issue.Span"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "HZN-7"
+                },
+                "result": {
+                    "description": "Result, once applied: moved, or the error code that stopped it.",
+                    "type": "string",
+                    "example": "moved"
+                },
+                "shift": {
+                    "description": "Shift is how many working days later it starts.",
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "to": {
+                    "$ref": "#/definitions/issue.Span"
+                },
+                "version": {
+                    "description": "Version is the issue's version the plan was made from.",
+                    "type": "integer"
                 }
             }
         },
@@ -8259,6 +8423,52 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "release_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.SchedulePlan": {
+            "type": "object",
+            "properties": {
+                "applied": {
+                    "description": "Applied is true when the plan was carried out (confirm).",
+                    "type": "boolean"
+                },
+                "issue": {
+                    "$ref": "#/definitions/issue.Move"
+                },
+                "moves": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.Move"
+                    }
+                }
+            }
+        },
+        "issue.ScheduleRequest": {
+            "type": "object",
+            "properties": {
+                "confirm": {
+                    "description": "Confirm applies the plan; without it, it is only proposed.",
+                    "type": "boolean"
+                },
+                "due_date": {
+                    "type": "string",
+                    "example": "2026-11-13"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2026-11-09"
+                }
+            }
+        },
+        "issue.Span": {
+            "type": "object",
+            "properties": {
+                "due_date": {
+                    "type": "string"
+                },
+                "start_date": {
                     "type": "string"
                 }
             }

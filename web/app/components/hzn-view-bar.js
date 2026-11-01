@@ -22,7 +22,7 @@ import { html, keepOpenOnInsidePress, sheet } from "horizon/core/dom.js";
 import { busy, clearFieldErrors, errorMessage, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
 
 /** Where each layout lives under /w/:ws/p/:key/. */
-export const LAYOUT_ROUTES = { list: "issues", board: "board", table: "table" };
+export const LAYOUT_ROUTES = { list: "issues", board: "board", table: "table", timeline: "timeline" };
 
 const styles = sheet(`
   :host { display: contents; }
