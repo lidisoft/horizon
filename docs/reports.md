@@ -135,6 +135,11 @@ read at the day's end (now for today), `null` for days to come.
 | `sprint` | `iteration` | Each issue: committed, added, removed, and how it `ended` (completed, abandoned, rolled_over, removed, open); `totals` |
 | `velocity` | `projects` (one), `last` | Committed at the start and completed at the end of the last completed iterations; `average` |
 | `progress` | `release` or `milestone` | `by_outcome` now, and `scope`/`completed` per day from the release's start date (else the first issue's creation). Today's issues count from their creation: who was targeted when isn't projected |
+| `cfd` | `filter`, `projects`; `by` (outcome, or category in one project) | `series` per outcome stacked completed, started, unstarted, abandoned, per day (default: the last 30 days) |
+| `cycle-time` | `filter`, `projects` | The issues completed (default: last 90 days) with `cycle_days` and `lead_days` (to a tenth); `cycle` and `lead` p50/p85/p95 |
+| `throughput` | `filter`, `projects`; `period` week or month | Completed per week (Monday first; default the last 12) or month (the last 6); `average` over past periods |
+| `created-resolved` | As throughput | `created` and `resolved` (completed or abandoned) per period |
+| `distribution` | `filter`, `projects`; `group` | Open issues (unstarted or started, not archived) by assignee (default), type, priority, label (an issue in each of its labels), project or `cf:<select field id>`, largest first; `key` "" for none |
 
 `GET /api/v1/w/{ws}/projects/{key}/overview` returns all overview blocks in one
 response.

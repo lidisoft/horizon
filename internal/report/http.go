@@ -35,11 +35,16 @@ func adapt[T any](fn func(context.Context, workspace.Context, Request) (T, error
 func NewHTTP(svc *Service) *HTTP {
 	h := &HTTP{svc: svc}
 	h.reports = map[string]report{
-		"burndown": adapt(svc.Burndown),
-		"burnup":   adapt(svc.Burndown),
-		"sprint":   adapt(svc.Sprint),
-		"velocity": adapt(svc.Velocity),
-		"progress": adapt(svc.Progress),
+		"burndown":         adapt(svc.Burndown),
+		"burnup":           adapt(svc.Burndown),
+		"sprint":           adapt(svc.Sprint),
+		"velocity":         adapt(svc.Velocity),
+		"progress":         adapt(svc.Progress),
+		"cfd":              adapt(svc.CumulativeFlow),
+		"cycle-time":       adapt(svc.CycleTime),
+		"throughput":       adapt(svc.Throughput),
+		"distribution":     adapt(svc.Distribution),
+		"created-resolved": adapt(svc.CreatedResolved),
 	}
 	return h
 }
@@ -88,11 +93,11 @@ func requestFromQuery(c *gin.Context) (Request, error) {
 // get runs a report from its URL.
 //
 //	@Summary		Run a report
-//	@Description	report: burndown, burnup (SprintSeries; iteration=), sprint (SprintReport; iteration=), velocity (Velocity; projects=KEY, last=), progress (Progress; release= or milestone=). Options as query parameters, filter as JSON, lists comma-separated; metric=count|estimate (estimate falls back to count when scales are none or differ, and says so).
+//	@Description	report: burndown, burnup (SprintSeries; iteration=), sprint (SprintReport; iteration=), velocity (Velocity; projects=KEY, last=), progress (Progress; release= or milestone=), cfd (Flow; by=outcome|category), cycle-time (CycleTime), throughput and created-resolved (Periodic; period=week|month), distribution (Distribution; group=assignee|type|priority|label|project|cf:<id>); the last five over filter and projects. Options as query parameters, filter as JSON, lists comma-separated; metric=count|estimate (estimate falls back to count when scales are none or differ, and says so).
 //	@Tags			reports
 //	@Produce		json
 //	@Param			ws			path		string	true	"Workspace slug"
-//	@Param			report		path		string	true	"Report"	Enums(burndown, burnup, sprint, velocity, progress)
+//	@Param			report		path		string	true	"Report"	Enums(burndown, burnup, sprint, velocity, progress, cfd, cycle-time, throughput, distribution, created-resolved)
 //	@Param			filter		query		string	false	"Filter (JSON), as in /issues/query"
 //	@Param			projects	query		string	false	"Project keys, comma-separated"
 //	@Param			iteration	query		string	false	"Iteration id"
@@ -121,7 +126,7 @@ func (h *HTTP) get(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Param			ws		path		string	true	"Workspace slug"
-//	@Param			report	path		string	true	"Report"	Enums(burndown, burnup, sprint, velocity, progress)
+//	@Param			report	path		string	true	"Report"	Enums(burndown, burnup, sprint, velocity, progress, cfd, cycle-time, throughput, distribution, created-resolved)
 //	@Param			body	body		Request	true	"Scope and options"
 //	@Success		200		{object}	SprintSeries
 //	@Router			/api/v1/w/{ws}/reports/{report} [post]

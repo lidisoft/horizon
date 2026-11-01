@@ -5389,7 +5389,7 @@ const docTemplate = `{
         },
         "/api/v1/w/{ws}/reports/{report}": {
             "get": {
-                "description": "report: burndown, burnup (SprintSeries; iteration=), sprint (SprintReport; iteration=), velocity (Velocity; projects=KEY, last=), progress (Progress; release= or milestone=). Options as query parameters, filter as JSON, lists comma-separated; metric=count|estimate (estimate falls back to count when scales are none or differ, and says so).",
+                "description": "report: burndown, burnup (SprintSeries; iteration=), sprint (SprintReport; iteration=), velocity (Velocity; projects=KEY, last=), progress (Progress; release= or milestone=), cfd (Flow; by=outcome|category), cycle-time (CycleTime), throughput and created-resolved (Periodic; period=week|month), distribution (Distribution; group=assignee|type|priority|label|project|cf:\u003cid\u003e); the last five over filter and projects. Options as query parameters, filter as JSON, lists comma-separated; metric=count|estimate (estimate falls back to count when scales are none or differ, and says so).",
                 "produces": [
                     "application/json"
                 ],
@@ -5411,7 +5411,12 @@ const docTemplate = `{
                             "burnup",
                             "sprint",
                             "velocity",
-                            "progress"
+                            "progress",
+                            "cfd",
+                            "cycle-time",
+                            "throughput",
+                            "distribution",
+                            "created-resolved"
                         ],
                         "type": "string",
                         "description": "Report",
@@ -5509,7 +5514,12 @@ const docTemplate = `{
                             "burnup",
                             "sprint",
                             "velocity",
-                            "progress"
+                            "progress",
+                            "cfd",
+                            "cycle-time",
+                            "throughput",
+                            "distribution",
+                            "created-resolved"
                         ],
                         "type": "string",
                         "description": "Report",
