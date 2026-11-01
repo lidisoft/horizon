@@ -331,15 +331,19 @@ export class HznApp extends HTMLElement {
     };
     render([]);
     if (!q || !this.currentSlug) return;
-    this.searchTimer = setTimeout(async () => {
+    // A failed search is tried once more; then the typed key and "Search
+    // for" stay. The last error is kept for diagnosis.
+    const search = async (attempt) => {
       try {
         const { data } = await api.get(`/w/${encodeURIComponent(this.currentSlug)}/search`, { query: { q, limit: 8 } });
         if (seq !== this.searchSeq) return; // typed on meanwhile
         render(data.items);
-      } catch {
-        // offline or failing: the typed key and "Search for" stay
+      } catch (err) {
+        this.lastSearchError = String(err?.message ?? err);
+        if (attempt === 0 && seq === this.searchSeq) this.searchTimer = setTimeout(() => search(1), 300);
       }
-    }, 150);
+    };
+    this.searchTimer = setTimeout(() => search(0), 150);
   }
 
   /** The New issue dialog, in the current project if any. */

@@ -936,9 +936,10 @@ func TestIssues(t *testing.T) {
 		// What the palette holds, and what the search answers, to tell a lost
 		// keystroke from a lost answer.
 		state, _ := chromedp.Run(pg.ctx, chromedp.Evaluate[string](`(async () => { const p = `+palette+`;
-			const api = await fetch("/api/v1/w/acme/search?q=replay&limit=8").then((r) => r.status + " " + r.statusText).catch(String);
+			const api = await fetch("/api/v1/w/acme/search?q=replay&limit=8").then(async (r) => r.status + " " + (await r.json()).items.length + " items").catch(String);
 			return "path=" + location.pathname + " open=" + p.hasAttribute("open") + " query=" + JSON.stringify(p.shadowRoot.querySelector("input").value) +
-				" focus=" + p.shadowRoot.activeElement?.localName + " issues=" + p.querySelector("[data-goto]").textContent.replace(/\s+/g, " ").trim() + " api=" + api; })()`,
+				" focus=" + p.shadowRoot.activeElement?.localName + " issues=" + p.querySelector("[data-goto]").textContent.replace(/\s+/g, " ").trim() + " api=" + api +
+				" error=" + document.querySelector("hzn-app").lastSearchError; })()`,
 			chromedp.EvalAwaitPromise))
 		pg.logs.failOnErrors(t)
 		t.Fatalf("palette search: %v\n%s", err, state)
