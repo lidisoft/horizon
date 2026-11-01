@@ -1630,6 +1630,93 @@ func TestCalendarView(t *testing.T) {
 	pg.logs.failOnErrors(t)
 }
 
+// TestRoadmap lists epics with children across projects, narrows them,
+// and opens one.
+func TestRoadmap(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	must := func(status int, body string) string {
+		t.Helper()
+		if status >= 300 {
+			t.Fatalf("%d %s", status, body)
+		}
+		return body
+	}
+	must(pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`))
+	must(pg.api("POST", "/w/acme/projects", `{"key":"OPS","name":"Operations"}`))
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID, Name string } `json:"issue_types"`
+	}
+	if err := json.Unmarshal([]byte(cfg), &resolved); err != nil {
+		t.Fatal(err)
+	}
+	typ := func(name string) string {
+		for _, it := range resolved.IssueTypes {
+			if it.Name == name {
+				return it.ID
+			}
+		}
+		t.Fatalf("no type %s", name)
+		return ""
+	}
+	issue := func(project, typeName, title, parent, dates string) {
+		body := `{"project":"` + project + `","type_id":"` + typ(typeName) + `","title":"` + title + `"`
+		if parent != "" {
+			body += `,"parent":"` + parent + `"`
+		}
+		key := struct{ Key string }{}
+		_ = json.Unmarshal([]byte(must(pg.api("POST", "/w/acme/issues", body+"}"))), &key)
+		if dates != "" {
+			must(pg.api("PATCH", "/w/acme/issues/"+key.Key, dates))
+		}
+	}
+	issue("HZN", "Epic", "Sync engine", "", "")                                                   // HZN-1, dates from its children
+	issue("HZN", "Story", "Pull", "HZN-1", `{"start_date":"2026-11-02","due_date":"2026-11-13"}`) // HZN-2
+	issue("HZN", "Story", "Push", "HZN-1", `{"start_date":"2026-11-16","due_date":"2026-11-27"}`) // HZN-3
+	issue("OPS", "Epic", "Monitoring", "", `{"start_date":"2026-12-01","due_date":"2026-12-18"}`) // OPS-1, its own dates
+	issue("OPS", "Task", "Dashboards", "OPS-1", "")                                               // OPS-2
+	issue("OPS", "Epic", "Lonely", "", `{"start_date":"2026-11-01","due_date":"2026-11-02"}`)     // no children
+	must(pg.api("POST", "/w/acme/milestones", `{"name":"Launch","date":"2026-12-15"}`))
+	keys := func() string {
+		return pg.poll(`[...` + view + `.querySelectorAll("[data-bar]")].map((b) => b.dataset.bar).join(",") || "none"`)
+	}
+
+	pg.do(chromedp.Navigate(a.base + "/w/acme"))
+	pg.poll(`document.querySelector("hzn-app").shadowRoot.querySelector('[data-nav="roadmap"]:not([hidden])')?.getAttribute("href") === "/w/acme/roadmap" && "linked"`)
+	pg.do(chromedp.Navigate(a.base + "/w/acme/roadmap"))
+	pg.poll(`location.pathname === "/w/acme/roadmap" && ` + view + `?.querySelectorAll("[data-bar]").length === 2 && "roadmap"`)
+	if got := keys(); got != "HZN-1,OPS-1" {
+		t.Errorf("bars = %s", got)
+	}
+	if got := pg.poll(`[...` + view + `.querySelectorAll(".group")].map((g) => g.textContent.trim()).join(",")`); got != "Horizon,Operations" {
+		t.Errorf("groups = %s", got)
+	}
+	sync := view + `.querySelector('[data-bar="HZN-1"]')`
+	if got := pg.poll(sync + `.dataset.x + ".." + ` + sync + `.dataset.to + " " + ` + sync + `.classList.contains("derived")`); got != "2026-11-02..2026-11-27 true" {
+		t.Errorf("Sync engine = %s", got)
+	}
+	pg.poll(view + `.querySelector(".marker.milestone")?.textContent.includes("Launch") && "milestone"`)
+
+	// Words narrow it; the address keeps them.
+	pg.eval(`(() => { const i = ` + view + `.querySelector("[data-q]");
+		i.dispatchEvent(new CustomEvent("lds-input", { detail: { value: "monitor" }, bubbles: true, composed: true })); })()`)
+	pg.poll(view + `.querySelectorAll("[data-bar]").length === 1 && "narrowed"`)
+	if got := keys(); got != "OPS-1" {
+		t.Errorf("narrowed = %s", got)
+	}
+	pg.poll(`new URLSearchParams(location.search).get("q") === "monitor" && "in address"`)
+
+	pg.click(view + `.querySelector('[data-bar="OPS-1"]')`)
+	pg.poll(`location.pathname === "/w/acme/issues/OPS-1" && "opened"`)
+	pg.logs.failOnErrors(t)
+}
+
 // TestReleases creates and ships a release, and plans a milestone with
 // its issues, from the project's Releases page and the workspace's
 // Milestones page.

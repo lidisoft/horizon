@@ -31,6 +31,11 @@ type QueryResult struct {
 // caller may see issues of; projects names those to look in (keys; none:
 // all). cursor is the next_cursor of the previous page.
 func (s *Service) Query(ctx context.Context, wc workspace.Context, q query.Query, projects []string, cursor string) (QueryResult, error) {
+	return s.query(ctx, wc, q, projects, cursor, "TRUE")
+}
+
+// query runs q with a further condition on i (trusted SQL, no arguments).
+func (s *Service) query(ctx context.Context, wc workspace.Context, q query.Query, projects []string, cursor, also string) (QueryResult, error) {
 	visible, err := s.queryProjects(ctx, wc, projects)
 	if err != nil {
 		return QueryResult{}, err
@@ -74,7 +79,7 @@ func (s *Service) Query(ctx context.Context, wc workspace.Context, q query.Query
 		}
 	}
 	from := `FROM issues i JOIN statuses s ON s.id = i.status_id JOIN status_categories sc ON sc.id = s.category_id
-		WHERE i.workspace_id = $1 AND i.project_id = ANY($2::uuid[]) AND (` + compiled.Where + `)`
+		WHERE i.workspace_id = $1 AND i.project_id = ANY($2::uuid[]) AND (` + compiled.Where + `) AND (` + also + `)`
 	args := append([]any{wc.Workspace.ID, ids}, compiled.Args...)
 	if err := s.pool.QueryRow(ctx, "SELECT count(*) "+from, args...).Scan(&out.Total); err != nil {
 		return QueryResult{}, err

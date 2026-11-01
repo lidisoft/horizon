@@ -5387,6 +5387,47 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/w/{ws}/roadmap": {
+            "post": {
+                "description": "Top-level issues (no parent) that have children, across the projects the caller sees (or those named), matching the query; each with its children's count, outcomes and date span, and its bar: its own dates, else its children's (derived).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Workspace roadmap",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Query",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.QueryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Roadmap"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/roles": {
             "get": {
                 "produces": [
@@ -7773,6 +7814,28 @@ const docTemplate = `{
                 }
             }
         },
+        "issue.Children": {
+            "type": "object",
+            "properties": {
+                "abandoned": {
+                    "type": "integer"
+                },
+                "completed": {
+                    "description": "Completed and Abandoned count children by their status's outcome.",
+                    "type": "integer"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "description": "StartDate and DueDate span the children's dates.",
+                    "type": "string"
+                }
+            }
+        },
         "issue.Comment": {
             "type": "object",
             "properties": {
@@ -8423,6 +8486,45 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "release_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "issue.Roadmap": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.RoadmapItem"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "issue.RoadmapItem": {
+            "type": "object",
+            "properties": {
+                "children": {
+                    "$ref": "#/definitions/issue.Children"
+                },
+                "derived": {
+                    "description": "Derived is true when the bar comes from the children's dates.",
+                    "type": "boolean"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "issue": {
+                    "$ref": "#/definitions/issue.Issue"
+                },
+                "start_date": {
+                    "description": "StartDate and DueDate are the bar: the issue's own, else its children's.",
                     "type": "string"
                 }
             }

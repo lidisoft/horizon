@@ -229,6 +229,15 @@ each successor at the `version` it was planned from, each `result` being
 lists the `precedes` links touching the project's issues whose ends the
 caller sees.
 
+## Roadmap
+
+`POST /w/{ws}/roadmap` takes a query like `/issues/query` (with `projects`
+and `cursor`) and keeps the top-level issues (no parent) that have
+children. Each item has the `issue`, its `children` (`count`, `completed`,
+`abandoned`, and the `start_date`/`due_date` span of their dates, archived
+children left out), and its bar: `start_date` and `due_date`, its own or,
+when it has none, its children's (`derived`).
+
 ## Saved views
 
 A view stores a query (as above, without `projects` and `cursor`), a

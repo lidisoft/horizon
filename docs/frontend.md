@@ -154,6 +154,7 @@ semantic tokens only, `:host` display):
 | `hzn-board` (view) | `/w/{ws}/p/{key}/board`: kanban. Columns are statuses, one per name across the project's workflows, in category order; a card dropped on a column moves to its own workflow's status of that name when a transition allows it (columns it can't reach dim while dragging), and ranks within a column. Shows the active iteration (a picker when several are; `?iteration=all` for every issue; all issues when none is active). Swimlanes by assignee, parent or priority, remembered per project in the browser; moving a card across lanes changes that field. `h`/`l`, `j`/`k` move between cards, `Alt+←/→` and `Alt+↑/↓` move the card. A saved board view keeps its swimlanes and WIP limits per column: a column over its limit shows `count / limit` highlighted, and whoever can edit the view sets limits from the column headers |
 | `hzn-backlog` (view) | `/w/{ws}/p/{key}/backlog`: the open iterations (active first) and the backlog (unfinished issues in no open iteration), with each bucket's issues, points and load against velocity. Drag issues between buckets and up and down; `Alt+↑/↓` reorders, `Alt+Shift+↑/↓` moves to the bucket above or below, ⌘K lists where the current issue can go. Plan, edit, start, complete and delete iterations |
 | `hzn-releases` (view) | `/w/{ws}/p/{key}/releases`: the project's releases with the progress of their issues (each can list them), then the project's and the workspace's milestones. Create, edit, release, archive and delete releases; issues are targeted from the issue's Release property |
+| `hzn-roadmap` (view) | `/w/{ws}/roadmap`: the workspace roadmap ([Roadmap](#roadmap)) |
 | `hzn-milestones` (view) | `/w/{ws}/milestones`: every milestone the user sees, by date |
 | `hzn-milestone-list` | Milestones with progress and linked issues; create, edit, link issues (by key) and delete them |
 | `hzn-release-dialog`, `hzn-milestone-dialog` | Create and edit releases; create, edit and link milestones |
@@ -201,6 +202,18 @@ is saved; otherwise a dialog lists each issue and its shift, with those
 that can't move (no `issue.edit`, archived), and offers to move them all,
 the issue alone, or nothing. Confirming applies the plan, each successor
 at the version it was planned from.
+
+## Roadmap
+
+`hzn-roadmap` (sidebar: Roadmap) shows the top-level issues that have
+children (epics and the like) of every project the user sees, grouped by
+project (`POST /w/{ws}/roadmap`). A bar is the issue's own dates, or,
+dashed, its children's span; its fill is the share of its children
+completed (abandoned ones left out), and the row says how many of how
+many. Milestones (the workspace's, and the projects' with their key) and
+release dates are markers, today a solid line. Projects, the state (open,
+all, closed) and words narrow it, kept in the address (`?projects=`,
+`?state=`, `?q=`); zoom is months, quarters or years. A bar opens its issue.
 
 ## Block editor
 

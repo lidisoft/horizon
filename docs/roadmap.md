@@ -69,7 +69,7 @@ usable exists early.
 - [x] Working calendars (weekdays, holidays) and time zone settings
 - [x] Timeline / Gantt with dependencies, auto-scheduling in working days, milestones
 - [x] Calendar view
-- [ ] Workspace roadmap across projects
+- [x] Workspace roadmap across projects
 
 ## Phase 7 — Reports
 

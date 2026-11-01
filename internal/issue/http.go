@@ -33,6 +33,7 @@ func NewHTTP(svc *Service, projects *project.Service) *HTTP {
 func (h *HTTP) RegisterWorkspace(ws *gin.RouterGroup) {
 	ws.POST("/issues", h.create)
 	ws.POST("/issues/query", h.query)
+	ws.POST("/roadmap", h.roadmap)
 	g := ws.Group("/issues/:issue", h.enter)
 	g.GET("", h.get)
 	g.PATCH("", h.update)
@@ -586,6 +587,30 @@ func (h *HTTP) addLink(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, l)
+}
+
+// roadmap lists the workspace roadmap.
+//
+//	@Summary		Workspace roadmap
+//	@Description	Top-level issues (no parent) that have children, across the projects the caller sees (or those named), matching the query; each with its children's count, outcomes and date span, and its bar: its own dates, else its children's (derived).
+//	@Tags			issues
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws		path		string			true	"Workspace slug"
+//	@Param			body	body		QueryRequest	true	"Query"
+//	@Success		200		{object}	Roadmap
+//	@Router			/api/v1/w/{ws}/roadmap [post]
+func (h *HTTP) roadmap(c *gin.Context) {
+	var req QueryRequest
+	if !bind(c, &req) {
+		return
+	}
+	res, err := h.svc.Roadmap(c, workspace.Current(c), req.Query, req.Projects, req.Cursor)
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, res)
 }
 
 // ScheduleRequest moves an issue's dates; "" clears one.

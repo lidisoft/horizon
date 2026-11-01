@@ -18,6 +18,7 @@ import "horizon/views/hzn-invitation.js";
 import "horizon/views/hzn-issue-list.js";
 import "horizon/views/hzn-issue.js";
 import "horizon/views/hzn-milestones.js";
+import "horizon/views/hzn-roadmap.js";
 import "horizon/views/hzn-not-found.js";
 import "horizon/views/hzn-project-home.js";
 import "horizon/views/hzn-releases.js";
