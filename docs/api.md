@@ -85,6 +85,7 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   /projects/{key}/overview                 project overview blocks
   /webhooks  /webhooks/{id}/deliveries
   /integrations/vcs
+/ws                                        WebSocket (realtime.md)
 /hooks/vcs/{provider}                      inbound forge webhooks
 ```
 

@@ -128,8 +128,10 @@ Workflow transitions can further restrict who may perform them
   the aggregate. Services check again, so no route depends on its middleware
   alone.
 - WebSocket: subscriptions are checked when made, and every pushed event is
-  checked against the recipient's current permissions (cached per connection,
-  invalidated by grant/role events).
+  checked against the recipient's current permissions (cached per connection
+  for 30 s, dropped on any workspace event that isn't an issue's: roles,
+  grants, members, projects). The upgrade checks `Origin` against the request
+  host and `BASE_URL`; sockets close after an hour to authenticate again.
 - Webhooks and the inbox respect the target user's or workspace's visibility.
 - Search and view queries add permission predicates to the generated SQL
   (only projects the user can view).

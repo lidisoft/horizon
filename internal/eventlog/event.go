@@ -196,3 +196,15 @@ func fromRows(rows []db.Event) []Event {
 	}
 	return events
 }
+
+// After returns up to limit events of a workspace after the event after,
+// oldest first, for replaying what a socket missed.
+func After(ctx context.Context, conn db.DBTX, workspaceID, after uuid.UUID, limit int) ([]Event, error) {
+	rows, err := db.New(conn).WorkspaceEventsAfter(ctx, db.WorkspaceEventsAfterParams{
+		WorkspaceID: uuid.NullUUID{UUID: workspaceID, Valid: true}, After: after, MaxRows: int32(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("eventlog: after: %w", err)
+	}
+	return fromRows(rows), nil
+}

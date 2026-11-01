@@ -4301,6 +4301,28 @@
                 }
             }
         },
+        "/api/v1/ws": {
+            "get": {
+                "description": "WebSocket (docs/realtime.md): subscribe to ws:\u003cslug\u003e, project:\u003cslug\u003e/\u003cKEY\u003e and issue:\u003cslug\u003e/\u003cKEY-n\u003e and receive their domain events. Session cookie, or an API token in the token query parameter.",
+                "tags": [
+                    "realtime"
+                ],
+                "summary": "Open the realtime socket",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API token, for clients without cookies",
+                        "name": "token",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "101": {
+                        "description": "Switching Protocols"
+                    }
+                }
+            }
+        },
         "/healthz": {
             "get": {
                 "produces": [

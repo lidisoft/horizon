@@ -215,6 +215,19 @@ func (s *Service) Enter(ctx context.Context, wc workspace.Context, key string) (
 	return Context{Context: wc, Project: projectFrom(p, aliases[p.ID])}, nil
 }
 
+// EnterByID is Enter for a project known by id.
+func (s *Service) EnterByID(ctx context.Context, wc workspace.Context, id uuid.UUID) (Context, error) {
+	var key string
+	err := s.pool.QueryRow(ctx, `SELECT key FROM projects WHERE workspace_id = $1 AND id = $2`, wc.Workspace.ID, id).Scan(&key)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Context{}, apperr.NotFound("project_not_found")
+	}
+	if err != nil {
+		return Context{}, err
+	}
+	return s.Enter(ctx, wc, key)
+}
+
 // Input is the input of Create and Update; nil fields are left unchanged on
 // update. Empty LeadID clears the lead.
 type Input struct {

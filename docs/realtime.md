@@ -20,7 +20,7 @@ latency or ordering. See [ADR-0008](adr/0008-websockets-for-realtime.md).
 
 | `t` | `d` | Purpose |
 |-----|-----|---------|
-| `sub` | `{ "topics": ["ws:acme", "project:HZN", "issue:HZN-42"] }` | Subscribe |
+| `sub` | `{ "topics": ["ws:acme", "project:acme/HZN", "issue:acme/HZN-42"], "since": "<event id>" }` | Subscribe; `since` (optional) replays what was missed |
 | `unsub` | `{ "topics": [...] }` | Unsubscribe |
 | `presence` | `{ "issue": "HZN-42", "state": "viewing" \| "editing" }` | Announce presence |
 | `doc.join` | `{ "doc": "<id>", "version": n }` | Start editing; server replies with missed steps |
@@ -32,6 +32,8 @@ latency or ordering. See [ADR-0008](adr/0008-websockets-for-realtime.md).
 
 | `t` | `d` |
 |-----|-----|
+| `ack` | `{ "topics": [...accepted], "denied": [...] }`, answering `sub` and `unsub` by `id` |
+| `error` | `{ "code": "bad_message" \| "unknown_type" }` |
 | `event` | A domain event (see [api.md](api.md#domain-event-format)) |
 | `presence` | Users viewing/editing a subscribed issue |
 | `doc.steps` | Accepted steps with the new version and the author client id |
@@ -39,6 +41,29 @@ latency or ordering. See [ADR-0008](adr/0008-websockets-for-realtime.md).
 | `doc.cursor` | Other users' selections |
 | `resync` | The client missed too much; refetch the listed topics |
 | `pong` | — |
+
+Presence and the `doc.*` messages arrive with the block editor (phase 5).
+
+### Topics
+
+| Topic | Events | Checked when subscribing |
+|-------|--------|--------------------------|
+| `ws:<slug>` | Everything in the workspace the user may see | Membership |
+| `project:<slug>/<KEY>` | The project's issues, the project itself, its configuration overrides | The project is visible (former keys resolve) |
+| `issue:<slug>/<KEY-n>` | The issue's events | `issue.view` on its project (former keys resolve) |
+
+A topic that doesn't exist or isn't visible is `denied`, as REST would answer
+404. Each event is checked again against the recipient's current access
+before it is sent: a project's events need its visibility (and `issue.view`
+for issue events); workspace-wide events (members, roles, configuration) need
+a workspace grant, so guests don't receive them. Events that change who sees
+a project (a visibility change, a deletion) go to every member, so sidebars
+update. Pushed issue events name statuses, types, labels, fields and people
+like the activity feed, but leave other issues as ids, as recipients differ.
+
+Sockets close after an hour (`1001 reconnect`); the client reconnects, which
+authenticates again. A socket too slow to take its events is closed the same
+way. The client pings every 25 s; 75 s of silence closes the socket.
 
 ### Fan-out
 
@@ -51,8 +76,11 @@ commit ─▶ outbox relay ─▶ JetStream ─▶ (NATS core subject horizon.>)
 
 - Every event carries `aggregate.version`. A client that sees a gap refetches
   that aggregate.
-- On reconnect, the client sends the last event id per topic; the server
-  replays from PostgreSQL `events` if within 24 h, otherwise sends `resync`.
+- On reconnect, the client sends the last event id it received as `since`;
+  the server replays the workspace's later events from PostgreSQL `events`
+  (filtered like live ones) if that id is under 24 h old and at most 500
+  events follow, otherwise it sends `resync` with the topics to refetch.
+  Replayed events can repeat live ones: clients drop events by id.
 - Presence lives in memory per replica and is shared through NATS core subject
   `horizon.presence.<ws>`, expiring after 60 s without a heartbeat.
 

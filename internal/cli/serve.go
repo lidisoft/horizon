@@ -41,12 +41,14 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 	if err := rt.s3.AllowOrigin(ctx, rt.cfg.BaseURL.Scheme+"://"+rt.cfg.BaseURL.Host); err != nil {
 		rt.log.Warn().Err(err).Msg("could not allow the app's origin in the bucket's CORS rules; attachment uploads may fail")
 	}
+	api, hub := rt.api()
+	hub.RegisterMetrics(rt.metrics)
 	engine := server.NewEngine(server.Deps{
 		Log:     rt.log,
 		Checks:  rt.checks(),
 		Metrics: rt.metrics,
 		Web:     webApp,
-		API:     rt.api(),
+		API:     api,
 
 		TrustedProxies: rt.cfg.TrustedProxies,
 	})
@@ -55,6 +57,7 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 	g.Go(func() error {
 		return server.Run(ctx, rt.cfg.HTTPAddr, engine, logging.WithSystem(rt.log, "http"))
 	})
+	g.Go(func() error { return hub.Run(ctx) })
 	g.Go(func() error {
 		return server.Run(ctx, rt.cfg.MetricsAddr, rt.metrics.Handler(), logging.WithSystem(rt.log, "metrics"))
 	})

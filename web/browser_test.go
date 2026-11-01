@@ -30,10 +30,12 @@ import (
 
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/configdef"
+	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/issue"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
 	"github.com/lidisoft/horizon/internal/project"
+	"github.com/lidisoft/horizon/internal/realtime"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/testenv"
 	"github.com/lidisoft/horizon/internal/workspace"
@@ -47,7 +49,7 @@ func TestMain(m *testing.M) {
 	if *serveAddr != "" {
 		os.Exit(serveForHumans(*serveAddr))
 	}
-	os.Exit(testenv.Main(m, testenv.Postgres|testenv.Chrome))
+	os.Exit(testenv.Main(m, testenv.Postgres|testenv.NATS|testenv.Chrome))
 }
 
 // testFS holds web/test: the runner and the *.test.js files. It is read from
@@ -250,21 +252,38 @@ func appServer(t *testing.T) app {
 	auth := identity.NewHTTP(ids, false)
 	acc := access.New(pool, nil)
 	config := configdef.New(pool, acc, nil, nil)
-	workspaces := workspace.NewHTTP(workspace.New(workspace.Options{
+	workspaceSvc := workspace.New(workspace.Options{
 		Pool: pool, Log: zerolog.Nop(), Identity: ids, Access: acc, Mail: a.mail, BaseURL: baseURL,
 		OnCreate: []workspace.CreateHook{config.SeedDefaults},
-	}), auth)
+	})
+	workspaces := workspace.NewHTTP(workspaceSvc, auth)
 	roles := access.NewHTTP(acc)
 	projectSvc := project.New(pool, acc, nil)
 	projects := project.NewHTTP(projectSvc)
 	configHTTP := configdef.NewHTTP(config)
 	projectSvc.OnDelete(config.DeleteProject)
-	issues := issue.NewHTTP(issue.New(pool, acc, config, projectSvc, nil), projectSvc)
+	issueSvc := issue.New(pool, acc, config, projectSvc, nil)
+	issues := issue.NewHTTP(issueSvc, projectSvc)
+
+	// Events reach sockets as in production: outbox relay, JetStream, hub.
+	bus := testenv.JetStream(t)
+	if _, err := bus.Stream.Ensure(context.Background(), bus.JetStream); err != nil {
+		t.Fatal(err)
+	}
+	hub := realtime.New(realtime.Options{Log: zerolog.Nop(), Pool: pool, NATS: bus.Conn, Stream: bus.Stream, Identity: ids, Access: acc,
+		Workspaces: workspaceSvc, Projects: projectSvc, Issues: issueSvc})
+	relay := &eventlog.Relay{Pool: pool, JetStream: bus.JetStream, Stream: bus.Stream, Log: zerolog.Nop(), PollInterval: 100 * time.Millisecond}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = hub.Run(ctx) }()
+	go func() { _ = relay.Run(ctx) }()
+
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
 	ln.Serve(server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
+		hub.Register(api)
 		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, func(ws *gin.RouterGroup) {
 			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject)
 		})
@@ -664,6 +683,8 @@ func TestProjects(t *testing.T) {
 	admin.eval(view + `.querySelector('lds-radio-group button[value="private"]').click()`)
 	admin.eval(view + `.querySelector('[data-action="save"]').click()`)
 	admin.poll(view + `.querySelector("[data-saved]")?.textContent && "saved"`)
+	// Pushed: it leaves Grace's sidebar without a reload.
+	grace.poll(`!` + appRoot + `.querySelector('lds-nav-item[data-project="LDS"]') && "gone"`)
 	grace.do(chromedp.Navigate(a.base + "/w/acme/p/LDS"))
 	if got := grace.poll(view + `.querySelector("h2")?.textContent.trim()`); got != "This project doesn't exist, or you can't see it." {
 		t.Errorf("private project for a viewer: %q", got)

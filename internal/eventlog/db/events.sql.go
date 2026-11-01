@@ -320,3 +320,49 @@ func (q *Queries) QueuePurge(ctx context.Context, arg QueuePurgeParams) error {
 	)
 	return err
 }
+
+const workspaceEventsAfter = `-- name: WorkspaceEventsAfter :many
+SELECT id, workspace_id, aggregate_type, aggregate_id, aggregate_version, type, actor_id, occurred_at, payload, published_at
+FROM events
+WHERE workspace_id = $1 AND id > $2
+ORDER BY id
+LIMIT $3
+`
+
+type WorkspaceEventsAfterParams struct {
+	WorkspaceID uuid.NullUUID
+	After       uuid.UUID
+	MaxRows     int32
+}
+
+// A workspace's events after one, oldest first, for socket replays.
+func (q *Queries) WorkspaceEventsAfter(ctx context.Context, arg WorkspaceEventsAfterParams) ([]Event, error) {
+	rows, err := q.db.Query(ctx, workspaceEventsAfter, arg.WorkspaceID, arg.After, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Event
+	for rows.Next() {
+		var i Event
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.AggregateType,
+			&i.AggregateID,
+			&i.AggregateVersion,
+			&i.Type,
+			&i.ActorID,
+			&i.OccurredAt,
+			&i.Payload,
+			&i.PublishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

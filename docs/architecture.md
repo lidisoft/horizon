@@ -69,7 +69,7 @@ internal/
   planning/               iterations, releases, milestones
   view/                   saved views, filter AST → SQL compiler
   document/               block documents, collaborative steps
-  realtime/               WebSocket hub, subscriptions, presence
+  realtime/               WebSocket hub, topics, per-recipient checks, replay (presence later)
   notify/                 inbox, subscriptions, email
   webhook/                endpoints, deliveries, signing
   vcs/                    git forge integrations
@@ -148,8 +148,9 @@ Commands write events through `eventlog.Append(ctx, tx, …)` inside the same
 
 ## Realtime fan-out
 
-Each `serve` replica subscribes to `horizon.>` on NATS core (not durable) and
-pushes matching events to its connected sockets, after a permission check.
+Each `serve` replica subscribes to the event subjects (`horizon.*.*.*.*`) on
+NATS core (not durable) and pushes matching events to its connected sockets,
+after a permission check (`internal/realtime`).
 Details in [realtime.md](realtime.md).
 
 ## Workers

@@ -42,7 +42,7 @@ usable exists early.
       project deletion)
 - [x] Comments (plain text first), attachments via S3
 - [x] Activity feed from `events`
-- [ ] WebSocket pushes for domain events (no collab yet)
+- [x] WebSocket pushes for domain events (no collab yet)
 - [ ] List view, issue detail, ⌘K palette, shortcuts
 - [ ] Full-text search
 

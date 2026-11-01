@@ -3,9 +3,11 @@ package issue
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/configdef"
@@ -228,4 +230,65 @@ func (n *namer) resolve(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// Pushed is an issue event described for pushes, with the projects whose
+// viewers may receive it (the issue's, and the one it left on a move).
+type Pushed struct {
+	Event    PublicEvent
+	Projects []uuid.UUID
+}
+
+// Public describes an issue event for WebSocket pushes, as for a viewer of
+// its project: other issues stay ids, since recipients differ. A deleted
+// issue is described from its tombstone. ok is false when the event's
+// issue and project are gone.
+func (s *Service) Public(ctx context.Context, e eventlog.Event) (Pushed, bool, error) {
+	var out Pushed
+	var payload map[string]any
+	_ = json.Unmarshal(e.Payload, &payload)
+	if from, ok := payload["from_project_id"].(string); ok {
+		if id, err := uuid.Parse(from); err == nil {
+			out.Projects = append(out.Projects, id)
+		}
+	}
+	var ic Context
+	row := s.pool.QueryRow(ctx, `
+		SELECT w.slug, p.id, p.key, i.number, i.title
+		FROM issues i JOIN projects p ON p.id = i.project_id JOIN workspaces w ON w.id = i.workspace_id
+		WHERE i.workspace_id = $1 AND i.id = $2`, e.WorkspaceID.UUID, e.AggregateID)
+	ic.Workspace.ID, ic.Issue.ID, ic.Issue.WorkspaceID = e.WorkspaceID.UUID, e.AggregateID, e.WorkspaceID.UUID
+	err := row.Scan(&ic.Workspace.Slug, &ic.Issue.ProjectID, &ic.Project.Key, &ic.Issue.Number, &ic.Issue.Title)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Deleted: the tombstone (or a late event) names the key and project.
+		key, _ := payload["key"].(string)
+		pid, _ := payload["project_id"].(string)
+		projectID, perr := uuid.Parse(pid)
+		if perr != nil {
+			return out, false, nil
+		}
+		if err := s.pool.QueryRow(ctx, `SELECT slug FROM workspaces WHERE id = $1`, e.WorkspaceID.UUID).Scan(&ic.Workspace.Slug); err != nil {
+			return out, false, nil
+		}
+		out.Projects = append(out.Projects, projectID)
+		out.Event = PublicEvent{
+			ID: e.ID, Type: e.PublicType(), Workspace: ic.Workspace.Slug, OccurredAt: e.OccurredAt, Payload: payload,
+			Aggregate: EventAggregate{Type: e.AggregateType, ID: e.AggregateID, Key: key, Version: e.AggregateVersion},
+		}
+		if e.ActorID.Valid {
+			out.Event.Actor = &Ref{ID: e.ActorID.UUID}
+		}
+		return out, true, nil
+	}
+	if err != nil {
+		return out, false, err
+	}
+	ic.Project.ID = ic.Issue.ProjectID
+	out.Projects = append(out.Projects, ic.Issue.ProjectID)
+	described, err := s.Describe(ctx, ic, []eventlog.Event{e})
+	if err != nil {
+		return out, false, err
+	}
+	out.Event = described[0]
+	return out, true, nil
 }

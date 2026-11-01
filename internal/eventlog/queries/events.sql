@@ -66,3 +66,11 @@ WHERE workspace_id = sqlc.arg(workspace_id) AND aggregate_type = sqlc.arg(aggreg
   AND (sqlc.narg(before)::uuid IS NULL OR id < sqlc.narg(before)::uuid)
 ORDER BY id DESC
 LIMIT sqlc.arg(max_rows);
+
+-- name: WorkspaceEventsAfter :many
+-- A workspace's events after one, oldest first, for socket replays.
+SELECT *
+FROM events
+WHERE workspace_id = sqlc.arg(workspace_id) AND id > sqlc.arg(after)
+ORDER BY id
+LIMIT sqlc.arg(max_rows);

@@ -17,6 +17,7 @@ import { createI18n } from "horizon/core/i18n.js";
 import { createRouter } from "horizon/core/router.js";
 import { createSession, safeNext } from "horizon/core/session.js";
 import { createShortcuts, displayKeys } from "horizon/core/shortcuts.js";
+import { createSocket } from "horizon/core/socket.js";
 import { createStore } from "horizon/core/store.js";
 import catalog from "horizon/i18n/en.json" with { type: "json" };
 
@@ -128,8 +129,11 @@ export class HznApp extends HTMLElement {
       refreshCsrf: () => session.load().then(() => {}),
     });
     this.workspaces = [];
+    const store = createStore();
+    // Domain events pushed for the current workspace (docs/realtime.md).
+    const socket = createSocket({ store });
     this.context = {
-      api, store: createStore(), router, i18n, shortcuts, session,
+      api, store, socket, router, i18n, shortcuts, session,
       // Views call refresh after creating, renaming or joining a workspace.
       workspaces: { list: () => this.workspaces, refresh: () => this.loadWorkspaces() },
       // Views call refresh after creating, renaming or archiving a project.
@@ -210,8 +214,13 @@ export class HznApp extends HTMLElement {
 
     this.renderTheme();
     router.subscribe((match) => this.show(match));
+    socket.on((m) => {
+      // Another tab or person created, renamed or archived a project.
+      if (m.t === "event" && m.d.aggregate?.type === "project") this.loadProjects();
+    });
     session.subscribe(async (state) => {
       this.renderUser();
+      this.syncSocket();
       // The workspaces come first: "/" picks one of them.
       if (state.status === "signed-in") await this.loadWorkspaces();
       else this.workspaces = [];
@@ -226,6 +235,7 @@ export class HznApp extends HTMLElement {
     try {
       await this.context.session.load();
       if (this.context.session.status === "signed-in") await this.loadWorkspaces();
+      this.syncSocket();
     } catch {
       // Server unreachable or failing: show the page anyway. Protected
       // routes send the user to sign-in, which reports errors as they occur.
@@ -233,7 +243,21 @@ export class HznApp extends HTMLElement {
     this.context.router.start();
   }
 
+  /** Keeps the socket open while signed in, watching the current workspace. */
+  syncSocket() {
+    const { socket, session } = this.context;
+    if (session.status !== "signed-in") {
+      socket.stop();
+      return;
+    }
+    socket.start();
+    const want = this.currentSlug ? [`ws:${this.currentSlug}`] : [];
+    socket.unsubscribe(socket.topics().filter((t) => !want.includes(t)));
+    socket.subscribe(want);
+  }
+
   disconnectedCallback() {
+    this.context?.socket.stop();
     this.context?.shortcuts.stop();
     this.context?.router.stop();
   }
@@ -259,7 +283,10 @@ export class HznApp extends HTMLElement {
       this.currentSlug = match.params.ws;
       rememberWorkspace(match.params.ws);
       this.renderSwitcher();
-      if (changed) this.loadProjects();
+      if (changed) {
+        this.loadProjects();
+        this.syncSocket();
+      }
     }
     this.currentProject = match.params.key?.toUpperCase();
     this.markProject();

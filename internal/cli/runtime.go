@@ -14,6 +14,7 @@ import (
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/config"
 	"github.com/lidisoft/horizon/internal/configdef"
+	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/issue"
 	"github.com/lidisoft/horizon/internal/logging"
@@ -24,6 +25,7 @@ import (
 	"github.com/lidisoft/horizon/internal/platform/postgres"
 	"github.com/lidisoft/horizon/internal/platform/s3"
 	"github.com/lidisoft/horizon/internal/project"
+	"github.com/lidisoft/horizon/internal/realtime"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/version"
 	"github.com/lidisoft/horizon/internal/workspace"
@@ -91,13 +93,14 @@ func (rt *runtime) identity() *identity.Service {
 	})
 }
 
-// api registers every module's routes on /api/v1.
-func (rt *runtime) api() func(api *gin.RouterGroup) {
+// api registers every module's routes on /api/v1; the hub pushes events to
+// its sockets once running.
+func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
 	ids := rt.identity()
 	auth := identity.NewHTTP(ids, rt.cfg.BaseURL.Scheme == "https")
 	acc := access.New(rt.pool, nil)
 	config := configdef.New(rt.pool, acc, nil, nil)
-	workspaces := workspace.NewHTTP(workspace.New(workspace.Options{
+	workspaceSvc := workspace.New(workspace.Options{
 		Pool:     rt.pool,
 		Log:      logging.WithSystem(rt.log, "workspace"),
 		Identity: ids,
@@ -105,7 +108,8 @@ func (rt *runtime) api() func(api *gin.RouterGroup) {
 		Mail:     rt.mailer(),
 		BaseURL:  rt.cfg.BaseURL,
 		OnCreate: []workspace.CreateHook{config.SeedDefaults},
-	}), auth)
+	})
+	workspaces := workspace.NewHTTP(workspaceSvc, auth)
 	roles := access.NewHTTP(acc)
 	projectSvc := project.New(rt.pool, acc, nil)
 	projects := project.NewHTTP(projectSvc)
@@ -114,13 +118,19 @@ func (rt *runtime) api() func(api *gin.RouterGroup) {
 	issueSvc := issue.New(rt.pool, acc, config, projectSvc, nil)
 	issueSvc.SetStorage(rt.s3)
 	issues := issue.NewHTTP(issueSvc, projectSvc)
+	hub := realtime.New(realtime.Options{
+		Log: logging.WithSystem(rt.log, "realtime"), Pool: rt.pool, NATS: rt.nc, Stream: eventlog.DefaultStream(rt.cfg.EventsRetention),
+		Identity: ids, Access: acc, Workspaces: workspaceSvc, Projects: projectSvc, Issues: issueSvc,
+		Origins: []string{rt.cfg.BaseURL.Host},
+	})
 	return func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
+		hub.Register(api)
 		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, func(ws *gin.RouterGroup) {
 			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject)
 		})
-	}
+	}, hub
 }
 
 // checks are the readiness probes (docs/operations.md#health).
