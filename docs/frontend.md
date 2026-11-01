@@ -157,7 +157,7 @@ semantic tokens only, `:host` display):
 | `hzn-timeline` | Gantt: bars, dependencies, drag to reschedule, milestones |
 | `hzn-calendar` | Month and week calendar |
 | `hzn-filter-bar` | Filter chips and builder |
-| `hzn-editor` | Block editor |
+| `hzn-editor` | Block editor: descriptions, comments ([Block editor](#block-editor)) |
 | `hzn-*-picker` | Status, priority, assignee, labels, estimate, iteration, release pickers: `lds-combobox` wrappers that load options from the store and apply mutations |
 | `hzn-inbox` | Notifications |
 | `hzn-chart-*`, `hzn-sparkline` | Hand-written SVG charts for reports ([reports.md](reports.md#charts)) |
@@ -188,6 +188,23 @@ A hand-written `contenteditable` editor working on the document model in
 - Undo/redo with grouping, local to the user (it inverts their own steps,
   mapped through remote ones).
 - Remote cursors and selections rendered as overlays.
+
+The pieces, under `web/app/editor/`:
+
+| Module | Role |
+|--------|------|
+| `schema.js` | Generated from `internal/document/schema.json` (`task gen:schema`) |
+| `model.js`, `transform.js` | Nodes, positions, steps, mapping and rebase; the same as `internal/document`, checked against the shared corpus |
+| `state.js` | Editor state (document, selection, marks for typed text) and transactions, which build steps |
+| `commands.js` | Typing, deleting (characters, words, lines; joins at block edges), Enter (new block or list item, leaving an empty item), marks over exact ranges, block types, lists (wrap, retype, Tab/Shift-Tab following ProseMirror's sink and lift), quotes |
+| `history.js` | Undo and redo of the user's own steps: typing groups, everything else is a step of its own; entries map through others' steps |
+| `view.js` | Renders the document into the `contenteditable` element (reusing the DOM of unchanged nodes), maps DOM points to positions and back (through shadow roots with `getComposedRanges`), replays `beforeinput` events as commands, reads IME composition back once it ends |
+| `render.js` | Read-only HTML of a document (comments, archived issues) |
+
+`<hzn-editor>` puts them together with a small formatting toolbar, shown
+while it has focus. Descriptions save a moment after typing stops and
+when the editor loses focus (until the step protocol); comments are
+written and edited in it and posted whole.
 
 This is the riskiest frontend component. It gets its own milestone and test
 corpus ([roadmap.md](roadmap.md)).

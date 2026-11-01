@@ -909,7 +909,7 @@ func TestIssues(t *testing.T) {
 	// A comment from the peek shows in the activity.
 	// A change saved mid-comment doesn't take the focus away: the rest of
 	// the typing would go to the list's shortcuts (O opens the page).
-	pg.typeInto(peek+`.querySelector("[data-composer] lds-textarea")`, "Looks")
+	pg.typeInto(peek+`.querySelector("[data-composer] hzn-editor")`, "Looks")
 	change(peek, `[data-prop="priority"]`, "low") // saves and reloads the peek, focus staying in the comment
 	pg.poll(view + `.querySelector('.row[data-key="HZN-1"] .priority')?.dataset.priority === "low" && "saved"`)
 	pg.do(chromedp.KeyEvent(" good"))
@@ -1265,6 +1265,84 @@ func TestReleases(t *testing.T) {
 	ws := view + `.querySelector("hzn-milestone-list").shadowRoot`
 	if got := pg.poll(ws + `.querySelector("li lds-badge")?.textContent`); got != "Horizon" {
 		t.Errorf("milestone scope = %q", got)
+	}
+	pg.logs.failOnErrors(t)
+}
+
+// TestEditor types a description with real keys: blocks, marks, lists,
+// undo; the description saves as a document.
+func TestEditor(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	if status, body := pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`); status != 201 {
+		t.Fatalf("create project: %d %s", status, body)
+	}
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID string } `json:"issue_types"`
+	}
+	_ = json.Unmarshal([]byte(cfg), &resolved)
+	if status, body := pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"Outbox relay"}`); status != 201 {
+		t.Fatalf("create issue: %d %s", status, body)
+	}
+	pg.do(chromedp.Navigate(a.base + "/w/acme/issues/HZN-1"))
+	ed := view + `.querySelector("hzn-issue-detail").shadowRoot.querySelector("[data-description]")`
+	pg.poll(ed + ` && "editor"`)
+	doc := func() string {
+		out, err := chromedp.Run(pg.ctx, chromedp.Evaluate[string](`JSON.stringify(`+ed+`.value)`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	want := func(step, expected string) {
+		t.Helper()
+		pg.poll(`JSON.stringify(` + ed + `.value) === ` + strconv.Quote(expected) + ` && "ok"`)
+		_ = step
+	}
+	ctrl := chromedp.KeyModifiers(chromedp.ModifierCtrl)
+
+	pg.typeInto(ed, "Context")
+	pg.do(chromedp.KeyEvent("1", chromedp.KeyModifiers(chromedp.ModifierCtrl|chromedp.ModifierAlt)))
+	pg.do(chromedp.KeyEvent("\r"))
+	pg.do(chromedp.KeyEvent("The relay "))
+	pg.do(chromedp.KeyEvent("b", ctrl))
+	pg.do(chromedp.KeyEvent("publishes"))
+	pg.do(chromedp.KeyEvent("b", ctrl))
+	pg.do(chromedp.KeyEvent(" events"))
+	want("heading and bold", `{"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Context"}]},`+
+		`{"type":"paragraph","content":[{"type":"text","text":"The relay "},{"type":"text","text":"publishes","marks":[{"type":"bold"}]},{"type":"text","text":" events"}]}]}`)
+
+	// A list: Ctrl+Shift+8, Enter makes items, Enter on an empty one leaves it.
+	pg.do(chromedp.KeyEvent("\r"))
+	pg.do(chromedp.KeyEvent("8", chromedp.KeyModifiers(chromedp.ModifierCtrl|chromedp.ModifierShift)))
+	pg.do(chromedp.KeyEvent("one\rtwo\r\r"))
+	pg.do(chromedp.KeyEvent("end"))
+	want("list", `{"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Context"}]},`+
+		`{"type":"paragraph","content":[{"type":"text","text":"The relay "},{"type":"text","text":"publishes","marks":[{"type":"bold"}]},{"type":"text","text":" events"}]},`+
+		`{"type":"bullet_list","content":[{"type":"list_item","content":[{"type":"paragraph","content":[{"type":"text","text":"one"}]}]},`+
+		`{"type":"list_item","content":[{"type":"paragraph","content":[{"type":"text","text":"two"}]}]}]},`+
+		`{"type":"paragraph","content":[{"type":"text","text":"end"}]}]}`)
+
+	// Backspace at the start of a paragraph joins it to the item before;
+	// undo puts it back.
+	pg.do(chromedp.KeyEvent(kb.Home))
+	pg.do(chromedp.KeyEvent(kb.Backspace))
+	pg.poll(`JSON.stringify(` + ed + `.value).includes('"twoend"') && "joined"`)
+	pg.do(chromedp.KeyEvent("z", ctrl))
+	pg.poll(`JSON.stringify(` + ed + `.value).includes('{"type":"text","text":"end"}') && "undone"`)
+
+	// Leaving the editor saves the description.
+	final := doc()
+	pg.eval(`document.activeElement?.blur(); ` + ed + `.shadowRoot.querySelector(".editor").blur()`)
+	pg.poll(`fetch("/api/v1/w/acme/issues/HZN-1").then((r) => r.json()).then((i) => JSON.stringify(i.description_doc) === ` + strconv.Quote(final) + ` && "saved")`)
+	if _, body := pg.api("GET", "/w/acme/issues/HZN-1", ""); !strings.Contains(body, `"description":"Context\nThe relay publishes events\n- one\n- two\nend"`) {
+		t.Errorf("text = %s", body)
 	}
 	pg.logs.failOnErrors(t)
 }

@@ -5,13 +5,14 @@
 // pushed events about the issue reload it. Fires hzn-issue-loaded with
 // { key, parent } and hzn-issue-gone when it is deleted or moved away.
 
+import "horizon/components/hzn-editor.js";
 import "horizon/components/hzn-issue-create.js";
 import "horizon/components/hzn-move-issue.js";
 import {
   PRIORITIES, avatar, issueHref, issueStyles, priorityIcon, projectData, statusGlyph,
 } from "horizon/components/issue-ui.js";
 import { isOpen } from "horizon/components/planning-ui.js";
-import { docStyles, isPlain, renderDoc } from "horizon/editor/render.js";
+import { docStyles, renderDoc } from "horizon/editor/render.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
@@ -89,9 +90,14 @@ class HznIssueDetail extends HTMLElement {
     root.addEventListener("click", (e) => this.onClick(e));
     root.addEventListener("lds-change", (e) => this.onChange(e));
     root.addEventListener("keydown", (e) => this.onKey(e));
-    // The comment being written survives re-renders.
-    root.addEventListener("lds-input", (e) => {
-      if (e.target.closest?.("[data-composer]")) this.draft = e.detail.value;
+    // The comment being written survives re-renders; the description saves
+    // a moment after typing stops, and when the editor loses focus.
+    root.addEventListener("hzn-change", (e) => {
+      if (e.target.closest?.("[data-composer]")) this.draftDoc = e.detail.doc;
+      if (e.target.matches?.("[data-description]")) this.scheduleDescription(e.detail.doc);
+    });
+    root.addEventListener("hzn-blur", (e) => {
+      if (e.target.matches?.("[data-description]")) this.saveDescription();
     });
     // Pushed changes wait until the control being edited loses focus.
     root.addEventListener("focusout", () => {
@@ -137,7 +143,7 @@ class HznIssueDetail extends HTMLElement {
       shortcuts.register({ id: "issue-priority", keys: "p", scope: "issue", description: "shortcut.priority", handler: focus("priority") }),
       shortcuts.register({ id: "issue-labels", keys: "l", scope: "issue", description: "shortcut.labels", handler: focus("labels") }),
       shortcuts.register({ id: "issue-title", keys: "e", scope: "issue", description: "shortcut.editTitle", handler: () => this.editTitle() }),
-      shortcuts.register({ id: "issue-comment", keys: "r", scope: "issue", description: "shortcut.comment", handler: () => this.shadowRoot.querySelector("[data-composer] lds-textarea")?.focus() }),
+      shortcuts.register({ id: "issue-comment", keys: "r", scope: "issue", description: "shortcut.comment", handler: () => this.shadowRoot.querySelector("[data-composer] hzn-editor")?.focus() }),
       shortcuts.register({ id: "issue-move", keys: "m", scope: "issue", description: "shortcut.move", handler: () => this.move() }),
       shortcuts.register({ id: "issue-copy", keys: "mod+shift+c", scope: "issue", description: "shortcut.copyLink", handler: () => this.copyLink() }),
     ];
@@ -253,6 +259,29 @@ class HznIssueDetail extends HTMLElement {
         ${this.dialogs()}`);
     }
     paintSwatches(this.shadowRoot);
+    // Editors take their documents once mounted.
+    const description = this.shadowRoot.querySelector("[data-description]");
+    if (description) {
+      description.people = this.data.people;
+      description.value = this.pendingDescription ?? i.description_doc;
+    }
+    const composer = this.shadowRoot.querySelector("[data-composer-editor]");
+    if (composer && this.draftDoc) composer.value = this.draftDoc;
+  }
+
+  /** Saves the description a moment after the last change. */
+  scheduleDescription(doc) {
+    this.pendingDescription = doc;
+    clearTimeout(this.descriptionTimer);
+    this.descriptionTimer = setTimeout(() => this.saveDescription(), 800);
+  }
+
+  async saveDescription() {
+    clearTimeout(this.descriptionTimer);
+    const doc = this.pendingDescription;
+    if (!doc) return;
+    this.pendingDescription = null;
+    await this.patch({ description_doc: doc });
   }
 
   menu() {
@@ -359,13 +388,12 @@ class HznIssueDetail extends HTMLElement {
     const { t } = this.context.i18n;
     const i = this.issue;
     const readOnly = i.archived_at || !this.can.includes("issue.edit");
-    // Plain paragraphs edit as text; anything richer shows as it is.
-    if (!readOnly && isPlain(i.description_doc)) {
-      return html`<lds-textarea data-prop="description" rows="${this.mode === "peek" ? 4 : 6}" auto-grow value="${i.description}" placeholder="${t("issues.describe")}" aria-label="${t("issues.description")}"></lds-textarea>`;
+    if (readOnly) {
+      return i.description || i.description_doc?.content?.some((b) => b.type !== "paragraph" || b.content)
+        ? html`<div class="description">${renderDoc(i.description_doc, this.docContext())}</div>`
+        : html`<div class="description"><span class="muted">${t("issues.noDescription")}</span></div>`;
     }
-    return i.description
-      ? html`<div class="description">${renderDoc(i.description_doc, this.docContext())}</div>`
-      : html`<div class="description"><span class="muted">${t("issues.noDescription")}</span></div>`;
+    return html`<hzn-editor data-description bare ws="${this.ws}" issue-key="${i.key}" placeholder="${t("issues.describe")}" label="${t("issues.description")}"></hzn-editor>`;
   }
 
   /** What rendering documents needs: links, images and names. */
@@ -446,7 +474,7 @@ class HznIssueDetail extends HTMLElement {
             <div class="who"><strong>${x.comment.author_name || t("issue.someone")}</strong>
               <span class="muted">${i18n.relative(x.comment.created_at)}${x.comment.edited_at ? ` · ${t("issues.edited")}` : ""}</span>
               <span class="tools">
-                ${x.comment.author_id === me && canComment && isPlain(x.comment.body_doc) ? html`<lds-button variant="ghost" size="sm" data-action="edit-comment" data-id="${x.comment.id}">${t("issues.edit")}</lds-button>` : ""}
+                ${x.comment.author_id === me && canComment ? html`<lds-button variant="ghost" size="sm" data-action="edit-comment" data-id="${x.comment.id}">${t("issues.edit")}</lds-button>` : ""}
                 ${x.comment.author_id === me || this.can.includes("issue.comment.moderate") ? html`<lds-button variant="ghost" size="sm" data-action="delete-comment" data-id="${x.comment.id}">${t("issues.remove")}</lds-button>` : ""}
               </span></div>
             <div class="body">${renderDoc(x.comment.body_doc, this.docContext())}</div>
@@ -456,7 +484,7 @@ class HznIssueDetail extends HTMLElement {
           <span>· ${i18n.relative(x.event.occurred_at)}</span></div>`))}</div>
       ${canComment ? html`
         <div class="composer" data-composer>
-          <lds-textarea rows="3" auto-grow value="${this.draft ?? ""}" placeholder="${t("issues.commentPlaceholder")}" aria-label="${t("issues.comment")}"></lds-textarea>
+          <hzn-editor data-composer-editor ws="${this.ws}" issue-key="${this.issue.key}" placeholder="${t("issues.commentPlaceholder")}" label="${t("issues.comment")}"></hzn-editor>
           <div class="actions"><lds-button size="sm" data-action="comment">${t("issues.comment")}</lds-button></div>
         </div>` : ""}`;
   }
@@ -785,16 +813,16 @@ class HznIssueDetail extends HTMLElement {
   async comment() {
     const { api, i18n } = this.context;
     const box = this.shadowRoot.querySelector("[data-composer]");
-    const area = box.querySelector("lds-textarea");
-    const body = (area.getAttribute("value") ?? "").trim();
-    if (!body) return area.focus();
+    const editor = box.querySelector("hzn-editor");
+    if (editor.empty) return editor.focus();
     try {
-      await busy(box.querySelector('[data-action="comment"]'), () => api.post(`${this.base}/comments`, { body: { body } }));
+      await busy(box.querySelector('[data-action="comment"]'), () => api.post(`${this.base}/comments`, { body: { body_doc: editor.value } }));
     } catch (err) {
       globalThis.LDS?.toast?.({ intent: "danger", title: errorMessage(err, i18n) });
       return;
     }
-    this.draft = "";
+    this.draftDoc = null;
+    editor.value = null;
     await this.load();
   }
 
@@ -804,16 +832,19 @@ class HznIssueDetail extends HTMLElement {
     if (!c || !box) return;
     const { t } = this.context.i18n;
     box.innerHTML = String(html`
-      <lds-textarea rows="3" auto-grow value="${c.body}" aria-label="${t("issues.comment")}"></lds-textarea>
+      <hzn-editor ws="${this.ws}" issue-key="${this.issue.key}" label="${t("issues.comment")}"></hzn-editor>
       <div class="actions-row"><lds-button size="sm" data-action="save-comment" data-id="${id}" data-version="${c.version}">${t("account.save")}</lds-button></div>`);
-    box.querySelector("lds-textarea").focus();
+    const editor = box.querySelector("hzn-editor");
+    editor.people = this.data.people;
+    editor.value = c.body_doc;
+    requestAnimationFrame(() => editor.focus());
   }
 
   async saveComment(button) {
     const { api, i18n } = this.context;
-    const area = button.closest(".body").querySelector("lds-textarea");
+    const editor = button.closest(".body").querySelector("hzn-editor");
     try {
-      await busy(button, () => api.patch(`${this.base}/comments/${button.dataset.id}`, { body: { body: area.getAttribute("value") ?? "" }, ifMatch: `"${button.dataset.version}"` }));
+      await busy(button, () => api.patch(`${this.base}/comments/${button.dataset.id}`, { body: { body_doc: editor.value }, ifMatch: `"${button.dataset.version}"` }));
     } catch (err) {
       globalThis.LDS?.toast?.({ intent: "danger", title: errorMessage(err, i18n) });
       return;
@@ -860,6 +891,7 @@ class HznIssueDetail extends HTMLElement {
   /** Whether a draft has focus: a comment, a link target, a title being edited. */
   editing() {
     const el = this.shadowRoot.activeElement;
+    if (el?.localName === "hzn-editor") return true;
     return ["lds-input", "lds-textarea"].includes(el?.localName) && !!el.closest("[data-composer], [data-linker], [data-comment], [data-title-input]");
   }
 }

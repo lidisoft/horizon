@@ -1074,5 +1074,16 @@
   "milestones.hideIssues": {
     "one": "Hide {count} issue",
     "other": "Hide {count} issues"
-  }
+  },
+  "editor.toolbar": "Formatting",
+  "editor.bold": "Bold",
+  "editor.italic": "Italic",
+  "editor.strike": "Strikethrough",
+  "editor.code": "Code",
+  "editor.heading": "Heading {level}",
+  "editor.bulletList": "Bulleted list",
+  "editor.orderedList": "Numbered list",
+  "editor.taskList": "Task list",
+  "editor.quote": "Quote",
+  "editor.codeBlock": "Code block"
 }
