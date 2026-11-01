@@ -141,6 +141,17 @@ the target. The response contains the new key; requests for the old key
 resolve to it. Iteration and release are cleared; links, comments and
 history stay.
 
+## Descriptions and comments
+
+Descriptions and comments are block documents (`description_doc`,
+`body_doc`: the JSON tree of [realtime.md](realtime.md#document-model)).
+`description` and `body` are their plain-text projection: blocks on lines,
+list items marked (`- `, `1. `, `[x] `), issue references as keys. Writes
+take either: the document, checked against the schema (`422
+description_doc: invalid`, `too_long` over 1 MiB, `unknown_attachment` for
+an image that isn't a ready attachment of the issue), or plain text, one
+paragraph per line. Lists of issues leave `description_doc` out.
+
 ## Planning iterations
 
 An iteration is planned (`POST …/iterations`, a name, optional dates),

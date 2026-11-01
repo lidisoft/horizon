@@ -105,7 +105,7 @@ sequence counter.
 | `key` | `<PROJECT>-<n>`, `n` from the project's sequence, never reused |
 | `type` | Issue type, resolved from workspace/project configuration |
 | `title` | Required |
-| `description` | Block document (see [realtime.md](realtime.md)); plain text until phase 5 |
+| `description` | Block document (see [realtime.md](realtime.md)), with its plain-text projection |
 | `status` | Must be a status of the type's workflow |
 | `priority` | `none`, `urgent`, `high`, `medium`, `low` |
 | `rank` | Fractional index string for manual ordering |
@@ -151,7 +151,9 @@ sequence counter.
 `IssueAttachmentAdded`, `IssueAttachmentRemoved`. Comment and attachment
 events carry their ids, never their content.
 
-**Comments** are plain text until block documents (phase 5). Authors edit
+**Comments** are single-author block documents, saved whole (no
+collaborative editing), with their plain text alongside. Images in a
+description or a comment are attachments of the issue. Authors edit
 and delete their own; `issue.comment.moderate` deletes anyone's. Archived
 issues take no new comments or attachments. **Attachments** are at most
 100 MiB; the uploader or a moderator removes them.

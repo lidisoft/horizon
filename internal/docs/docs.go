@@ -7234,7 +7234,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "body": {
+                    "description": "Body is the plain text of BodyDoc.",
                     "type": "string"
+                },
+                "body_doc": {
+                    "type": "object"
                 },
                 "created_at": {
                     "type": "string"
@@ -7272,6 +7276,9 @@ const docTemplate = `{
             "properties": {
                 "body": {
                     "type": "string"
+                },
+                "body_doc": {
+                    "type": "object"
                 }
             }
         },
@@ -7283,6 +7290,10 @@ const docTemplate = `{
                 },
                 "description": {
                     "type": "string"
+                },
+                "description_doc": {
+                    "description": "DescriptionDoc is the description as a block document; it wins over\ndescription (plain text, one paragraph per line).",
+                    "type": "object"
                 },
                 "due_date": {
                     "type": "string"
@@ -7370,7 +7381,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "description": {
+                    "description": "Description is the plain text of DescriptionDoc.",
                     "type": "string"
+                },
+                "description_doc": {
+                    "description": "DescriptionDoc is the description as a block document\n(docs/realtime.md#document-model); single issues only, not lists.",
+                    "type": "object"
                 },
                 "due_date": {
                     "type": "string",
@@ -7756,6 +7772,10 @@ const docTemplate = `{
             "properties": {
                 "description": {
                     "type": "string"
+                },
+                "description_doc": {
+                    "description": "DescriptionDoc replaces the description with a block document; it\nwins over description (plain text).",
+                    "type": "object"
                 },
                 "due_date": {
                     "type": "string"

@@ -1,6 +1,6 @@
 -- name: CreateComment :one
-INSERT INTO comments (workspace_id, id, issue_id, author_id, body, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO comments (workspace_id, id, issue_id, author_id, body, body_doc, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: IssueComments :many
@@ -14,7 +14,7 @@ LIMIT sqlc.arg(max_rows);
 SELECT * FROM comments WHERE workspace_id = $1 AND id = $2 FOR UPDATE;
 
 -- name: EditComment :one
-UPDATE comments SET body = $3, edited_at = $4, version = version + 1
+UPDATE comments SET body = $3, body_doc = $4, edited_at = $5, version = version + 1
 WHERE workspace_id = $1 AND id = $2
 RETURNING *;
 
@@ -52,3 +52,7 @@ SELECT object_key FROM attachments WHERE issue_id = ANY(sqlc.arg(ids)::uuid[]);
 -- name: ExpiredUploads :many
 DELETE FROM attachments WHERE state = 'pending' AND created_at < $1
 RETURNING workspace_id, id, object_key;
+
+-- name: ReadyAttachmentIDs :many
+-- Which of the ids are ready attachments of the issue, for images.
+SELECT id FROM attachments WHERE issue_id = $1 AND state = 'ready' AND id = ANY(sqlc.arg(ids)::uuid[]);

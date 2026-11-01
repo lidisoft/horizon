@@ -66,14 +66,14 @@ func TestComments(t *testing.T) {
 	a := f.create(f.owner, "Task", "A")
 	ann := f.member("ann@example.com")
 
-	c1, err := f.svc.AddComment(ctx, f.enter(ann, a.Key), "  First!  ")
+	c1, err := f.svc.AddComment(ctx, f.enter(ann, a.Key), issue.PlainText("  First!  "))
 	if err != nil || c1.Body != "First!" || c1.AuthorName != "ann" {
 		t.Fatalf("comment = %+v, %v", c1, err)
 	}
-	_, err = f.svc.AddComment(ctx, f.enter(ann, a.Key), " ")
+	_, err = f.svc.AddComment(ctx, f.enter(ann, a.Key), issue.PlainText(" "))
 	wantField(t, err, "body", "required")
-	c2, _ := f.svc.AddComment(ctx, f.enter(f.owner, a.Key), "Second")
-	c3, _ := f.svc.AddComment(ctx, f.enter(f.owner, a.Key), "Third")
+	c2, _ := f.svc.AddComment(ctx, f.enter(f.owner, a.Key), issue.PlainText("Second"))
+	c3, _ := f.svc.AddComment(ctx, f.enter(f.owner, a.Key), issue.PlainText("Third"))
 
 	page, err := f.svc.Comments(ctx, f.enter(ann, a.Key), "", 2)
 	if err != nil || len(page.Items) != 2 || page.Items[0].ID != c1.ID || page.Next == "" {
@@ -85,13 +85,13 @@ func TestComments(t *testing.T) {
 	}
 
 	// Only the author edits; moderators delete.
-	_, err = f.svc.EditComment(ctx, f.enter(ann, a.Key), c2.ID, 0, "mine now")
+	_, err = f.svc.EditComment(ctx, f.enter(ann, a.Key), c2.ID, 0, issue.PlainText("mine now"))
 	wantCode(t, err, "not_author")
-	edited, err := f.svc.EditComment(ctx, f.enter(ann, a.Key), c1.ID, c1.Version, "First, edited")
+	edited, err := f.svc.EditComment(ctx, f.enter(ann, a.Key), c1.ID, c1.Version, issue.PlainText("First, edited"))
 	if err != nil || edited.EditedAt == nil || edited.Version != 2 {
 		t.Fatalf("edited = %+v, %v", edited, err)
 	}
-	_, err = f.svc.EditComment(ctx, f.enter(ann, a.Key), c1.ID, c1.Version, "stale")
+	_, err = f.svc.EditComment(ctx, f.enter(ann, a.Key), c1.ID, c1.Version, issue.PlainText("stale"))
 	wantCode(t, err, "version_conflict")
 	wantCode(t, f.svc.DeleteComment(ctx, f.enter(ann, a.Key), c2.ID), "forbidden")
 	if err := f.svc.DeleteComment(ctx, f.enter(f.owner, a.Key), c1.ID); err != nil {
@@ -107,7 +107,7 @@ func TestComments(t *testing.T) {
 	if _, err := f.svc.SetArchived(ctx, f.enter(f.owner, a.Key), 0, true); err != nil {
 		t.Fatal(err)
 	}
-	_, err = f.svc.AddComment(ctx, f.enter(ann, a.Key), "late")
+	_, err = f.svc.AddComment(ctx, f.enter(ann, a.Key), issue.PlainText("late"))
 	wantCode(t, err, "issue_archived")
 
 	want := "issue.created issue.commented issue.commented issue.commented issue.comment_edited issue.comment_deleted issue.comment_deleted issue.archived"

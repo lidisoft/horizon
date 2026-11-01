@@ -22,22 +22,26 @@ var Priorities = []string{"urgent", "high", "medium", "low", "none"}
 
 // Issue is the public view of an issue.
 type Issue struct {
-	ID          uuid.UUID     `json:"id"`
-	Key         string        `json:"key" example:"HZN-42"`
-	ProjectID   uuid.UUID     `json:"project_id"`
-	Number      int64         `json:"number"`
-	TypeID      uuid.UUID     `json:"type_id"`
-	Title       string        `json:"title"`
-	Description string        `json:"description"`
-	StatusID    uuid.UUID     `json:"status_id"`
-	Priority    string        `json:"priority" enums:"none,urgent,high,medium,low"`
-	Rank        string        `json:"rank"`
-	Estimate    *string       `json:"estimate"`
-	AssigneeID  uuid.NullUUID `json:"assignee_id" swaggertype:"string"`
-	ReporterID  uuid.NullUUID `json:"reporter_id" swaggertype:"string"`
-	ParentID    uuid.NullUUID `json:"parent_id" swaggertype:"string"`
-	IterationID uuid.NullUUID `json:"iteration_id" swaggertype:"string"`
-	ReleaseID   uuid.NullUUID `json:"release_id" swaggertype:"string"`
+	ID        uuid.UUID `json:"id"`
+	Key       string    `json:"key" example:"HZN-42"`
+	ProjectID uuid.UUID `json:"project_id"`
+	Number    int64     `json:"number"`
+	TypeID    uuid.UUID `json:"type_id"`
+	Title     string    `json:"title"`
+	// Description is the plain text of DescriptionDoc.
+	Description string `json:"description"`
+	// DescriptionDoc is the description as a block document
+	// (docs/realtime.md#document-model); single issues only, not lists.
+	DescriptionDoc json.RawMessage `json:"description_doc,omitempty" swaggertype:"object"`
+	StatusID       uuid.UUID       `json:"status_id"`
+	Priority       string          `json:"priority" enums:"none,urgent,high,medium,low"`
+	Rank           string          `json:"rank"`
+	Estimate       *string         `json:"estimate"`
+	AssigneeID     uuid.NullUUID   `json:"assignee_id" swaggertype:"string"`
+	ReporterID     uuid.NullUUID   `json:"reporter_id" swaggertype:"string"`
+	ParentID       uuid.NullUUID   `json:"parent_id" swaggertype:"string"`
+	IterationID    uuid.NullUUID   `json:"iteration_id" swaggertype:"string"`
+	ReleaseID      uuid.NullUUID   `json:"release_id" swaggertype:"string"`
 	// Parent names the parent when the caller sees it (GET only).
 	Parent     *Ref            `json:"parent,omitempty"`
 	Labels     []uuid.UUID     `json:"labels"`

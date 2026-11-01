@@ -53,11 +53,11 @@ PostgreSQL schema outline. Authoritative definitions live in
 
 | Table | Key columns |
 |-------|-------------|
-| `issues` | workspace_id, project_id, number, type_id, title, description, status_id, priority, rank (text, collate "C"), estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields JSONB, started_at, resolved_at, description_doc_id, archived_at, version |
+| `issues` | workspace_id, project_id, number, type_id, title, description (plain text of its document), status_id, priority, rank (text, collate "C"), estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields JSONB, started_at, resolved_at, archived_at, version |
 | `issue_key_aliases` | workspace_id, project_id, number, issue_id — keys left behind by moves; a former project key resolves to the project first (`project_key_aliases`), then here |
 | `issue_labels` | issue_id, label_id |
 | `issue_links` | workspace_id, source_id, target_id, type (`relates_to`, `blocks`, `duplicates`, `precedes`), lag_days (`precedes` only) — inverse types (`blocked_by` …) are the same row read from its target |
-| `comments` | workspace_id, issue_id, author_id, body (plain text until phase 5, then document_id), edited_at, version |
+| `comments` | workspace_id, issue_id, author_id, body_doc JSONB (a single-author block document), body (its plain text), edited_at, version |
 | `attachments` | workspace_id, issue_id, uploader_id, filename, content_type (sniffed), size, object_key, state (pending, ready), completed_at |
 | `iterations` | workspace_id, project_id, name, goal, state (`planned`, `scheduled`, `active`, `completed`, `archived`), start_date, end_date, started_at, completed_at, archived_at, completion JSONB (`{policy, rollover_to}`), version; `issues.iteration_id` references it (`ON DELETE SET NULL`) |
 | `releases` | workspace_id, project_id, name (unique per project, ignoring case), description, state, start_date, release_date, released_at, archived_at, version; `issues.release_id` references it (`ON DELETE SET NULL`) |
@@ -85,8 +85,12 @@ Appending or prepending steps the first or last digit, so keys stay short
 when issues pile up at either end; a rebalance job normalises keys that grow
 past a length threshold in the middle.
 
-`description` holds plain text until block documents arrive (phase 5), when
-`description_doc_id` replaces it. `started_at` is set the first time the issue
+An issue's description is a block document in `documents` (one per issue,
+versioned for collaborative editing); `issues.description` keeps its plain
+text for search and text clients. Issues and comments written before
+documents existed have no document row (or `body_doc`): their text reads
+as one paragraph per line, and the first write stores a document.
+`started_at` is set the first time the issue
 enters a started category; `resolved_at` while it sits in a completed or
 abandoned one.
 
@@ -94,7 +98,7 @@ abandoned one.
 
 | Table | Key columns |
 |-------|-------------|
-| `documents` | workspace_id, owner_type, owner_id, version bigint, content JSONB (latest snapshot) |
+| `documents` | workspace_id, issue_id (unique: the issue's description), version bigint, content JSONB (latest snapshot) |
 | `document_steps` | document_id, version, client_id, user_id, steps JSONB, created_at — unique (document_id, version) |
 
 Steps older than the latest snapshot minus a retention window are compacted

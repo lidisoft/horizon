@@ -54,6 +54,7 @@ type Comment struct {
 	CreatedAt   time.Time
 	EditedAt    *time.Time
 	Version     int32
+	BodyDoc     []byte
 }
 
 type ConfigDisable struct {
@@ -75,6 +76,15 @@ type CustomField struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	Version     int32
+}
+
+type Document struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	IssueID     uuid.UUID
+	Version     int64
+	Content     json.RawMessage
+	UpdatedAt   time.Time
 }
 
 type Event struct {

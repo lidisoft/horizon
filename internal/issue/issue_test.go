@@ -332,7 +332,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	got, err := f.svc.Update(ctx, f.enter(f.owner, a.Key), a.Version, issue.Update{
-		Title: s("A, renamed"), Description: s("Some *text*"), Labels: &[]uuid.UUID{label.ID, label.ID},
+		Title: s("A, renamed"), Description: issue.PlainText("Some *text*"), Labels: &[]uuid.UUID{label.ID, label.ID},
 		DueDate: s("2026-11-13"), ParentKey: s(b.Key),
 	})
 	if err != nil {

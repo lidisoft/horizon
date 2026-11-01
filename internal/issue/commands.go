@@ -10,6 +10,7 @@ import (
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/configdef"
+	"github.com/lidisoft/horizon/internal/document"
 	"github.com/lidisoft/horizon/internal/issue/db"
 )
 
@@ -19,7 +20,7 @@ import (
 // workflow may differ, needs StatusID in the new workflow (IssueTypeChanged).
 type Update struct {
 	Title       *string
-	Description *string
+	Description Text
 	Labels      *[]uuid.UUID
 	StartDate   *string
 	DueDate     *string
@@ -30,8 +31,25 @@ type Update struct {
 	StatusID  *uuid.UUID
 }
 
-// Update applies an Update.
+// Update applies an Update. The result carries the description document.
 func (s *Service) Update(ctx context.Context, ic Context, version int32, in Update) (Issue, error) {
+	i, err := s.update(ctx, ic, version, in)
+	if err != nil {
+		return i, err
+	}
+	saved, err := db.New(s.pool).IssueByID(ctx, db.IssueByIDParams{WorkspaceID: ic.Workspace.ID, ID: i.ID})
+	if err != nil {
+		return i, err
+	}
+	doc, _, err := descriptionOf(ctx, s.pool, saved)
+	if err != nil {
+		return i, err
+	}
+	i.DescriptionDoc = docJSON(doc)
+	return i, nil
+}
+
+func (s *Service) update(ctx context.Context, ic Context, version int32, in Update) (Issue, error) {
 	return s.mutate(ctx, ic, version, access.IssueEdit, false, func(e *edit) ([]change, error) {
 		var fields apperr.Fields
 		var changed []string
@@ -43,9 +61,21 @@ func (s *Service) Update(ctx context.Context, ic Context, version int32, in Upda
 				changed = append(changed, "title")
 			}
 		}
-		if in.Description != nil && *in.Description != i.Description {
-			i.Description = validDescription(&fields, *in.Description)
-			changes = append(changes, change{"IssueDescribed", nil})
+		if in.Description.IsSet() {
+			if doc := in.Description.parse(&fields, "description"); doc != nil {
+				if err := checkImages(ctx, e.tx, &fields, "description", i.ID, doc); err != nil {
+					return nil, err
+				}
+				cur, _, err := descriptionOf(ctx, e.tx, e.cur)
+				if err != nil {
+					return nil, err
+				}
+				if !doc.Eq(cur) {
+					e.description = doc
+					i.Description = document.PlainText(doc)
+					changes = append(changes, change{"IssueDescribed", nil})
+				}
+			}
 		}
 		if in.StartDate != nil {
 			d, ok := parseDate(*in.StartDate)

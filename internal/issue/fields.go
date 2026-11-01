@@ -12,6 +12,7 @@ import (
 
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/configdef"
+	"github.com/lidisoft/horizon/internal/document"
 )
 
 // Limits of custom field values.
@@ -206,6 +207,7 @@ func clearField(e *edit, field string) {
 		i.ReleaseID = uuid.NullUUID{}
 	case "description":
 		i.Description = ""
+		e.description = document.FromText(docSchema, "")
 	case "labels":
 		empty := []uuid.UUID{}
 		e.labels = &empty

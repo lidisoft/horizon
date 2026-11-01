@@ -150,9 +150,9 @@ func (q *Queries) CreateAttachment(ctx context.Context, arg CreateAttachmentPara
 }
 
 const createComment = `-- name: CreateComment :one
-INSERT INTO comments (workspace_id, id, issue_id, author_id, body, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING workspace_id, id, issue_id, author_id, body, created_at, edited_at, version
+INSERT INTO comments (workspace_id, id, issue_id, author_id, body, body_doc, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING workspace_id, id, issue_id, author_id, body, created_at, edited_at, version, body_doc
 `
 
 type CreateCommentParams struct {
@@ -161,6 +161,7 @@ type CreateCommentParams struct {
 	IssueID     uuid.UUID
 	AuthorID    uuid.NullUUID
 	Body        string
+	BodyDoc     []byte
 	CreatedAt   time.Time
 }
 
@@ -171,6 +172,7 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 		arg.IssueID,
 		arg.AuthorID,
 		arg.Body,
+		arg.BodyDoc,
 		arg.CreatedAt,
 	)
 	var i Comment
@@ -183,6 +185,7 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 		&i.CreatedAt,
 		&i.EditedAt,
 		&i.Version,
+		&i.BodyDoc,
 	)
 	return i, err
 }
@@ -216,15 +219,16 @@ func (q *Queries) DeleteComment(ctx context.Context, arg DeleteCommentParams) er
 }
 
 const editComment = `-- name: EditComment :one
-UPDATE comments SET body = $3, edited_at = $4, version = version + 1
+UPDATE comments SET body = $3, body_doc = $4, edited_at = $5, version = version + 1
 WHERE workspace_id = $1 AND id = $2
-RETURNING workspace_id, id, issue_id, author_id, body, created_at, edited_at, version
+RETURNING workspace_id, id, issue_id, author_id, body, created_at, edited_at, version, body_doc
 `
 
 type EditCommentParams struct {
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID
 	Body        string
+	BodyDoc     []byte
 	EditedAt    *time.Time
 }
 
@@ -233,6 +237,7 @@ func (q *Queries) EditComment(ctx context.Context, arg EditCommentParams) (Comme
 		arg.WorkspaceID,
 		arg.ID,
 		arg.Body,
+		arg.BodyDoc,
 		arg.EditedAt,
 	)
 	var i Comment
@@ -245,6 +250,7 @@ func (q *Queries) EditComment(ctx context.Context, arg EditCommentParams) (Comme
 		&i.CreatedAt,
 		&i.EditedAt,
 		&i.Version,
+		&i.BodyDoc,
 	)
 	return i, err
 }
@@ -335,7 +341,7 @@ func (q *Queries) IssueAttachments(ctx context.Context, issueID uuid.UUID) ([]Is
 }
 
 const issueComments = `-- name: IssueComments :many
-SELECT c.workspace_id, c.id, c.issue_id, c.author_id, c.body, c.created_at, c.edited_at, c.version, coalesce(u.name, '')::text AS author_name FROM comments c LEFT JOIN users u ON u.id = c.author_id
+SELECT c.workspace_id, c.id, c.issue_id, c.author_id, c.body, c.created_at, c.edited_at, c.version, c.body_doc, coalesce(u.name, '')::text AS author_name FROM comments c LEFT JOIN users u ON u.id = c.author_id
 WHERE c.issue_id = $1 AND c.id > $2
 ORDER BY c.id
 LIMIT $3
@@ -356,6 +362,7 @@ type IssueCommentsRow struct {
 	CreatedAt   time.Time
 	EditedAt    *time.Time
 	Version     int32
+	BodyDoc     []byte
 	AuthorName  string
 }
 
@@ -378,6 +385,7 @@ func (q *Queries) IssueComments(ctx context.Context, arg IssueCommentsParams) ([
 			&i.CreatedAt,
 			&i.EditedAt,
 			&i.Version,
+			&i.BodyDoc,
 			&i.AuthorName,
 		); err != nil {
 			return nil, err
@@ -419,7 +427,7 @@ func (q *Queries) LockAttachment(ctx context.Context, arg LockAttachmentParams) 
 }
 
 const lockComment = `-- name: LockComment :one
-SELECT workspace_id, id, issue_id, author_id, body, created_at, edited_at, version FROM comments WHERE workspace_id = $1 AND id = $2 FOR UPDATE
+SELECT workspace_id, id, issue_id, author_id, body, created_at, edited_at, version, body_doc FROM comments WHERE workspace_id = $1 AND id = $2 FOR UPDATE
 `
 
 type LockCommentParams struct {
@@ -439,6 +447,37 @@ func (q *Queries) LockComment(ctx context.Context, arg LockCommentParams) (Comme
 		&i.CreatedAt,
 		&i.EditedAt,
 		&i.Version,
+		&i.BodyDoc,
 	)
 	return i, err
+}
+
+const readyAttachmentIDs = `-- name: ReadyAttachmentIDs :many
+SELECT id FROM attachments WHERE issue_id = $1 AND state = 'ready' AND id = ANY($2::uuid[])
+`
+
+type ReadyAttachmentIDsParams struct {
+	IssueID uuid.UUID
+	Ids     []uuid.UUID
+}
+
+// Which of the ids are ready attachments of the issue, for images.
+func (q *Queries) ReadyAttachmentIDs(ctx context.Context, arg ReadyAttachmentIDsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, readyAttachmentIDs, arg.IssueID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

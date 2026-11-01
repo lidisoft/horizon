@@ -109,18 +109,21 @@ func version(c *gin.Context) (int32, bool) {
 
 // CreateRequest is the body of POST /w/{ws}/issues.
 type CreateRequest struct {
-	Project     string                     `json:"project" example:"HZN"`
-	TypeID      uuid.UUID                  `json:"type_id"`
-	Title       string                     `json:"title"`
-	Description string                     `json:"description,omitempty"`
-	Priority    string                     `json:"priority,omitempty" enums:"none,urgent,high,medium,low"`
-	AssigneeID  *uuid.UUID                 `json:"assignee_id,omitempty"`
-	Estimate    *string                    `json:"estimate,omitempty"`
-	Parent      string                     `json:"parent,omitempty" example:"HZN-12"`
-	Labels      []uuid.UUID                `json:"labels,omitempty"`
-	StartDate   string                     `json:"start_date,omitempty" example:"2026-11-02"`
-	DueDate     string                     `json:"due_date,omitempty"`
-	Fields      map[string]json.RawMessage `json:"fields,omitempty" swaggertype:"object"`
+	Project     string    `json:"project" example:"HZN"`
+	TypeID      uuid.UUID `json:"type_id"`
+	Title       string    `json:"title"`
+	Description *string   `json:"description,omitempty"`
+	// DescriptionDoc is the description as a block document; it wins over
+	// description (plain text, one paragraph per line).
+	DescriptionDoc json.RawMessage            `json:"description_doc,omitempty" swaggertype:"object"`
+	Priority       string                     `json:"priority,omitempty" enums:"none,urgent,high,medium,low"`
+	AssigneeID     *uuid.UUID                 `json:"assignee_id,omitempty"`
+	Estimate       *string                    `json:"estimate,omitempty"`
+	Parent         string                     `json:"parent,omitempty" example:"HZN-12"`
+	Labels         []uuid.UUID                `json:"labels,omitempty"`
+	StartDate      string                     `json:"start_date,omitempty" example:"2026-11-02"`
+	DueDate        string                     `json:"due_date,omitempty"`
+	Fields         map[string]json.RawMessage `json:"fields,omitempty" swaggertype:"object"`
 }
 
 // create adds an issue.
@@ -145,7 +148,7 @@ func (h *HTTP) create(c *gin.Context) {
 		server.WriteError(c, apperr.Invalid(apperr.Field{Field: "project", Code: "unknown"}))
 		return
 	}
-	in := NewIssue{TypeID: req.TypeID, Title: req.Title, Description: req.Description, Priority: req.Priority, Estimate: req.Estimate,
+	in := NewIssue{TypeID: req.TypeID, Title: req.Title, Description: Text{Plain: req.Description, Doc: req.DescriptionDoc}, Priority: req.Priority, Estimate: req.Estimate,
 		ParentKey: req.Parent, Labels: req.Labels, StartDate: req.StartDate, DueDate: req.DueDate, Fields: req.Fields}
 	if req.AssigneeID != nil {
 		in.AssigneeID = uuid.NullUUID{UUID: *req.AssigneeID, Valid: true}
@@ -194,15 +197,18 @@ func (h *HTTP) get(c *gin.Context) {
 
 // UpdateRequest changes the fields that are present.
 type UpdateRequest struct {
-	Title       *string                    `json:"title,omitempty"`
-	Description *string                    `json:"description,omitempty"`
-	Labels      *[]uuid.UUID               `json:"labels,omitempty"`
-	StartDate   *string                    `json:"start_date,omitempty"`
-	DueDate     *string                    `json:"due_date,omitempty"`
-	Fields      map[string]json.RawMessage `json:"fields,omitempty" swaggertype:"object"`
-	Parent      *string                    `json:"parent,omitempty" example:"HZN-12"`
-	TypeID      *uuid.UUID                 `json:"type_id,omitempty"`
-	StatusID    *uuid.UUID                 `json:"status_id,omitempty"`
+	Title       *string `json:"title,omitempty"`
+	Description *string `json:"description,omitempty"`
+	// DescriptionDoc replaces the description with a block document; it
+	// wins over description (plain text).
+	DescriptionDoc json.RawMessage            `json:"description_doc,omitempty" swaggertype:"object"`
+	Labels         *[]uuid.UUID               `json:"labels,omitempty"`
+	StartDate      *string                    `json:"start_date,omitempty"`
+	DueDate        *string                    `json:"due_date,omitempty"`
+	Fields         map[string]json.RawMessage `json:"fields,omitempty" swaggertype:"object"`
+	Parent         *string                    `json:"parent,omitempty" example:"HZN-12"`
+	TypeID         *uuid.UUID                 `json:"type_id,omitempty"`
+	StatusID       *uuid.UUID                 `json:"status_id,omitempty"`
 }
 
 // update edits an issue.
@@ -226,7 +232,7 @@ func (h *HTTP) update(c *gin.Context) {
 		return
 	}
 	if v, ok := version(c); ok {
-		i, err := h.svc.Update(c, current(c), v, Update{Title: req.Title, Description: req.Description, Labels: req.Labels,
+		i, err := h.svc.Update(c, current(c), v, Update{Title: req.Title, Description: Text{Plain: req.Description, Doc: req.DescriptionDoc}, Labels: req.Labels,
 			StartDate: req.StartDate, DueDate: req.DueDate, Fields: req.Fields, ParentKey: req.Parent, TypeID: req.TypeID, StatusID: req.StatusID})
 		reply(c, http.StatusOK, i, err)
 	}
@@ -678,9 +684,11 @@ func (h *HTTP) comments(c *gin.Context) {
 	c.JSON(http.StatusOK, p)
 }
 
-// CommentRequest is the body of a comment; plain text for now.
+// CommentRequest is the body of a comment: a block document, or plain
+// text (one paragraph per line).
 type CommentRequest struct {
-	Body string `json:"body"`
+	Body    *string         `json:"body,omitempty"`
+	BodyDoc json.RawMessage `json:"body_doc,omitempty" swaggertype:"object"`
 }
 
 // addComment comments on an issue.
@@ -699,7 +707,7 @@ func (h *HTTP) addComment(c *gin.Context) {
 	if !bind(c, &req) {
 		return
 	}
-	cm, err := h.svc.AddComment(c, current(c), req.Body)
+	cm, err := h.svc.AddComment(c, current(c), Text{Plain: req.Body, Doc: req.BodyDoc})
 	if err != nil {
 		server.WriteError(c, err)
 		return
@@ -729,7 +737,7 @@ func (h *HTTP) editComment(c *gin.Context) {
 		return
 	}
 	if v, ok := version(c); ok {
-		cm, err := h.svc.EditComment(c, current(c), id, v, req.Body)
+		cm, err := h.svc.EditComment(c, current(c), id, v, Text{Plain: req.Body, Doc: req.BodyDoc})
 		if err != nil {
 			server.WriteError(c, err)
 			return

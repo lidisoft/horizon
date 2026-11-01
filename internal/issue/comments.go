@@ -2,6 +2,7 @@ package issue
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -11,29 +12,29 @@ import (
 
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
+	"github.com/lidisoft/horizon/internal/document"
 	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/issue/db"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
 )
 
-// maxComment is the longest comment, in characters.
-const maxComment = 20000
-
-// Comment is a comment on an issue. The body is plain text until block
-// documents arrive (phase 5).
+// Comment is a comment on an issue: a single-author block document, with
+// its plain text.
 type Comment struct {
 	ID         uuid.UUID     `json:"id"`
 	IssueID    uuid.UUID     `json:"issue_id"`
 	AuthorID   uuid.NullUUID `json:"author_id" swaggertype:"string"`
 	AuthorName string        `json:"author_name"`
-	Body       string        `json:"body"`
-	CreatedAt  time.Time     `json:"created_at"`
-	EditedAt   *time.Time    `json:"edited_at"`
-	Version    int32         `json:"version"`
+	// Body is the plain text of BodyDoc.
+	Body      string          `json:"body"`
+	BodyDoc   json.RawMessage `json:"body_doc" swaggertype:"object"`
+	CreatedAt time.Time       `json:"created_at"`
+	EditedAt  *time.Time      `json:"edited_at"`
+	Version   int32           `json:"version"`
 }
 
 func commentFrom(c db.Comment, author string) Comment {
-	return Comment{ID: c.ID, IssueID: c.IssueID, AuthorID: c.AuthorID, AuthorName: author, Body: c.Body,
+	return Comment{ID: c.ID, IssueID: c.IssueID, AuthorID: c.AuthorID, AuthorName: author, Body: c.Body, BodyDoc: bodyOf(c),
 		CreatedAt: c.CreatedAt, EditedAt: c.EditedAt, Version: c.Version}
 }
 
@@ -66,30 +67,39 @@ func (s *Service) Comments(ctx context.Context, ic Context, cursor string, limit
 			page.Next = rows[i-1].ID.String()
 			break
 		}
-		page.Items = append(page.Items, Comment{ID: r.ID, IssueID: r.IssueID, AuthorID: r.AuthorID, AuthorName: r.AuthorName,
-			Body: r.Body, CreatedAt: r.CreatedAt, EditedAt: r.EditedAt, Version: r.Version})
+		page.Items = append(page.Items, commentFrom(db.Comment{ID: r.ID, IssueID: r.IssueID, AuthorID: r.AuthorID, Body: r.Body, BodyDoc: r.BodyDoc,
+			CreatedAt: r.CreatedAt, EditedAt: r.EditedAt, Version: r.Version}, r.AuthorName))
 	}
 	return page, nil
 }
 
-func validComment(body string) (string, error) {
-	body = strings.TrimSpace(body)
-	switch {
-	case body == "":
-		return "", apperr.Invalid(apperr.Field{Field: "body", Code: "required"})
-	case len([]rune(body)) > maxComment:
-		return "", apperr.Invalid(apperr.Field{Field: "body", Code: "too_long"})
+// validComment reads a comment's document: not empty, its images
+// attachments of the issue.
+func validComment(ctx context.Context, conn db.DBTX, issueID uuid.UUID, body Text) (*document.Node, error) {
+	var fields apperr.Fields
+	if body.Plain != nil {
+		trimmed := strings.TrimSpace(*body.Plain)
+		body.Plain = &trimmed
 	}
-	return body, nil
+	doc := body.parse(&fields, "body")
+	if doc != nil && document.IsEmpty(doc) {
+		fields.Add("body", "required")
+	}
+	if doc != nil {
+		if err := checkImages(ctx, conn, &fields, "body", issueID, doc); err != nil {
+			return nil, err
+		}
+	}
+	return doc, fields.Err()
 }
 
 // AddComment comments on the issue (issue.comment). Archived issues take
 // no comments.
-func (s *Service) AddComment(ctx context.Context, ic Context, body string) (Comment, error) {
+func (s *Service) AddComment(ctx context.Context, ic Context, body Text) (Comment, error) {
 	if err := s.require(ctx, ic.Context, access.IssueComment); err != nil {
 		return Comment{}, err
 	}
-	body, err := validComment(body)
+	doc, err := validComment(ctx, s.pool, ic.Issue.ID, body)
 	if err != nil {
 		return Comment{}, err
 	}
@@ -104,7 +114,7 @@ func (s *Service) AddComment(ctx context.Context, ic Context, body string) (Comm
 		}
 		c, err = db.New(tx).CreateComment(ctx, db.CreateCommentParams{
 			WorkspaceID: cur.WorkspaceID, ID: uuid.Must(uuid.NewV7()), IssueID: cur.ID,
-			AuthorID: uuid.NullUUID{UUID: ic.Principal.User.ID, Valid: true}, Body: body, CreatedAt: s.now(),
+			AuthorID: uuid.NullUUID{UUID: ic.Principal.User.ID, Valid: true}, Body: document.PlainText(doc), BodyDoc: docJSON(doc), CreatedAt: s.now(),
 		})
 		if err != nil {
 			return err
@@ -137,11 +147,12 @@ func (s *Service) lockComment(ctx context.Context, tx pgx.Tx, ic Context, id uui
 }
 
 // EditComment changes the body of the caller's own comment.
-func (s *Service) EditComment(ctx context.Context, ic Context, id uuid.UUID, version int32, body string) (Comment, error) {
-	body, err := validComment(body)
+func (s *Service) EditComment(ctx context.Context, ic Context, id uuid.UUID, version int32, body Text) (Comment, error) {
+	doc, err := validComment(ctx, s.pool, ic.Issue.ID, body)
 	if err != nil {
 		return Comment{}, err
 	}
+	text, raw := document.PlainText(doc), docJSON(doc)
 	var c db.Comment
 	var author string
 	err = postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
@@ -156,11 +167,11 @@ func (s *Service) EditComment(ctx context.Context, ic Context, id uuid.UUID, ver
 			return apperr.Conflict("issue_archived")
 		}
 		author = ic.Principal.User.Name
-		if cur.Body == body {
+		if old, err := docSchema.ParseJSON(bodyOf(cur)); err == nil && old.Eq(doc) {
 			c = cur
 			return nil
 		}
-		if c, err = db.New(tx).EditComment(ctx, db.EditCommentParams{WorkspaceID: cur.WorkspaceID, ID: cur.ID, Body: body, EditedAt: new(s.now())}); err != nil {
+		if c, err = db.New(tx).EditComment(ctx, db.EditCommentParams{WorkspaceID: cur.WorkspaceID, ID: cur.ID, Body: text, BodyDoc: raw, EditedAt: new(s.now())}); err != nil {
 			return err
 		}
 		return eventlog.Append(ctx, tx, s.event(ic.Context.Context, ic.Issue, "IssueCommentEdited", map[string]any{"comment_id": c.ID}))

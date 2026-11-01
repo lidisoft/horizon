@@ -11,6 +11,7 @@ import {
   PRIORITIES, avatar, issueHref, issueStyles, priorityIcon, projectData, statusGlyph,
 } from "horizon/components/issue-ui.js";
 import { isOpen } from "horizon/components/planning-ui.js";
+import { docStyles, isPlain, renderDoc } from "horizon/editor/render.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
@@ -84,7 +85,7 @@ class HznIssueDetail extends HTMLElement {
     if (this.shadowRoot) return;
     this.context = requestContext(this);
     const root = this.attachShadow({ mode: "open" });
-    root.adoptedStyleSheets = [issueStyles, styles];
+    root.adoptedStyleSheets = [issueStyles, styles, docStyles];
     root.addEventListener("click", (e) => this.onClick(e));
     root.addEventListener("lds-change", (e) => this.onChange(e));
     root.addEventListener("keydown", (e) => this.onKey(e));
@@ -358,9 +359,18 @@ class HznIssueDetail extends HTMLElement {
     const { t } = this.context.i18n;
     const i = this.issue;
     const readOnly = i.archived_at || !this.can.includes("issue.edit");
-    return readOnly
-      ? html`<div class="description">${i.description || html`<span class="muted">${t("issues.noDescription")}</span>`}</div>`
-      : html`<lds-textarea data-prop="description" rows="${this.mode === "peek" ? 4 : 6}" auto-grow value="${i.description}" placeholder="${t("issues.describe")}" aria-label="${t("issues.description")}"></lds-textarea>`;
+    // Plain paragraphs edit as text; anything richer shows as it is.
+    if (!readOnly && isPlain(i.description_doc)) {
+      return html`<lds-textarea data-prop="description" rows="${this.mode === "peek" ? 4 : 6}" auto-grow value="${i.description}" placeholder="${t("issues.describe")}" aria-label="${t("issues.description")}"></lds-textarea>`;
+    }
+    return i.description
+      ? html`<div class="description">${renderDoc(i.description_doc, this.docContext())}</div>`
+      : html`<div class="description"><span class="muted">${t("issues.noDescription")}</span></div>`;
+  }
+
+  /** What rendering documents needs: links, images and names. */
+  docContext() {
+    return { ws: this.ws, issueKey: this.issue.key, people: this.data.people };
   }
 
   childrenBlock() {
@@ -436,10 +446,10 @@ class HznIssueDetail extends HTMLElement {
             <div class="who"><strong>${x.comment.author_name || t("issue.someone")}</strong>
               <span class="muted">${i18n.relative(x.comment.created_at)}${x.comment.edited_at ? ` · ${t("issues.edited")}` : ""}</span>
               <span class="tools">
-                ${x.comment.author_id === me && canComment ? html`<lds-button variant="ghost" size="sm" data-action="edit-comment" data-id="${x.comment.id}">${t("issues.edit")}</lds-button>` : ""}
+                ${x.comment.author_id === me && canComment && isPlain(x.comment.body_doc) ? html`<lds-button variant="ghost" size="sm" data-action="edit-comment" data-id="${x.comment.id}">${t("issues.edit")}</lds-button>` : ""}
                 ${x.comment.author_id === me || this.can.includes("issue.comment.moderate") ? html`<lds-button variant="ghost" size="sm" data-action="delete-comment" data-id="${x.comment.id}">${t("issues.remove")}</lds-button>` : ""}
               </span></div>
-            <div class="body">${x.comment.body}</div>
+            <div class="body">${renderDoc(x.comment.body_doc, this.docContext())}</div>
           </div>
         </div>` : html`
         <div class="event"><span><strong>${x.event.actor?.name ?? t("issue.someone")}</strong> ${this.describe(x.event)}</span>

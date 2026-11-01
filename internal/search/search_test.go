@@ -95,7 +95,7 @@ func (f *fixture) create(key, title, description string) issue.Issue {
 	f.t.Helper()
 	ctx := context.Background()
 	pc, _ := f.projects.Enter(ctx, f.wc(f.owner), key)
-	i, err := f.issues.Create(ctx, pc, issue.NewIssue{TypeID: f.task, Title: title, Description: description})
+	i, err := f.issues.Create(ctx, pc, issue.NewIssue{TypeID: f.task, Title: title, Description: issue.PlainText(description)})
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestSearch(t *testing.T) {
 
 	// Comments.
 	ic, _ := f.issues.Enter(ctx, f.wc(f.owner), ws.Key)
-	if _, err := f.issues.AddComment(ctx, ic, "Seen on Firefox with a flaky proxy"); err != nil {
+	if _, err := f.issues.AddComment(ctx, ic, issue.PlainText("Seen on Firefox with a flaky proxy")); err != nil {
 		t.Fatal(err)
 	}
 	if got := f.find(f.owner, "flaky proxy", search.Options{}); got != "HZN-3:comment" {

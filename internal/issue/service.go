@@ -17,6 +17,7 @@ import (
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/configdef"
+	"github.com/lidisoft/horizon/internal/document"
 	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/issue/db"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
@@ -27,7 +28,7 @@ import (
 // Limits of issue content.
 const (
 	maxTitle       = 255
-	maxDescription = 100_000
+	maxDescription = 1 << 20 // plain text given for a description or comment
 	maxLabels      = 50
 	pageSize       = 100
 	maxPageSize    = 500
@@ -113,13 +114,18 @@ func (s *Service) Enter(ctx context.Context, wc workspace.Context, key string) (
 	return Context{Context: pc, Issue: i}, nil
 }
 
-// Get returns the issue with its labels.
+// Get returns the issue with its labels and description document.
 func (s *Service) Get(ctx context.Context, ic Context) (Issue, error) {
 	labels, err := s.labelsOf(ctx, s.pool, []uuid.UUID{ic.Issue.ID})
 	if err != nil {
 		return Issue{}, err
 	}
 	i := issueFrom(ic.Issue, ic.Project.Key, labels[ic.Issue.ID])
+	doc, _, err := descriptionOf(ctx, s.pool, ic.Issue)
+	if err != nil {
+		return Issue{}, err
+	}
+	i.DescriptionDoc = docJSON(doc)
 	if ic.Issue.ParentID.Valid {
 		parent, key, ok, err := s.visibleIssue(ctx, ic, ic.Issue.ParentID.UUID)
 		if err != nil {
@@ -191,7 +197,7 @@ func (s *Service) List(ctx context.Context, pc project.Context, cursor string, l
 type NewIssue struct {
 	TypeID      uuid.UUID
 	Title       string
-	Description string
+	Description Text
 	Priority    string
 	AssigneeID  uuid.NullUUID
 	Estimate    *string
@@ -225,6 +231,7 @@ func (s *Service) Create(ctx context.Context, pc project.Context, in NewIssue) (
 	}
 	var created db.Issue
 	var labels []uuid.UUID
+	var createdDoc *document.Node
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		q := db.New(tx)
 		r, err := s.config.Resolve(ctx, tx, pc.Workspace.ID, uuid.NullUUID{UUID: pc.Project.ID, Valid: true})
@@ -253,7 +260,10 @@ func (s *Service) Create(ctx context.Context, pc project.Context, in NewIssue) (
 			next.StartedAt = &now
 		}
 		next.Title = validTitle(&fields, in.Title)
-		next.Description = validDescription(&fields, in.Description)
+		description := in.Description.parse(&fields, "description")
+		if description != nil {
+			next.Description = document.PlainText(description)
+		}
 		if in.Priority != "" {
 			next.Priority = in.Priority
 			if !slices.Contains(Priorities, in.Priority) {
@@ -322,6 +332,16 @@ func (s *Service) Create(ctx context.Context, pc project.Context, in NewIssue) (
 				return err
 			}
 		}
+		// A new issue has no attachments yet: its description takes no images.
+		if len(document.Attachments(description)) > 0 {
+			return apperr.Invalid(apperr.Field{Field: "description_doc", Code: "unknown_attachment"})
+		}
+		if in.Description.IsSet() {
+			if err := s.saveDescription(ctx, tx, created, description); err != nil {
+				return err
+			}
+		}
+		createdDoc = description
 		return eventlog.Append(ctx, tx, s.event(pc.Context, created, "IssueCreated", map[string]any{
 			"project_id": created.ProjectID, "key": keyOf(pc.Project.Key, created.Number), "type_id": created.TypeID,
 			"status_id": created.StatusID, "parent_id": created.ParentID, "assignee_id": created.AssigneeID,
@@ -330,7 +350,9 @@ func (s *Service) Create(ctx context.Context, pc project.Context, in NewIssue) (
 	if err != nil {
 		return Issue{}, err
 	}
-	return issueFrom(created, pc.Project.Key, labels), nil
+	out := issueFrom(created, pc.Project.Key, labels)
+	out.DescriptionDoc = docJSON(createdDoc)
+	return out, nil
 }
 
 // --- Mutating ---------------------------------------------------------------------
@@ -349,6 +371,9 @@ type edit struct {
 	cur    db.Issue
 	next   *db.Issue
 	labels *[]uuid.UUID // nil: labels unchanged
+	// description, when set, is the new description document (its text
+	// already in next.Description).
+	description *document.Node
 }
 
 // mutate runs one command on an issue: permission, lock, version check
@@ -395,6 +420,11 @@ func (s *Service) mutate(ctx context.Context, ic Context, version int32, perm ac
 		saved, err = s.save(ctx, tx, next)
 		if err != nil {
 			return err
+		}
+		if e.description != nil {
+			if err := s.saveDescription(ctx, tx, saved, e.description); err != nil {
+				return err
+			}
 		}
 		if cur.IterationID.Valid && cur.IterationID != saved.IterationID {
 			if err := s.leftIteration(ctx, tx, ic.Context.Context, cur, LeftCleared); err != nil {
@@ -489,13 +519,6 @@ func validTitle(fields *apperr.Fields, title string) string {
 		fields.Add("title", "too_long")
 	}
 	return title
-}
-
-func validDescription(fields *apperr.Fields, d string) string {
-	if len(d) > maxDescription {
-		fields.Add("description", "too_long")
-	}
-	return d
 }
 
 // validEstimate accepts a value of the scale, or "" to clear.
