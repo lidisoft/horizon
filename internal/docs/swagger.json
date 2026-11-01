@@ -4157,6 +4157,60 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/search": {
+            "get": {
+                "description": "By key (former keys too), words in titles, descriptions and comments (each word a prefix), and fuzzy titles; in the projects whose issues the caller sees. Snippets mark matched words with U+0002 and U+0003.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "search"
+                ],
+                "summary": "Search issues",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "What to look for",
+                        "name": "q",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "At most 100; 20 by default",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include archived issues",
+                        "name": "archived",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Only this project (key)",
+                        "name": "project",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/search.Results"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/teams": {
             "get": {
                 "produces": [
@@ -6633,6 +6687,91 @@
                     "enum": [
                         "workspace",
                         "private"
+                    ]
+                }
+            }
+        },
+        "search.Result": {
+            "type": "object",
+            "properties": {
+                "archived": {
+                    "type": "boolean"
+                },
+                "assignee_id": {
+                    "type": "string"
+                },
+                "comment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "HZN-42"
+                },
+                "match": {
+                    "description": "Match is where the query matched: the key, the title, the description\nor a comment.",
+                    "type": "string",
+                    "enum": [
+                        "key",
+                        "title",
+                        "description",
+                        "comment"
+                    ]
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "snippet": {
+                    "description": "Snippet is the matching text of the description or comment, matched\nwords between U+0002 and U+0003.",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/search.Status"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "search.Results": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/search.Result"
+                    }
+                },
+                "query": {
+                    "type": "string"
+                }
+            }
+        },
+        "search.Status": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "In progress"
+                },
+                "outcome": {
+                    "type": "string",
+                    "enum": [
+                        "unstarted",
+                        "started",
+                        "completed",
+                        "abandoned"
                     ]
                 }
             }

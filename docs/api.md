@@ -82,7 +82,9 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
     /attachments/{id}/complete  /download  POST after the PUT | GET redirects to a presigned URL; DELETE /attachments/{id}
     /activity                              GET the issue's events, newest first, in the domain event format
     /subscription
-  /views  /milestones  /search
+  /search                                  GET ?q=&limit=&archived=&project= — issues by key, words (prefixes) in titles,
+                                           descriptions and comments, and near titles; snippets mark words with U+0002/U+0003
+  /views  /milestones
   /reports/{report}                        report data (see reports.md)
   /projects/{key}/overview                 project overview blocks
   /webhooks  /webhooks/{id}/deliveries

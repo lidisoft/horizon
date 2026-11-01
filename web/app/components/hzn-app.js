@@ -39,6 +39,7 @@ export const ROUTES = [
   { name: "project", path: "/w/:ws/p/:key", view: "hzn-project-home" },
   { name: "project-issues", path: "/w/:ws/p/:key/issues", view: "hzn-issue-list" },
   { name: "issue", path: "/w/:ws/issues/:issue", view: "hzn-issue" },
+  { name: "search", path: "/w/:ws/search", view: "hzn-search" },
   { name: "settings-issue-types", path: "/w/:ws/settings/issue-types", view: "hzn-settings-issue-types", layout: "settings" },
   { name: "settings-workflows", path: "/w/:ws/settings/workflows", view: "hzn-settings-workflows", layout: "settings" },
   { name: "settings-categories", path: "/w/:ws/settings/categories", view: "hzn-settings-categories", layout: "settings" },
@@ -50,6 +51,7 @@ export const ROUTES = [
   { name: "reset-password", path: "/reset-password", view: "hzn-reset-password", public: true },
 ];
 const NOT_FOUND_VIEW = "hzn-not-found";
+const OUTCOME_ICONS = { unstarted: "circle", started: "circle-dot", completed: "circle-check", abandoned: "circle-x" };
 const THEME_KEY = "horizon.theme";
 const WORKSPACE_KEY = "horizon.workspace";
 
@@ -160,6 +162,7 @@ export class HznApp extends HTMLElement {
             </lds-menu>
           </div>
           <lds-nav-item href="/" data-route="workspace" data-nav="home"><lds-icon slot="start" name="layers"></lds-icon>${t("nav.home")}</lds-nav-item>
+          <lds-nav-item href="/" data-route="search" data-nav="search" hidden><lds-icon slot="start" name="search"></lds-icon>${t("nav.search")}</lds-nav-item>
           <lds-nav-item href="/" data-route="settings" data-nav="settings" hidden><lds-icon slot="start" name="settings"></lds-icon>${t("nav.settings")}</lds-nav-item>
           <div data-projects></div>
           <div slot="footer" class="footer">
@@ -215,13 +218,14 @@ export class HznApp extends HTMLElement {
 
     // Commands of the open issue, and "Open <KEY>" for a typed issue key.
     this.palette.addEventListener("lds-open", () => this.renderCommands());
-    this.palette.addEventListener("input", (event) => this.offerKey(event.composedPath()[0]?.value ?? ""));
+    this.palette.addEventListener("input", (event) => this.searchPalette(event.composedPath()[0]?.value ?? ""));
 
     this.palette.addEventListener("lds-select", (event) => {
       const value = event.detail?.value ?? "";
-      if (value.startsWith("cmd:") || value.startsWith("goto:")) {
+      if (value.startsWith("cmd:") || value.startsWith("goto:") || value.startsWith("search:")) {
         this.palette.removeAttribute("open");
         if (value.startsWith("goto:")) router.navigate(issueHref(this.currentSlug, value.slice(5)));
+        else if (value.startsWith("search:")) router.navigate(`/w/${this.currentSlug}/search?q=${encodeURIComponent(value.slice(7))}`);
         else this.commandRuns.get(value)?.();
         return;
       }
@@ -276,16 +280,42 @@ export class HznApp extends HTMLElement {
         return html`<lds-command-item value="${value}"><lds-icon slot="start" name="${item.icon}"></lds-icon>${item.label}
           ${item.keys ? html`<lds-kbd slot="end">${displayKeys(item.keys).join(" ")}</lds-kbd>` : ""}</lds-command-item>`;
       })}</lds-command-group>`)}`);
-    this.offerKey("");
+    this.searchPalette("");
   }
 
-  /** Offers to open the issue whose key is typed. */
-  offerKey(query) {
+  /**
+   * Issues for what is typed: a typed key at once, then the search's
+   * matches. Items carry the query as keywords so the palette's own
+   * filter keeps them.
+   */
+  searchPalette(query) {
+    const { api, i18n } = this.context;
     const group = this.palette.querySelector("[data-goto]");
-    const key = query.trim().toUpperCase();
-    group.hidden = !this.currentSlug || !ISSUE_KEY.test(key);
-    group.innerHTML = group.hidden ? "" : String(html`
-      <lds-command-item value="goto:${key}" keywords="${key} ${key.toLowerCase()}"><lds-icon slot="start" name="search"></lds-icon>${this.context.i18n.t("command.openIssue", { key })}</lds-command-item>`);
+    const q = query.trim();
+    clearTimeout(this.searchTimer);
+    const seq = (this.searchSeq = (this.searchSeq ?? 0) + 1);
+    const key = ISSUE_KEY.test(q) ? q.toUpperCase() : "";
+    const render = (items) => {
+      group.hidden = !this.currentSlug || !q;
+      const keywords = `${q} ${q.toLowerCase()}`;
+      group.innerHTML = group.hidden ? "" : String(html`
+        ${key && !items.some((r) => r.key === key) ? html`<lds-command-item value="goto:${key}" keywords="${keywords}">
+          <lds-icon slot="start" name="search"></lds-icon>${i18n.t("command.openIssue", { key })}</lds-command-item>` : ""}
+        ${items.map((r) => html`<lds-command-item value="goto:${r.key}" keywords="${keywords}">
+          <lds-icon slot="start" name="${OUTCOME_ICONS[r.status.outcome] ?? "circle"}"></lds-icon>${r.key} ${r.title}</lds-command-item>`)}
+        <lds-command-item value="search:${q}" keywords="${keywords}"><lds-icon slot="start" name="search"></lds-icon>${i18n.t("command.searchFor", { q })}</lds-command-item>`);
+    };
+    render([]);
+    if (!q || !this.currentSlug) return;
+    this.searchTimer = setTimeout(async () => {
+      try {
+        const { data } = await api.get(`/w/${encodeURIComponent(this.currentSlug)}/search`, { query: { q, limit: 8 } });
+        if (seq !== this.searchSeq) return; // typed on meanwhile
+        render(data.items);
+      } catch {
+        // offline or failing: the typed key and "Search for" stay
+      }
+    }, 150);
   }
 
   /** The New issue dialog, in the current project if any. */
@@ -432,6 +462,9 @@ export class HznApp extends HTMLElement {
     }
     const home = root.querySelector('[data-nav="home"]');
     const settings = root.querySelector('[data-nav="settings"]');
+    const search = root.querySelector('[data-nav="search"]');
+    search.hidden = !current;
+    if (current) search.setAttribute("href", `/w/${current.slug}/search`);
     home.setAttribute("href", current ? `/w/${current.slug}` : "/");
     settings.hidden = !current;
     if (current) settings.setAttribute("href", `/w/${current.slug}/settings/general`);

@@ -5,7 +5,7 @@
   "theme.dark": "Switch to dark theme",
   "theme.light": "Switch to light theme",
   "command.label": "Command palette",
-  "command.placeholder": "Type a command…",
+  "command.placeholder": "Type a command or search issues…",
   "command.empty": "No commands match.",
   "command.group.navigation": "Navigation",
   "command.group.general": "General",
@@ -861,5 +861,22 @@
   "error.estimate.not_in_scale": "That value isn't on the project's scale.",
   "error.due_date.before_start": "The due date is before the start date.",
   "error.assignee_id.not_member": "That person isn't a member of the workspace.",
-  "error.status_id.required_in_workflow": "Choose a status in the new type's workflow."
+  "error.status_id.required_in_workflow": "Choose a status in the new type's workflow.",
+  "command.searchFor": "Search for “{q}”",
+  "nav.search": "Search",
+  "search.label": "Search issues",
+  "search.placeholder": "Search titles, descriptions and comments, or type a key",
+  "search.archived": "Include archived",
+  "search.prompt": "Search this workspace",
+  "search.hint": "Words match titles, descriptions and comments as you type; a key such as HZN-42 opens that issue.",
+  "search.none": "No issues match “{q}”",
+  "search.noneHint": "Check the spelling, use fewer words, or include archived issues.",
+  "search.count": {
+    "one": "{count} issue",
+    "other": "{count} issues"
+  },
+  "search.match.key": "Key",
+  "search.match.title": "Title",
+  "search.match.description": "Description",
+  "search.match.comment": "Comment"
 }

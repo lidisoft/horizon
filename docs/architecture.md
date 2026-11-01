@@ -142,9 +142,13 @@ Commands write events through `eventlog.Append(ctx, tx, …)` inside the same
 - Views compile their filter tree to parameterised SQL (`internal/view`);
   custom fields use JSONB operators backed by GIN indexes.
 - Search uses PostgreSQL only ([ADR-0020](adr/0020-postgresql-search.md)):
-  `tsvector` columns for word search on issues and comments, and `pg_trgm`
-  trigram indexes on titles and keys for typo-tolerant, prefix matching in ⌘K.
-  The `tsvector` columns are updated in the write transaction.
+  GIN indexes on `tsvector` expressions for word search on issues (title
+  weighted over description) and comments, and `pg_trgm` trigram indexes on
+  titles for typo-tolerant matching in ⌘K. Expression indexes are updated in
+  the write transaction like columns would be, without adding a `tsvector`
+  to every row read; queries repeat the indexed expressions
+  (`internal/search`). Each word is a prefix (`outb rel` finds "Outbox
+  relay"), so ⌘K results follow typing; an issue key finds that issue first.
 
 ## Realtime fan-out
 

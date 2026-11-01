@@ -145,6 +145,7 @@ semantic tokens only, `:host` display):
 | `hzn-issue-detail` | Issue page and peek panel (`mode="page" \| "peek"`): properties save as they change (If-Match), description, sub-issues, links, attachments, activity and comments |
 | `hzn-issue-create` | New issue dialog (button, `C`, ⌘K) |
 | `hzn-move-issue` | Move to another project, with the server's preview of matches and gaps |
+| `hzn-search` (view) | Search page (`/w/{ws}/search?q=`): results with highlighted snippets; ⌘K shows the first matches as you type and "Search for …" leads here |
 | `hzn-board` | Kanban with drag and drop between columns and rank |
 | `hzn-backlog` | Backlog plus iteration buckets, drag to plan |
 | `hzn-grid` | Table view with field columns and inline editing |

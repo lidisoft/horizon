@@ -44,7 +44,7 @@ usable exists early.
 - [x] Activity feed from `events`
 - [x] WebSocket pushes for domain events (no collab yet)
 - [x] List view, issue detail, ⌘K palette, shortcuts
-- [ ] Full-text search
+- [x] Full-text search
 
 ## Phase 4 — Planning
 

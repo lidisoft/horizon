@@ -53,7 +53,7 @@ PostgreSQL schema outline. Authoritative definitions live in
 
 | Table | Key columns |
 |-------|-------------|
-| `issues` | workspace_id, project_id, number, type_id, title, description, status_id, priority, rank (text, collate "C"), estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields JSONB, started_at, resolved_at, description_doc_id, search tsvector, archived_at, version |
+| `issues` | workspace_id, project_id, number, type_id, title, description, status_id, priority, rank (text, collate "C"), estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields JSONB, started_at, resolved_at, description_doc_id, archived_at, version |
 | `issue_key_aliases` | workspace_id, project_id, number, issue_id — keys left behind by moves; a former project key resolves to the project first (`project_key_aliases`), then here |
 | `issue_labels` | issue_id, label_id |
 | `issue_links` | workspace_id, source_id, target_id, type (`relates_to`, `blocks`, `duplicates`, `precedes`), lag_days (`precedes` only) — inverse types (`blocked_by` …) are the same row read from its target |
@@ -69,7 +69,9 @@ Notable indexes:
 - `issues (workspace_id, project_id, number)` unique — issue keys.
 - `issues (workspace_id, project_id, status_id, rank)` — board columns and lists.
 - `issues USING gin (fields jsonb_path_ops)` — custom field filters.
-- `issues USING gin (search)` — full-text search.
+- `issues USING gin (setweight(to_tsvector('simple', title), 'A') || setweight(to_tsvector('simple', description), 'B'))`
+  and `comments USING gin (to_tsvector('simple', body))` — full-text search
+  (expression indexes: no `tsvector` column).
 - `issues USING gin (title gin_trgm_ops)` — fuzzy and prefix matching for ⌘K
   (requires the `pg_trgm` extension).
 

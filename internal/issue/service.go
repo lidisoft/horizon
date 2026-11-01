@@ -67,6 +67,9 @@ func (ic Context) Scope() access.Scope { return ic.Context.Scope() }
 
 func (ic Context) key() string { return keyOf(ic.Project.Key, ic.Issue.Number) }
 
+// KeyOf formats an issue key: KeyOf("HZN", 42) is "HZN-42".
+func KeyOf(projectKey string, n int64) string { return keyOf(projectKey, n) }
+
 func keyOf(projectKey string, n int64) string {
 	return projectKey + "-" + strconv.FormatInt(n, 10)
 }

@@ -36,6 +36,7 @@ import (
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
 	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/realtime"
+	"github.com/lidisoft/horizon/internal/search"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/testenv"
 	"github.com/lidisoft/horizon/internal/workspace"
@@ -264,6 +265,7 @@ func appServer(t *testing.T) app {
 	projectSvc.OnDelete(config.DeleteProject)
 	issueSvc := issue.New(pool, acc, config, projectSvc, nil)
 	issues := issue.NewHTTP(issueSvc, projectSvc)
+	searchHTTP := search.NewHTTP(search.New(pool, acc, projectSvc, issueSvc))
 
 	// Events reach sockets as in production: outbox relay, JetStream, hub.
 	bus := testenv.JetStream(t)
@@ -284,7 +286,7 @@ func appServer(t *testing.T) app {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
 		hub.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, func(ws *gin.RouterGroup) {
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, func(ws *gin.RouterGroup) {
 			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject)
 		})
 	}}))
@@ -911,7 +913,10 @@ func TestIssues(t *testing.T) {
 	if got := pg.poll(palette + `.querySelector("[data-dynamic] lds-command-group")?.getAttribute("heading")`); got != "Issue HZN-1" {
 		t.Errorf("palette group = %q", got)
 	}
-	// Typing a key offers to open it.
+	// Words find issues as you type; a typed key offers to open it.
+	pg.do(chromedp.KeyEvent("replay"))
+	pg.poll(palette + `.querySelector('[value="goto:HZN-2"]')?.textContent.includes("Replay after reconnect") && "found"`)
+	pg.eval(`(() => { const i = ` + palette + `.shadowRoot.querySelector("input"); i.value = ""; i.dispatchEvent(new Event("input", { bubbles: true, composed: true })); })()`)
 	pg.do(chromedp.KeyEvent("hzn-2"))
 	pg.poll(palette + `.querySelector('[value="goto:HZN-2"]') && "offered"`)
 	pg.eval(palette + `.querySelector('[value="goto:HZN-2"]').click()`)
@@ -926,6 +931,17 @@ func TestIssues(t *testing.T) {
 	pg.eval(detail + `.querySelector("[data-title-input]").setAttribute("value", "")`)
 	pg.typeInto(detail+`.querySelector("[data-title-input]")`, "Replay missed events\r")
 	pg.poll(detail + `.querySelector("h1")?.textContent === "Replay missed events" && "renamed"`)
+
+	// The search page highlights the matched words.
+	pg.do(chromedp.Navigate(a.base + "/w/acme/search?q=missed"))
+	pg.poll(view + `.querySelector(".result .key")?.textContent === "HZN-2" && "found"`)
+	if got := pg.poll(view + `.querySelector(".result")?.getAttribute("href")`); got != "/w/acme/issues/HZN-2" {
+		t.Errorf("result link = %q", got)
+	}
+	pg.typeInto(view+`.querySelector("[data-q]")`, " nothing-like-this")
+	pg.poll(view + `.querySelector("lds-empty-state h2")?.textContent.includes("No issues match") && "none"`)
+	pg.do(chromedp.Navigate(a.base + "/w/acme/issues/HZN-2"))
+	pg.poll(detail + `.querySelector("h1")?.textContent === "Replay missed events" && "back"`)
 
 	// Delete it from the menu.
 	pg.eval(detail + `.querySelector('[data-action="delete"]').click()`)

@@ -26,6 +26,7 @@ import (
 	"github.com/lidisoft/horizon/internal/platform/s3"
 	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/realtime"
+	"github.com/lidisoft/horizon/internal/search"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/version"
 	"github.com/lidisoft/horizon/internal/workspace"
@@ -118,6 +119,7 @@ func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
 	issueSvc := issue.New(rt.pool, acc, config, projectSvc, nil)
 	issueSvc.SetStorage(rt.s3)
 	issues := issue.NewHTTP(issueSvc, projectSvc)
+	searchHTTP := search.NewHTTP(search.New(rt.pool, acc, projectSvc, issueSvc))
 	hub := realtime.New(realtime.Options{
 		Log: logging.WithSystem(rt.log, "realtime"), Pool: rt.pool, NATS: rt.nc, Stream: eventlog.DefaultStream(rt.cfg.EventsRetention),
 		Identity: ids, Access: acc, Workspaces: workspaceSvc, Projects: projectSvc, Issues: issueSvc,
@@ -127,7 +129,7 @@ func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
 		hub.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, func(ws *gin.RouterGroup) {
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, func(ws *gin.RouterGroup) {
 			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject)
 		})
 	}, hub

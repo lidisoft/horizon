@@ -15,6 +15,7 @@ import "horizon/views/hzn-issue.js";
 import "horizon/views/hzn-not-found.js";
 import "horizon/views/hzn-project-home.js";
 import "horizon/views/hzn-reset-password.js";
+import "horizon/views/hzn-search.js";
 import "horizon/views/hzn-settings-categories.js";
 import "horizon/views/hzn-settings-estimation.js";
 import "horizon/views/hzn-settings-general.js";
