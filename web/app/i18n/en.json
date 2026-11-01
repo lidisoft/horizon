@@ -880,7 +880,7 @@
   "search.match.description": "Description",
   "search.match.comment": "Comment",
   "settings.iterations": "Iterations",
-  "planning.layout": "Layout",
+  "planning.layout": "Project views",
   "planning.layouts.issues": "List",
   "planning.layouts.board": "Board",
   "planning.layouts.backlog": "Backlog",
@@ -995,5 +995,84 @@
   "shortcut.columnLeft": "Previous column",
   "shortcut.columnRight": "Next column",
   "shortcut.moveLeft": "Move the issue to the previous column",
-  "shortcut.moveRight": "Move the issue to the next column"
+  "shortcut.moveRight": "Move the issue to the next column",
+  "nav.milestones": "Milestones",
+  "planning.layouts.releases": "Releases",
+  "planning.progressPoints": {
+    "one": "{done} of {total} pts · {count} of {issues} issue done",
+    "other": "{done} of {total} pts · {count} of {issues} issues done"
+  },
+  "planning.progressIssues": {
+    "one": "{done} of {count} issue done",
+    "other": "{done} of {count} issues done"
+  },
+  "releases.title": "Releases",
+  "releases.new": "New release",
+  "releases.create": "Create release",
+  "releases.created": "{name} created",
+  "releases.edit": "Edit release",
+  "releases.name": "Name",
+  "releases.description": "Description",
+  "releases.dates": "Dates",
+  "releases.startDate": "Start date",
+  "releases.releaseDate": "Release date",
+  "releases.datesHint": "Both optional. Releasing it without a date dates it today.",
+  "releases.state.unreleased": "Unreleased",
+  "releases.state.released": "Released",
+  "releases.state.archived": "Archived",
+  "releases.releasedOn": "Released {date}",
+  "releases.starts": "Starts {date}",
+  "releases.due": "Due {date}",
+  "releases.release": "Release",
+  "releases.released": "{name} released",
+  "releases.archive": "Archive",
+  "releases.archived": "{name} archived",
+  "releases.delete": "Delete release",
+  "releases.deleteTitle": "Delete {name}?",
+  "releases.deleteBody": {
+    "one": "Its issue loses its release. This can't be undone.",
+    "other": "Its {count} issues lose their release. This can't be undone."
+  },
+  "releases.deleted": "{name} deleted",
+  "releases.more": "More actions for {name}",
+  "releases.showArchived": "Show archived",
+  "releases.empty": "No releases yet.",
+  "releases.showIssues": {
+    "one": "Show {count} issue",
+    "other": "Show {count} issues"
+  },
+  "releases.hideIssues": {
+    "one": "Hide {count} issue",
+    "other": "Hide {count} issues"
+  },
+  "milestones.title": "Milestones",
+  "milestones.new": "New milestone",
+  "milestones.create": "Create milestone",
+  "milestones.created": "{name} created",
+  "milestones.edit": "Edit milestone",
+  "milestones.scope": "For",
+  "milestones.workspace": "Whole workspace",
+  "milestones.name": "Name",
+  "milestones.date": "Date",
+  "milestones.description": "Description",
+  "milestones.link": "Link issues",
+  "milestones.linkTitle": "Issues of {name}",
+  "milestones.issues": "Issue keys",
+  "milestones.linkHint": "Any issues you can see, by key, separated by commas or spaces.",
+  "milestones.linkHintProject": "Issues of its project, by key, separated by commas or spaces.",
+  "milestones.unknownIssues": "Some keys don't name an issue it can track.",
+  "milestones.delete": "Delete milestone",
+  "milestones.deleteTitle": "Delete {name}?",
+  "milestones.deleteBody": "Its issues stay as they are. This can't be undone.",
+  "milestones.deleted": "{name} deleted",
+  "milestones.more": "More actions for {name}",
+  "milestones.empty": "No milestones yet.",
+  "milestones.showIssues": {
+    "one": "Show {count} issue",
+    "other": "Show {count} issues"
+  },
+  "milestones.hideIssues": {
+    "one": "Hide {count} issue",
+    "other": "Hide {count} issues"
+  }
 }

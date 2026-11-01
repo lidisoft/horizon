@@ -51,7 +51,7 @@ usable exists early.
 - [x] Iterations: plan, schedule, load, start, complete with policy, archive
 - [x] Backlog view with sprint planning
 - [x] Board view
-- [ ] Releases, milestones
+- [x] Releases, milestones
 
 ## Phase 5 — Block editor and collaboration
 

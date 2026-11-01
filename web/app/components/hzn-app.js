@@ -42,6 +42,8 @@ export const ROUTES = [
   { name: "project-backlog", path: "/w/:ws/p/:key/backlog", view: "hzn-backlog" },
   { name: "issue", path: "/w/:ws/issues/:issue", view: "hzn-issue" },
   { name: "search", path: "/w/:ws/search", view: "hzn-search" },
+  { name: "milestones", path: "/w/:ws/milestones", view: "hzn-milestones" },
+  { name: "project-releases", path: "/w/:ws/p/:key/releases", view: "hzn-releases" },
   { name: "settings-issue-types", path: "/w/:ws/settings/issue-types", view: "hzn-settings-issue-types", layout: "settings" },
   { name: "settings-workflows", path: "/w/:ws/settings/workflows", view: "hzn-settings-workflows", layout: "settings" },
   { name: "settings-categories", path: "/w/:ws/settings/categories", view: "hzn-settings-categories", layout: "settings" },
@@ -166,6 +168,7 @@ export class HznApp extends HTMLElement {
           </div>
           <lds-nav-item href="/" data-route="workspace" data-nav="home"><lds-icon slot="start" name="layers"></lds-icon>${t("nav.home")}</lds-nav-item>
           <lds-nav-item href="/" data-route="search" data-nav="search" hidden><lds-icon slot="start" name="search"></lds-icon>${t("nav.search")}</lds-nav-item>
+          <lds-nav-item href="/" data-route="milestones" data-nav="milestones" hidden><lds-icon slot="start" name="flag"></lds-icon>${t("nav.milestones")}</lds-nav-item>
           <lds-nav-item href="/" data-route="settings" data-nav="settings" hidden><lds-icon slot="start" name="settings"></lds-icon>${t("nav.settings")}</lds-nav-item>
           <div data-projects></div>
           <div slot="footer" class="footer">
@@ -458,7 +461,7 @@ export class HznApp extends HTMLElement {
 
   markProject() {
     for (const item of this.shadowRoot.querySelectorAll("lds-nav-item[data-project]")) {
-      item.toggleAttribute("active", item.dataset.project === this.currentProject && ["project", "project-issues", "project-backlog", "project-board", "issue"].includes(this.context.router.current?.route?.name));
+      item.toggleAttribute("active", item.dataset.project === this.currentProject && ["project", "project-issues", "project-backlog", "project-board", "project-releases", "issue"].includes(this.context.router.current?.route?.name));
     }
   }
 
@@ -486,6 +489,9 @@ export class HznApp extends HTMLElement {
     const search = root.querySelector('[data-nav="search"]');
     search.hidden = !current;
     if (current) search.setAttribute("href", `/w/${current.slug}/search`);
+    const milestones = root.querySelector('[data-nav="milestones"]');
+    milestones.hidden = !current;
+    if (current) milestones.setAttribute("href", `/w/${current.slug}/milestones`);
     home.setAttribute("href", current ? `/w/${current.slug}` : "/");
     settings.hidden = !current;
     if (current) settings.setAttribute("href", `/w/${current.slug}/settings/general`);

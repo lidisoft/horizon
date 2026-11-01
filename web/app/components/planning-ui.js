@@ -11,10 +11,12 @@ export const planningStyles = sheet(`
   nav.views a:hover { background: var(--lds-color-bg-subtle); color: var(--lds-color-fg-default); }
   nav.views a[aria-current="page"] { background: var(--lds-color-bg-subtle); color: var(--lds-color-fg-default);
     font-weight: var(--lds-font-weight-medium); }
+  .progress { display: inline-flex; align-items: center; gap: var(--lds-space-2); white-space: nowrap; }
+  .progress lds-progress { inline-size: 6rem; }
 `);
 
 /** The layouts of a project's issues, in the switcher's order. */
-export const LAYOUTS = ["issues", "board", "backlog"];
+export const LAYOUTS = ["issues", "board", "backlog", "releases"];
 
 /** The layout switcher (wireframes: ViewSwitch). */
 export function viewSwitch(t, ws, key, active) {
@@ -71,4 +73,20 @@ export async function loadIterations(context, ws, key) {
 export async function loadReleases(context, ws, key) {
   const { data } = await context.api.get(`/w/${encodeURIComponent(ws)}/projects/${encodeURIComponent(key)}/releases`);
   return data;
+}
+
+/**
+ * Progress of a set of issues (stats from the API): completed points over
+ * estimated points when estimated, else completed issues over issues.
+ */
+export function progress(stats, i18n) {
+  const { t } = i18n;
+  const done = stats.by_outcome?.completed ?? { issues: 0, points: 0 };
+  const byPoints = stats.points > 0;
+  const value = byPoints ? done.points : done.issues;
+  const max = byPoints ? stats.points : stats.issues;
+  const text = byPoints
+    ? t("planning.progressPoints", { done: points(done.points, i18n), total: points(stats.points, i18n), count: done.issues, issues: stats.issues })
+    : t("planning.progressIssues", { done: done.issues, count: stats.issues });
+  return html`<span class="progress"><lds-progress value="${max ? Math.round((value / max) * 100) : 0}" max="100" label="${text}"></lds-progress><span class="muted">${text}</span></span>`;
 }

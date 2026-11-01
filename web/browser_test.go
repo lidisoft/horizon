@@ -1188,3 +1188,79 @@ func TestBoard(t *testing.T) {
 	pg.poll(`location.search === "?iteration=all" && "remembered"`)
 	pg.logs.failOnErrors(t)
 }
+
+// TestReleases creates and ships a release, and plans a milestone with
+// its issues, from the project's Releases page and the workspace's
+// Milestones page.
+func TestReleases(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	if status, body := pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`); status != 201 {
+		t.Fatalf("create project: %d %s", status, body)
+	}
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID string } `json:"issue_types"`
+	}
+	_ = json.Unmarshal([]byte(cfg), &resolved)
+	for _, title := range []string{"Outbox relay", "Replay after reconnect"} {
+		if status, body := pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"`+title+`"}`); status != 201 {
+			t.Fatalf("create issue: %d %s", status, body)
+		}
+	}
+
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/issues"))
+	pg.click(view + `.querySelector('nav.views a[href$="/releases"]')`)
+	pg.poll(`location.pathname === "/w/acme/p/HZN/releases" && "releases"`)
+	pg.poll(view + `.querySelector("[data-releases] .none") && "empty"`)
+
+	// A new release; HZN-1 targeted to it shows under it.
+	pg.click(view + `.querySelector('[data-action="new"]')`)
+	dialog := view + `.querySelector("hzn-release-dialog").shadowRoot`
+	pg.poll(dialog + `.querySelector("lds-modal").hasAttribute("open") && "open"`)
+	pg.typeInto(dialog+`.querySelector('[name="name"]')`, "v0.1\r")
+	release := view + `.querySelector('li[aria-label="v0.1"]')`
+	pg.poll(release + `?.querySelector("lds-badge")?.textContent === "Unreleased" && "created"`)
+	_, body := pg.api("GET", "/w/acme/projects/HZN/releases", "")
+	var list struct{ Items []struct{ ID string } }
+	_ = json.Unmarshal([]byte(body), &list)
+	if status, body := pg.api("POST", "/w/acme/issues/HZN-1/release", `{"release_id":"`+list.Items[0].ID+`"}`); status != 200 {
+		t.Fatalf("target: %d %s", status, body)
+	}
+	pg.poll(release + `?.querySelector(".toggle")?.textContent.includes("1 issue") && "targeted"`)
+	pg.click(release + `.querySelector(".toggle")`)
+	pg.poll(release + `?.querySelector('a.issue[href="/w/acme/issues/HZN-1"]') && "listed"`)
+
+	// Released: dated today.
+	pg.click(release + `.querySelector('[data-action="release"]')`)
+	pg.poll(release + `?.querySelector("lds-badge")?.textContent === "Released" && "released"`)
+
+	// A milestone of the project, then its issues.
+	milestones := view + `.querySelector("hzn-milestone-list").shadowRoot`
+	pg.click(milestones + `.querySelector('[data-action="new"]')`)
+	mdialog := milestones + `.querySelector("hzn-milestone-dialog").shadowRoot`
+	pg.poll(mdialog + `.querySelector("lds-modal").hasAttribute("open") && "open"`)
+	pg.eval(`(() => { const d = ` + mdialog + `.querySelector("[data-date]"); d.setAttribute("value", "2026-12-18");
+		d.dispatchEvent(new CustomEvent("lds-change", { detail: { value: "2026-12-18" }, bubbles: true, composed: true })); })()`)
+	pg.typeInto(mdialog+`.querySelector('[name="name"]')`, "Beta\r")
+	pg.poll(milestones + `.querySelector("li .name")?.textContent === "Beta" && "planned"`)
+	pg.eval(milestones + `.querySelector('[data-action="link"]').click()`)
+	pg.poll(mdialog + `.querySelector('[name="keys"]') && ` + mdialog + `.querySelector("lds-modal").hasAttribute("open") && "linking"`)
+	pg.typeInto(mdialog+`.querySelector('[name="keys"]')`, "hzn-1, HZN-2")
+	pg.click(mdialog + `.querySelector("[data-submit]")`)
+	pg.poll(milestones + `.querySelector("li .progress")?.textContent.includes("0 of 2 issues done") && "linked"`)
+
+	// The workspace's Milestones page lists it, with its project.
+	pg.click(appRoot + `.querySelector('[data-nav="milestones"]')`)
+	pg.poll(`location.pathname === "/w/acme/milestones" && "milestones"`)
+	ws := view + `.querySelector("hzn-milestone-list").shadowRoot`
+	if got := pg.poll(ws + `.querySelector("li lds-badge")?.textContent`); got != "Horizon" {
+		t.Errorf("milestone scope = %q", got)
+	}
+	pg.logs.failOnErrors(t)
+}
