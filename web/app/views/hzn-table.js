@@ -277,6 +277,8 @@ class HznTable extends HTMLElement {
     this.renderColumnList();
     this.renderBulk();
     const box = this.shadowRoot.querySelector("[data-grid]");
+    // Whether a cell has the focus, asked before the cells are replaced.
+    const focused = !!this.shadowRoot.activeElement?.matches?.("td[data-col]");
     if (!this.items.length) {
       box.innerHTML = String(html`
         <lds-empty-state class="empty"><lds-icon slot="icon" name="${this.bar?.filter ? "filter" : "table"}"></lds-icon>
@@ -308,7 +310,7 @@ class HznTable extends HTMLElement {
         </tbody>
       </table>`);
     paintSwatches(box);
-    this.restoreActive();
+    this.restoreActive(focused);
   }
 
   /** A cell: its display, and whether it edits. */
@@ -406,11 +408,11 @@ class HznTable extends HTMLElement {
   }
 
   /** After a re-render, the active cell is where it was (by issue and column). */
-  restoreActive() {
+  restoreActive(focused) {
     const a = this.active;
     const td = a && this.shadowRoot.querySelector(`tr[data-key="${CSS.escape(a.key)}"] td[data-col="${CSS.escape(a.col)}"]`);
     const first = this.shadowRoot.querySelector("tbody td[data-col]");
-    const had = this.shadowRoot.activeElement?.matches?.("td[data-col]") || this.refocus;
+    const had = focused || this.refocus;
     this.refocus = false;
     this.activate(td ?? first, !!(td && had));
   }
