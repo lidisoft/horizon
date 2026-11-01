@@ -287,6 +287,10 @@ func (s *Service) SubmitSteps(ctx context.Context, ic Context, base int64, clien
 	var out Submitted
 	var docID uuid.UUID
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		// The issue first, then its document: the order every writer takes.
+		if _, err := db.New(tx).LockIssue(ctx, db.LockIssueParams{WorkspaceID: ic.Workspace.ID, ID: ic.Issue.ID}); err != nil {
+			return err
+		}
 		d, err := s.lockDescription(ctx, tx, ic.Issue)
 		if err != nil {
 			return err
@@ -327,27 +331,37 @@ func (s *Service) SubmitSteps(ctx context.Context, ic Context, base int64, clien
 	return out, nil
 }
 
-// FlushDescription snapshots a description now (the last editor left), if
-// it changed since its last snapshot.
+// FlushDescription ends an editing session (the last editor left): the
+// description is snapshotted and described (IssueDescribed), if it changed.
 func (s *Service) FlushDescription(ctx context.Context, docID uuid.UUID) error {
 	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
-		var d db.Document
-		row := tx.QueryRow(ctx, `SELECT workspace_id, id, issue_id, version, content, updated_at, snapshot_version FROM documents WHERE id = $1 FOR UPDATE`, docID)
-		if err := row.Scan(&d.WorkspaceID, &d.ID, &d.IssueID, &d.Version, &d.Content, &d.UpdatedAt, &d.SnapshotVersion); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil
-			}
+		d, ok, err := lockIssueAndDocument(ctx, tx, docID)
+		if err != nil || !ok {
 			return err
 		}
-		if d.Version == d.SnapshotVersion {
-			return nil
-		}
-		doc, err := currentDoc(ctx, tx, d)
-		if err != nil {
-			return err
-		}
-		return s.snapshot(ctx, tx, d.IssueID, d.ID, doc, d.Version)
+		return s.endSession(ctx, tx, d)
 	})
+}
+
+// lockIssueAndDocument locks a document's issue, then the document: the
+// order every writer takes, so they never deadlock.
+func lockIssueAndDocument(ctx context.Context, tx pgx.Tx, docID uuid.UUID) (db.Document, bool, error) {
+	var issueID, workspaceID uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT issue_id, workspace_id FROM documents WHERE id = $1`, docID).Scan(&issueID, &workspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.Document{}, false, nil
+	}
+	if err != nil {
+		return db.Document{}, false, err
+	}
+	if _, err := db.New(tx).LockIssue(ctx, db.LockIssueParams{WorkspaceID: workspaceID, ID: issueID}); err != nil {
+		return db.Document{}, false, err
+	}
+	d, err := db.New(tx).LockDocument(ctx, docID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return d, false, nil
+	}
+	return d, err == nil, err
 }
 
 // replaceDescription writes a whole new description (PATCH, workflow
@@ -368,6 +382,10 @@ func (s *Service) replaceDescription(ctx context.Context, tx pgx.Tx, i db.Issue,
 	step := &document.ReplaceStep{From: 0, To: cur.Content.Size(), Slice: document.Slice{Content: doc.Content}}
 	_, batch, err := s.applyBatch(ctx, tx, i, d, cur, []document.Step{step}, "api", user, true)
 	if err != nil {
+		return nil, err
+	}
+	// The write records its own IssueDescribed.
+	if err := db.New(tx).SetDescribed(ctx, db.SetDescribedParams{ID: d.ID, DescribedVersion: d.Version + 1}); err != nil {
 		return nil, err
 	}
 	return &DocSteps{WorkspaceID: i.WorkspaceID, DocumentID: d.ID, IssueID: i.ID, Batch: batch}, nil

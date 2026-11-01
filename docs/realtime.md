@@ -185,10 +185,15 @@ simple and makes the shared test corpus the main correctness tool.
 
 ### Domain events for documents
 
-Keystrokes don't produce domain events. An `IssueDescribed` event (with a
-summary diff and the new version) is emitted when an editing session goes
-quiet (30 s without steps) or the last editor leaves. Notifications and
-webhooks react to that event, not to steps.
+Keystrokes don't produce domain events. An `IssueDescribed` event is
+emitted when an editing session goes quiet (30 s without steps: the
+worker's `describe` job looks every 10 s) or the last editor on a replica
+leaves, whichever comes first, once per change (`documents.described_version`).
+Its payload: `from_version`, `to_version`, `editors` (user ids), and
+`chars_before` / `chars_after` of the plain text; the actor is the last
+editor. A description written through the API records its own
+`IssueDescribed` at once. Notifications and webhooks react to that event,
+not to steps.
 
 ### Offline and limits
 

@@ -98,8 +98,8 @@ abandoned one.
 
 | Table | Key columns |
 |-------|-------------|
-| `documents` | workspace_id, issue_id (unique: the issue's description), version bigint, content JSONB (latest snapshot) |
-| `document_steps` | document_id, version, client_id, user_id, steps JSONB, created_at — unique (document_id, version) |
+| `documents` | workspace_id, issue_id (unique: the issue's description), version bigint (steps applied), content JSONB (snapshot at snapshot_version), described_version (covered by the last `IssueDescribed`) |
+| `document_steps` | document_id, version (the batch applied to it), client_id, user_id, steps JSONB, created_at — primary key (document_id, version) |
 
 Steps older than the latest snapshot minus a retention window are compacted
 away. See [realtime.md](realtime.md).

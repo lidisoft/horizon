@@ -56,7 +56,7 @@ const createDescription = `-- name: CreateDescription :one
 INSERT INTO documents (workspace_id, id, issue_id, version, snapshot_version, content, updated_at)
 VALUES ($1, $2, $3, 0, 0, $4, $5)
 ON CONFLICT (issue_id) DO NOTHING
-RETURNING workspace_id, id, issue_id, version, content, updated_at, snapshot_version
+RETURNING workspace_id, id, issue_id, version, content, updated_at, snapshot_version, described_version
 `
 
 type CreateDescriptionParams struct {
@@ -84,12 +84,13 @@ func (q *Queries) CreateDescription(ctx context.Context, arg CreateDescriptionPa
 		&i.Content,
 		&i.UpdatedAt,
 		&i.SnapshotVersion,
+		&i.DescribedVersion,
 	)
 	return i, err
 }
 
 const descriptionDocument = `-- name: DescriptionDocument :one
-SELECT workspace_id, id, issue_id, version, content, updated_at, snapshot_version FROM documents WHERE issue_id = $1
+SELECT workspace_id, id, issue_id, version, content, updated_at, snapshot_version, described_version FROM documents WHERE issue_id = $1
 `
 
 func (q *Queries) DescriptionDocument(ctx context.Context, issueID uuid.UUID) (Document, error) {
@@ -103,12 +104,54 @@ func (q *Queries) DescriptionDocument(ctx context.Context, issueID uuid.UUID) (D
 		&i.Content,
 		&i.UpdatedAt,
 		&i.SnapshotVersion,
+		&i.DescribedVersion,
 	)
 	return i, err
 }
 
+const editors = `-- name: Editors :many
+SELECT DISTINCT user_id::uuid FROM document_steps WHERE document_id = $1 AND version >= $2 AND user_id IS NOT NULL
+`
+
+type EditorsParams struct {
+	DocumentID uuid.UUID
+	Version    int64
+}
+
+// Who wrote the batches from version on (those still kept).
+func (q *Queries) Editors(ctx context.Context, arg EditorsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, editors, arg.DocumentID, arg.Version)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var user_id uuid.UUID
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lastEditor = `-- name: LastEditor :one
+SELECT user_id FROM document_steps WHERE document_id = $1 ORDER BY version DESC LIMIT 1
+`
+
+func (q *Queries) LastEditor(ctx context.Context, documentID uuid.UUID) (uuid.NullUUID, error) {
+	row := q.db.QueryRow(ctx, lastEditor, documentID)
+	var user_id uuid.NullUUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const lockDescription = `-- name: LockDescription :one
-SELECT workspace_id, id, issue_id, version, content, updated_at, snapshot_version FROM documents WHERE issue_id = $1 FOR UPDATE
+SELECT workspace_id, id, issue_id, version, content, updated_at, snapshot_version, described_version FROM documents WHERE issue_id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockDescription(ctx context.Context, issueID uuid.UUID) (Document, error) {
@@ -122,8 +165,68 @@ func (q *Queries) LockDescription(ctx context.Context, issueID uuid.UUID) (Docum
 		&i.Content,
 		&i.UpdatedAt,
 		&i.SnapshotVersion,
+		&i.DescribedVersion,
 	)
 	return i, err
+}
+
+const lockDocument = `-- name: LockDocument :one
+SELECT workspace_id, id, issue_id, version, content, updated_at, snapshot_version, described_version FROM documents WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockDocument(ctx context.Context, id uuid.UUID) (Document, error) {
+	row := q.db.QueryRow(ctx, lockDocument, id)
+	var i Document
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.ID,
+		&i.IssueID,
+		&i.Version,
+		&i.Content,
+		&i.UpdatedAt,
+		&i.SnapshotVersion,
+		&i.DescribedVersion,
+	)
+	return i, err
+}
+
+const quietDocuments = `-- name: QuietDocuments :many
+SELECT id FROM documents WHERE version > described_version AND updated_at < $1 ORDER BY updated_at LIMIT 100
+`
+
+// Descriptions changed since their last IssueDescribed and idle since before.
+func (q *Queries) QuietDocuments(ctx context.Context, updatedAt time.Time) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, quietDocuments, updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setDescribed = `-- name: SetDescribed :exec
+UPDATE documents SET described_version = $2 WHERE id = $1
+`
+
+type SetDescribedParams struct {
+	ID               uuid.UUID
+	DescribedVersion int64
+}
+
+func (q *Queries) SetDescribed(ctx context.Context, arg SetDescribedParams) error {
+	_, err := q.db.Exec(ctx, setDescribed, arg.ID, arg.DescribedVersion)
+	return err
 }
 
 const setDocumentVersion = `-- name: SetDocumentVersion :exec

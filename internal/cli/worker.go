@@ -44,6 +44,7 @@ func runWorker(ctx context.Context, rt *runtime) error {
 	if err != nil {
 		return err
 	}
+	d := rt.domain()
 	return worker.Run(ctx, worker.Deps{
 		Log:           logging.WithSystem(rt.log, "worker"),
 		Pool:          rt.pool,
@@ -51,9 +52,13 @@ func runWorker(ctx context.Context, rt *runtime) error {
 		Stream:        eventlog.DefaultStream(rt.cfg.EventsRetention),
 		Metrics:       rt.metrics,
 		DeleteObjects: rt.s3.Delete,
-		Consumers:     []eventlog.Consumer{rt.domain().planning.PolicyConsumer()},
+		Consumers:     []eventlog.Consumer{d.planning.PolicyConsumer()},
 		Jobs: []worker.Job{
 			{Name: "identity-cleanup", Every: time.Hour, Run: rt.identity().Cleanup},
+			{Name: "describe", Every: 10 * time.Second, Run: func(ctx context.Context) error {
+				_, err := d.issues.DescribeQuiet(ctx)
+				return err
+			}},
 			{Name: "upload-expiry", Every: time.Hour, Run: func(ctx context.Context) error {
 				return issue.ExpireUploads(ctx, rt.pool, time.Now().Add(-issue.UploadExpiry))
 			}},

@@ -59,7 +59,7 @@ usable exists early.
 - [x] Single-user block editor replacing plain-text descriptions and comments
 - [x] Server-authoritative step protocol, rebase, snapshots
 - [x] Presence, remote cursors
-- [ ] `IssueDescribed` session events
+- [x] `IssueDescribed` session events
 
 ## Phase 6 — Views
 

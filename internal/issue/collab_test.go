@@ -93,3 +93,63 @@ func TestDescriptionSteps(t *testing.T) {
 	}
 
 }
+
+func TestDescribedSessions(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	a := f.create(f.owner, "Task", "A")
+	j, _ := f.svc.JoinDescription(ctx, f.enter(f.owner, a.Key), -1)
+	for i, word := range []string{"one", " two"} {
+		if _, err := f.svc.SubmitSteps(ctx, f.enter(f.owner, a.Key), int64(i), "c", []json.RawMessage{insert(1+i*3, word)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	described := func() int {
+		n := 0
+		for _, h := range f.history(a.ID) {
+			if h == "issue.described" {
+				n++
+			}
+		}
+		return n
+	}
+	// Still being edited: nothing yet.
+	if n, err := f.svc.DescribeQuiet(ctx); err != nil || n != 0 || described() != 0 {
+		t.Fatalf("too early: %d, %v, %d", n, err, described())
+	}
+	// Quiet for long enough: described once, with the text.
+	if _, err := f.pool.Exec(ctx, `UPDATE documents SET updated_at = now() - interval '1 minute' WHERE id = $1`, j.DocumentID); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := f.svc.DescribeQuiet(ctx); err != nil || n != 1 {
+		t.Fatalf("quiet: %d, %v", n, err)
+	}
+	if n, _ := f.svc.DescribeQuiet(ctx); n != 0 || described() != 1 {
+		t.Fatalf("described %d times", described())
+	}
+	events, _ := f.svc.Activity(ctx, f.enter(f.owner, a.Key), "", 10)
+	if p := events.Items[0].Payload; events.Items[0].Type != "issue.described" || p["to_version"] != float64(2) || p["chars_after"] != float64(7) {
+		t.Errorf("event %s %v", events.Items[0].Type, p)
+	}
+	if got, _ := f.svc.Get(ctx, f.enter(f.owner, a.Key)); got.Description != "one two" {
+		t.Errorf("text = %q", got.Description)
+	}
+
+	// The last editor leaving describes at once; nothing new, nothing more.
+	if _, err := f.svc.SubmitSteps(ctx, f.enter(f.owner, a.Key), 2, "c", []json.RawMessage{insert(8, "!")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.FlushDescription(ctx, j.DocumentID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.FlushDescription(ctx, j.DocumentID); err != nil || described() != 2 {
+		t.Errorf("after leaving: %d, %v", described(), err)
+	}
+	// A write through the API is described by its own event, once.
+	if _, err := f.svc.Update(ctx, f.enter(f.owner, a.Key), 0, issue.Update{Description: issue.PlainText("new")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.FlushDescription(ctx, j.DocumentID); err != nil || described() != 3 {
+		t.Errorf("after a PATCH: %d, %v", described(), err)
+	}
+}

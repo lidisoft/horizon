@@ -175,6 +175,7 @@ longer than that.
 | `vcs` | Processes forge webhooks: links branches/PRs/commits, applies merge transitions |
 | `policy` | Runs cross-aggregate policies as new commands: applies the completion policy of each `IterationCompleted` ([domain.md](domain.md#iteration-completion-policy)) |
 | `purge` | Scrubs JetStream subjects and S3 objects after hard deletes (a periodic job over the `purges` queue; it keeps tombstones) |
+| `describe` | Ends idle description editing sessions with one `IssueDescribed` event (a periodic job, every 10 s; [realtime.md](realtime.md#domain-events-for-documents)) |
 | `reports` | Maintains report projections ([reports.md](reports.md), [ADR-0021](adr/0021-report-projections.md)) |
 
 ## Object storage

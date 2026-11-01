@@ -26,3 +26,20 @@ UPDATE documents SET content = $2, snapshot_version = $3, updated_at = $4 WHERE 
 
 -- name: CompactSteps :exec
 DELETE FROM document_steps WHERE document_id = $1 AND version < $2;
+
+-- name: LockDocument :one
+SELECT * FROM documents WHERE id = $1 FOR UPDATE;
+
+-- name: SetDescribed :exec
+UPDATE documents SET described_version = $2 WHERE id = $1;
+
+-- name: QuietDocuments :many
+-- Descriptions changed since their last IssueDescribed and idle since before.
+SELECT id FROM documents WHERE version > described_version AND updated_at < $1 ORDER BY updated_at LIMIT 100;
+
+-- name: Editors :many
+-- Who wrote the batches from version on (those still kept).
+SELECT DISTINCT user_id::uuid FROM document_steps WHERE document_id = $1 AND version >= $2 AND user_id IS NOT NULL;
+
+-- name: LastEditor :one
+SELECT user_id FROM document_steps WHERE document_id = $1 ORDER BY version DESC LIMIT 1;
