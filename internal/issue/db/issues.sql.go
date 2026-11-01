@@ -950,7 +950,7 @@ const saveIssue = `-- name: SaveIssue :one
 UPDATE issues
 SET type_id = $3, title = $4, description = $5, status_id = $6, priority = $7, rank = $8, estimate = $9,
     assignee_id = $10, parent_id = $11, start_date = $12, due_date = $13, fields = $14, started_at = $15,
-    resolved_at = $16, archived_at = $17, updated_at = $18, version = version + 1
+    resolved_at = $16, archived_at = $17, updated_at = $18, iteration_id = $19, release_id = $20, version = version + 1
 WHERE workspace_id = $1 AND id = $2
 RETURNING workspace_id, id, project_id, number, type_id, title, description, status_id, priority, rank, estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields, started_at, resolved_at, archived_at, created_at, updated_at, version
 `
@@ -974,6 +974,8 @@ type SaveIssueParams struct {
 	ResolvedAt  *time.Time
 	ArchivedAt  *time.Time
 	UpdatedAt   time.Time
+	IterationID uuid.NullUUID
+	ReleaseID   uuid.NullUUID
 }
 
 // Writes every mutable column of an issue and bumps its version.
@@ -997,6 +999,8 @@ func (q *Queries) SaveIssue(ctx context.Context, arg SaveIssueParams) (Issue, er
 		arg.ResolvedAt,
 		arg.ArchivedAt,
 		arg.UpdatedAt,
+		arg.IterationID,
+		arg.ReleaseID,
 	)
 	var i Issue
 	err := row.Scan(
@@ -1041,4 +1045,56 @@ type ScrubFieldParams struct {
 func (q *Queries) ScrubField(ctx context.Context, arg ScrubFieldParams) error {
 	_, err := q.db.Exec(ctx, scrubField, arg.WorkspaceID, arg.Field)
 	return err
+}
+
+const setIssueIteration = `-- name: SetIssueIteration :one
+UPDATE issues SET iteration_id = $3, updated_at = $4, version = version + 1
+WHERE workspace_id = $1 AND id = $2
+RETURNING workspace_id, id, project_id, number, type_id, title, description, status_id, priority, rank, estimate, assignee_id, reporter_id, parent_id, iteration_id, release_id, start_date, due_date, fields, started_at, resolved_at, archived_at, created_at, updated_at, version
+`
+
+type SetIssueIterationParams struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	IterationID uuid.NullUUID
+	UpdatedAt   time.Time
+}
+
+// Moves an issue into an iteration, or out of any (planning commands).
+func (q *Queries) SetIssueIteration(ctx context.Context, arg SetIssueIterationParams) (Issue, error) {
+	row := q.db.QueryRow(ctx, setIssueIteration,
+		arg.WorkspaceID,
+		arg.ID,
+		arg.IterationID,
+		arg.UpdatedAt,
+	)
+	var i Issue
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.ID,
+		&i.ProjectID,
+		&i.Number,
+		&i.TypeID,
+		&i.Title,
+		&i.Description,
+		&i.StatusID,
+		&i.Priority,
+		&i.Rank,
+		&i.Estimate,
+		&i.AssigneeID,
+		&i.ReporterID,
+		&i.ParentID,
+		&i.IterationID,
+		&i.ReleaseID,
+		&i.StartDate,
+		&i.DueDate,
+		&i.Fields,
+		&i.StartedAt,
+		&i.ResolvedAt,
+		&i.ArchivedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Version,
+	)
+	return i, err
 }

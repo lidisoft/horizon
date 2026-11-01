@@ -1534,6 +1534,74 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/w/{ws}/config/settings/iterations": {
+            "get": {
+                "description": "Completion policy, maximum active iterations and default iteration length, each with the workspace's value and whether the project overrides it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Get the iteration settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.IterationSettingsResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Keys left out are unchanged; null removes a value (at project scope, the project follows the workspace again).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Set iteration settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Settings to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.IterationSettingsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.IterationSettings"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/config/workflows": {
             "get": {
                 "produces": [
@@ -3927,6 +3995,448 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/w/{ws}/projects/{key}/iterations": {
+            "get": {
+                "description": "Active first, then upcoming by start date, then finished ones (archived ones with ?archived=true). Each carries stats of the issues it holds; the list adds the suggested next iteration, the iteration settings in effect and the velocity of the last three completed ones.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "List iterations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include archived iterations",
+                        "name": "archived",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.IterationList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Needs iteration.manage. With both dates it is scheduled at once; without, planned.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Plan an iteration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Name required",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/planning.PlanRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Iteration"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/iterations/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Get an iteration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Iteration"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Needs iteration.manage; not while active (409 iteration_active). Its issues go back to the backlog; only an IterationDeleted tombstone remains of its history.",
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Delete an iteration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "description": "Name and goal (IterationUpdated), dates (IterationScheduled). An active iteration keeps its start date; completed and archived ones don't change (409 iteration_closed).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Update an iteration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/planning.UpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Iteration"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/iterations/{id}/archive": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Archive an iteration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration version",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Iteration"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/iterations/{id}/complete": {
+            "post": {
+                "description": "Needs iteration.manage. The completion policy in effect is recorded and applied to the issues shortly after, by the policy worker: archive_all archives them all; archive_done_rollover_rest archives the finished ones and moves the rest to rollover_to or the backlog; none changes nothing.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Complete an iteration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Where unfinished issues go",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/planning.CompleteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Iteration"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/iterations/{id}/issues": {
+            "post": {
+                "description": "Needs iteration.manage. Adds issues of the project (taking them from another iteration if they are in one) and removes some; at most 500 at once. Completed iterations don't change (409 iteration_closed).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Load an iteration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Issue keys",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/planning.LoadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Iteration"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/iterations/{id}/start": {
+            "post": {
+                "description": "Needs iteration.manage and dates (409 iteration_not_scheduled), within the project's maximum of active iterations (409 too_many_active).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Start an iteration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration version",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Iteration"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/projects/{key}/people": {
             "get": {
                 "description": "Active members who see the project, for assignee pickers. Readable by whoever sees the project, guests included.",
@@ -4814,6 +5324,20 @@ const docTemplate = `{
                 }
             }
         },
+        "configdef.CountSetting": {
+            "type": "object",
+            "properties": {
+                "overridden": {
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "integer"
+                },
+                "workspace": {
+                    "type": "integer"
+                }
+            }
+        },
         "configdef.CreateWorkflowRequest": {
             "type": "object",
             "properties": {
@@ -5159,6 +5683,70 @@ const docTemplate = `{
                 }
             }
         },
+        "configdef.IterationSettings": {
+            "type": "object",
+            "properties": {
+                "completion_policy": {
+                    "$ref": "#/definitions/configdef.PolicySetting"
+                },
+                "iteration_length_weeks": {
+                    "description": "LengthWeeks is the default length of new iterations, in weeks.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/configdef.CountSetting"
+                        }
+                    ]
+                },
+                "max_active_iterations": {
+                    "$ref": "#/definitions/configdef.CountSetting"
+                }
+            }
+        },
+        "configdef.IterationSettingsRequest": {
+            "type": "object",
+            "properties": {
+                "completion_policy": {
+                    "type": "string",
+                    "enum": [
+                        "archive_done_rollover_rest",
+                        "archive_all",
+                        "none"
+                    ]
+                },
+                "iteration_length_weeks": {
+                    "type": "integer",
+                    "maximum": 8,
+                    "minimum": 1
+                },
+                "max_active_iterations": {
+                    "type": "integer",
+                    "maximum": 10,
+                    "minimum": 1
+                }
+            }
+        },
+        "configdef.IterationSettingsResponse": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "type": "boolean"
+                },
+                "completion_policy": {
+                    "$ref": "#/definitions/configdef.PolicySetting"
+                },
+                "iteration_length_weeks": {
+                    "description": "LengthWeeks is the default length of new iterations, in weeks.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/configdef.CountSetting"
+                        }
+                    ]
+                },
+                "max_active_iterations": {
+                    "$ref": "#/definitions/configdef.CountSetting"
+                }
+            }
+        },
         "configdef.Label": {
             "type": "object",
             "properties": {
@@ -5255,6 +5843,31 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "configdef.PolicySetting": {
+            "type": "object",
+            "properties": {
+                "overridden": {
+                    "description": "Overridden is true when the project sets its own value.",
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "string",
+                    "enum": [
+                        "archive_done_rollover_rest",
+                        "archive_all",
+                        "none"
+                    ]
+                },
+                "workspace": {
+                    "type": "string",
+                    "enum": [
+                        "archive_done_rollover_rest",
+                        "archive_all",
+                        "none"
+                    ]
                 }
             }
         },
@@ -6098,6 +6711,9 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "iteration_id": {
+                    "type": "string"
+                },
                 "key": {
                     "type": "string",
                     "example": "HZN-42"
@@ -6136,6 +6752,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "rank": {
+                    "type": "string"
+                },
+                "release_id": {
                     "type": "string"
                 },
                 "reporter_id": {
@@ -6518,6 +7137,232 @@ const docTemplate = `{
                 "size": {
                     "type": "integer",
                     "example": 2048
+                }
+            }
+        },
+        "planning.CompleteRequest": {
+            "type": "object",
+            "properties": {
+                "rollover_to": {
+                    "description": "RolloverTo is the open iteration taking the unfinished issues under\narchive_done_rollover_rest; null or absent sends them to the backlog.",
+                    "type": "string"
+                }
+            }
+        },
+        "planning.Completion": {
+            "type": "object",
+            "properties": {
+                "policy": {
+                    "type": "string",
+                    "enum": [
+                        "archive_done_rollover_rest",
+                        "archive_all",
+                        "none"
+                    ]
+                },
+                "rollover_to": {
+                    "type": "string"
+                }
+            }
+        },
+        "planning.Iteration": {
+            "type": "object",
+            "properties": {
+                "archived_at": {
+                    "type": "string"
+                },
+                "completed_at": {
+                    "type": "string"
+                },
+                "completion": {
+                    "description": "Completion is what completing it did: the policy in effect, and where\nunfinished issues went (null: the backlog).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/planning.Completion"
+                        }
+                    ]
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string",
+                    "example": "2026-11-13"
+                },
+                "goal": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Sprint 4"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2026-11-02"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string",
+                    "enum": [
+                        "planned",
+                        "scheduled",
+                        "active",
+                        "completed",
+                        "archived"
+                    ]
+                },
+                "stats": {
+                    "description": "Stats count the issues it holds now (lists only).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/planning.Stats"
+                        }
+                    ]
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "planning.IterationList": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "description": "CanManage is true when the caller holds iteration.manage.",
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/planning.Iteration"
+                    }
+                },
+                "next": {
+                    "$ref": "#/definitions/planning.NextIteration"
+                },
+                "settings": {
+                    "$ref": "#/definitions/configdef.IterationSettings"
+                },
+                "velocity": {
+                    "description": "Velocity is the average of completed points over the last three\ncompleted iterations (0 without any).",
+                    "type": "number"
+                }
+            }
+        },
+        "planning.LoadRequest": {
+            "type": "object",
+            "properties": {
+                "add": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "HZN-41",
+                        "HZN-44"
+                    ]
+                },
+                "remove": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "planning.NextIteration": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string",
+                    "example": "2026-11-27"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Sprint 5"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2026-11-16"
+                }
+            }
+        },
+        "planning.PlanRequest": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string",
+                    "example": "2026-11-27"
+                },
+                "goal": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Sprint 5"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2026-11-16"
+                }
+            }
+        },
+        "planning.Stats": {
+            "type": "object",
+            "properties": {
+                "by_outcome": {
+                    "description": "ByOutcome splits them by their status's outcome (unstarted, started,\ncompleted, abandoned).",
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/planning.Tally"
+                    }
+                },
+                "estimated": {
+                    "description": "Estimated is the number of issues with an estimate.",
+                    "type": "integer"
+                },
+                "issues": {
+                    "type": "integer"
+                },
+                "points": {
+                    "type": "number"
+                }
+            }
+        },
+        "planning.Tally": {
+            "type": "object",
+            "properties": {
+                "issues": {
+                    "type": "integer"
+                },
+                "points": {
+                    "type": "number"
+                }
+            }
+        },
+        "planning.UpdateRequest": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "goal": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "description": "StartDate and EndDate \"\" unschedule a planned or scheduled iteration.",
+                    "type": "string"
                 }
             }
         },

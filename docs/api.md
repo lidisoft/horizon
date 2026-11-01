@@ -62,13 +62,17 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   /config/fields  /config/fields/{id}       type fixed after creation; /config/issue-types/{id}/fields GET | PUT {fields: [{field_id, required}]}
   /config/labels  /config/labels/{id}       /merge {into}; projects: /move-to-workspace
   /config/settings/estimation              GET | PUT {scale}; at project scope {scale: null} follows the workspace
+  /config/settings/iterations              GET | PUT {completion_policy, max_active_iterations, iteration_length_weeks}: absent keys unchanged, null removes the value
   /projects                                 GET (visible ones) | POST (project.create)
   /projects/{key}                          GET (current or former key; "can" lists the caller's permissions) | PATCH | /archive | /unarchive
                                            DELETE ?confirm={key} (archived projects only)
     /people                                active members who see the project (assignee pickers)
     /config/resolved                       the configuration its issues use, in one read (switched-off labels flagged)
     /config/…                              project overrides (same shape), plus …/{id}/disable|enable and issue-types/{id}/copy
-    /iterations  /iterations/{id}/start|complete|archive
+    /iterations                            GET (stats, next suggestion, settings, velocity; ?archived=true) | POST (iteration.manage)
+    /iterations/{id}                       GET | PATCH (If-Match) | DELETE (not while active)
+    /iterations/{id}/issues                POST {add: [keys], remove: [keys]} — load
+    /iterations/{id}/start|complete|archive  POST (If-Match optional); complete takes {rollover_to}
     /releases  /milestones
   /projects/{key}/issues                   GET in rank order (?cursor, ?limit, ?archived=true)
   /issues                                  POST {project, type_id, title, …}; filter via view query (POST /issues/query)
@@ -131,6 +135,22 @@ has children. Moving needs `issue.move` on what moves and `issue.create` on
 the target. The response contains the new key; requests for the old key
 resolve to it. Iteration and release are cleared; links, comments and
 history stay.
+
+## Planning iterations
+
+An iteration is planned (`POST …/iterations`, a name, optional dates),
+scheduled once it has both dates, then started, completed and archived
+(`docs/domain.md#iteration`). Loading moves issues of the project in and
+out: `POST …/iterations/{id}/issues {"add": ["HZN-41"], "remove": ["HZN-38"]}`.
+An issue added from another open iteration leaves that one. Issues carry
+`iteration_id`; an issue's iteration changes only through loading (and
+with it, through deletes, moves, a deleted iteration, a workflow
+post-action or the completion policy).
+
+`POST …/complete` takes `{"rollover_to": "<iteration id>"}` (or nothing,
+for the backlog) and answers at once with the policy in effect recorded
+under `completion`; the policy worker applies it to the issues shortly
+after, and their events arrive over the socket.
 
 ## Querying issues
 

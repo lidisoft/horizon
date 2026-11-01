@@ -37,7 +37,7 @@ events, so clients invalidate their resolved view.
 | Estimation scale | Setting | Fibonacci points (0, 1, 2, 3, 5, 8, 13, 21) |
 | Iteration completion policy | Setting | `archive_done_rollover_rest` |
 | Max active iterations | Setting | 1 |
-| Default iteration length | Setting | 2 weeks |
+| Default iteration length | Setting | 2 weeks (1–8) |
 | Time zone | Setting | `UTC` until set at workspace creation |
 | Working calendar | Setting | Monday–Friday, no holidays |
 | Git merge transition | Setting | Off |

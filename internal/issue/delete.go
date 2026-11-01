@@ -122,6 +122,9 @@ func (s *Service) deleteOne(ctx context.Context, tx pgx.Tx, wc workspace.Context
 	if err := eventlog.Append(ctx, tx, events...); err != nil {
 		return err
 	}
+	if err := s.leftIteration(ctx, tx, wc, i, LeftDeleted); err != nil {
+		return err
+	}
 	objects, err := q.AttachmentKeys(ctx, []uuid.UUID{i.ID})
 	if err != nil {
 		return err

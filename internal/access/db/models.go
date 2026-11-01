@@ -185,6 +185,24 @@ type IssueTypeField struct {
 	Position    int32
 }
 
+type Iteration struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	ProjectID   uuid.UUID
+	Name        string
+	Goal        string
+	State       string
+	StartDate   pgtype.Date
+	EndDate     pgtype.Date
+	StartedAt   *time.Time
+	CompletedAt *time.Time
+	ArchivedAt  *time.Time
+	Completion  []byte
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
 type Label struct {
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID

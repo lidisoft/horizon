@@ -36,6 +36,8 @@ type Issue struct {
 	AssigneeID  uuid.NullUUID `json:"assignee_id" swaggertype:"string"`
 	ReporterID  uuid.NullUUID `json:"reporter_id" swaggertype:"string"`
 	ParentID    uuid.NullUUID `json:"parent_id" swaggertype:"string"`
+	IterationID uuid.NullUUID `json:"iteration_id" swaggertype:"string"`
+	ReleaseID   uuid.NullUUID `json:"release_id" swaggertype:"string"`
 	// Parent names the parent when the caller sees it (GET only).
 	Parent     *Ref            `json:"parent,omitempty"`
 	Labels     []uuid.UUID     `json:"labels"`
@@ -57,7 +59,8 @@ func issueFrom(i db.Issue, projectKey string, labels []uuid.UUID) Issue {
 	return Issue{
 		ID: i.ID, Key: fmt.Sprintf("%s-%d", projectKey, i.Number), ProjectID: i.ProjectID, Number: i.Number, TypeID: i.TypeID,
 		Title: i.Title, Description: i.Description, StatusID: i.StatusID, Priority: i.Priority, Rank: i.Rank, Estimate: i.Estimate,
-		AssigneeID: i.AssigneeID, ReporterID: i.ReporterID, ParentID: i.ParentID, Labels: labels,
+		AssigneeID: i.AssigneeID, ReporterID: i.ReporterID, ParentID: i.ParentID, IterationID: i.IterationID, ReleaseID: i.ReleaseID,
+		Labels:    labels,
 		StartDate: dateString(i.StartDate), DueDate: dateString(i.DueDate), Fields: i.Fields,
 		StartedAt: i.StartedAt, ResolvedAt: i.ResolvedAt, ArchivedAt: i.ArchivedAt,
 		CreatedAt: i.CreatedAt, UpdatedAt: i.UpdatedAt, Version: i.Version,

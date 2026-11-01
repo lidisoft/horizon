@@ -86,6 +86,8 @@ func (h *HTTP) register(g *gin.RouterGroup) {
 	g.POST("/labels/:id/merge", h.mergeLabel)
 	g.GET("/settings/estimation", h.estimation)
 	g.PUT("/settings/estimation", h.setEstimation)
+	g.GET("/settings/iterations", h.iterationSettings)
+	g.PUT("/settings/iterations", h.setIterationSettings)
 }
 
 // CategoryList is the body of GET …/config/categories.
@@ -736,6 +738,56 @@ func (h *HTTP) setEstimation(c *gin.Context) {
 	var req EstimationRequest
 	if bind(c, &req) {
 		v, err := h.svc.SetEstimation(c, targetOf(c), req.Scale)
+		reply(c, http.StatusOK, v, err)
+	}
+}
+
+// IterationSettingsResponse is the effective iteration settings and
+// whether the caller may change them.
+type IterationSettingsResponse struct {
+	IterationSettings
+	CanManage bool `json:"can_manage"`
+}
+
+// IterationSettingsRequest changes iteration settings. An absent key is
+// left alone; null removes the value, so a project follows the workspace
+// again and the workspace returns to the built-in default.
+type IterationSettingsRequest struct {
+	CompletionPolicy     *string `json:"completion_policy,omitempty" enums:"archive_done_rollover_rest,archive_all,none"`
+	MaxActiveIterations  *int    `json:"max_active_iterations,omitempty" minimum:"1" maximum:"10"`
+	IterationLengthWeeks *int    `json:"iteration_length_weeks,omitempty" minimum:"1" maximum:"8"`
+}
+
+// iterationSettings returns the iteration settings in effect.
+//
+//	@Summary		Get the iteration settings
+//	@Description	Completion policy, maximum active iterations and default iteration length, each with the workspace's value and whether the project overrides it.
+//	@Tags			configuration
+//	@Produce		json
+//	@Param			ws	path		string	true	"Workspace slug"
+//	@Success		200	{object}	IterationSettingsResponse
+//	@Router			/api/v1/w/{ws}/config/settings/iterations [get]
+func (h *HTTP) iterationSettings(c *gin.Context) {
+	t := targetOf(c)
+	v, err := h.svc.IterationSettings(c, h.svc.pool, t)
+	reply(c, http.StatusOK, IterationSettingsResponse{IterationSettings: v, CanManage: h.svc.CanManage(c, t)}, err)
+}
+
+// setIterationSettings changes iteration settings.
+//
+//	@Summary		Set iteration settings
+//	@Description	Keys left out are unchanged; null removes a value (at project scope, the project follows the workspace again).
+//	@Tags			configuration
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws		path		string						true	"Workspace slug"
+//	@Param			body	body		IterationSettingsRequest	true	"Settings to change"
+//	@Success		200		{object}	IterationSettings
+//	@Router			/api/v1/w/{ws}/config/settings/iterations [put]
+func (h *HTTP) setIterationSettings(c *gin.Context) {
+	var req IterationSettingsInput
+	if bind(c, &req) {
+		v, err := h.svc.SetIterationSettings(c, targetOf(c), req)
 		reply(c, http.StatusOK, v, err)
 	}
 }

@@ -171,6 +171,9 @@ func (s *Service) moveOne(ctx context.Context, tx pgx.Tx, ic Context, target pro
 		parent = uuid.NullUUID{}
 		m.dropped = append(m.dropped, "parent")
 	}
+	if err := s.leftIteration(ctx, tx, ic.Context.Context, m.cur, LeftMoved); err != nil {
+		return db.Issue{}, err
+	}
 	saved, err := q.MoveIssue(ctx, db.MoveIssueParams{
 		WorkspaceID: m.cur.WorkspaceID, ID: m.cur.ID, ProjectID: target.Project.ID, Number: n, TypeID: m.typeID, StatusID: m.statusID,
 		Rank: rank, Estimate: m.estimate, Fields: m.fields, ParentID: parent, StartedAt: started, ResolvedAt: resolved, UpdatedAt: now,

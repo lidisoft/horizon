@@ -193,10 +193,13 @@ func (n *namer) resolve(ctx context.Context) error {
 	if len(rest) == 0 {
 		return nil
 	}
+	// People, and the planning items of the issue's workspace.
 	rows, err := n.s.pool.Query(ctx, `
 		SELECT u.id, u.name FROM users u
 		JOIN workspace_members m ON m.user_id = u.id AND m.workspace_id = $1
-		WHERE u.id = ANY($2::uuid[])`, n.ic.Workspace.ID, rest)
+		WHERE u.id = ANY($2::uuid[])
+		UNION ALL
+		SELECT it.id, it.name FROM iterations it WHERE it.workspace_id = $1 AND it.id = ANY($2::uuid[])`, n.ic.Workspace.ID, rest)
 	if err != nil {
 		return err
 	}

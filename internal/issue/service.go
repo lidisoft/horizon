@@ -41,6 +41,8 @@ type Service struct {
 	projects *project.Service
 	storage  Storage
 	now      func() time.Time
+
+	leaveIteration IterationHook
 }
 
 // New returns a Service and plugs it into config as its Issues, so
@@ -394,6 +396,11 @@ func (s *Service) mutate(ctx context.Context, ic Context, version int32, perm ac
 		if err != nil {
 			return err
 		}
+		if cur.IterationID.Valid && cur.IterationID != saved.IterationID {
+			if err := s.leftIteration(ctx, tx, ic.Context.Context, cur, LeftCleared); err != nil {
+				return err
+			}
+		}
 		if e.labels != nil {
 			if err := q.ClearIssueLabels(ctx, cur.ID); err != nil {
 				return err
@@ -428,7 +435,7 @@ func (s *Service) save(ctx context.Context, tx pgx.Tx, i db.Issue) (db.Issue, er
 		WorkspaceID: i.WorkspaceID, ID: i.ID, TypeID: i.TypeID, Title: i.Title, Description: i.Description, StatusID: i.StatusID,
 		Priority: i.Priority, Rank: i.Rank, Estimate: i.Estimate, AssigneeID: i.AssigneeID, ParentID: i.ParentID,
 		StartDate: i.StartDate, DueDate: i.DueDate, Fields: i.Fields, StartedAt: i.StartedAt, ResolvedAt: i.ResolvedAt,
-		ArchivedAt: i.ArchivedAt, UpdatedAt: s.now(),
+		ArchivedAt: i.ArchivedAt, UpdatedAt: s.now(), IterationID: i.IterationID, ReleaseID: i.ReleaseID,
 	})
 }
 

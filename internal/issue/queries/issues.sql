@@ -26,7 +26,7 @@ SELECT * FROM issues WHERE workspace_id = $1 AND id = $2 FOR UPDATE;
 UPDATE issues
 SET type_id = $3, title = $4, description = $5, status_id = $6, priority = $7, rank = $8, estimate = $9,
     assignee_id = $10, parent_id = $11, start_date = $12, due_date = $13, fields = $14, started_at = $15,
-    resolved_at = $16, archived_at = $17, updated_at = $18, version = version + 1
+    resolved_at = $16, archived_at = $17, updated_at = $18, iteration_id = $19, release_id = $20, version = version + 1
 WHERE workspace_id = $1 AND id = $2
 RETURNING *;
 
@@ -121,5 +121,11 @@ UPDATE issues
 SET project_id = $3, number = $4, type_id = $5, status_id = $6, rank = $7, estimate = $8, fields = $9,
     parent_id = $10, iteration_id = NULL, release_id = NULL, started_at = $11, resolved_at = $12,
     updated_at = $13, version = version + 1
+WHERE workspace_id = $1 AND id = $2
+RETURNING *;
+
+-- name: SetIssueIteration :one
+-- Moves an issue into an iteration, or out of any (planning commands).
+UPDATE issues SET iteration_id = $3, updated_at = $4, version = version + 1
 WHERE workspace_id = $1 AND id = $2
 RETURNING *;

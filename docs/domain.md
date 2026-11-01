@@ -187,9 +187,27 @@ planned ──schedule──▶ scheduled ──start──▶ active ──comp
 | `IterationDeleted` | Hard deleted (storm) |
 
 **Invariants**
-- Dates are required to start.
+- Dates are required to start: an iteration with both dates is
+  `scheduled`, one without is `planned` (clearing them unschedules it).
 - At most `max_active_iterations` active per project (configurable, default 1).
-- Only issues of the same project can be loaded.
+- Only issues of the same project, not archived, can be loaded. An issue
+  is in one iteration at most: loading it elsewhere takes it out of the
+  first.
+- An active iteration keeps its start date; its end date may move.
+  Completed and archived iterations don't change, and keep their scope as
+  it was at completion.
+- An active iteration can't be deleted. Deleting another sends its issues
+  back to the backlog, scrubs its events and leaves an `IterationDeleted`
+  tombstone.
+
+**Commands and permissions.** Planning, scheduling, loading, starting,
+completing, archiving and deleting all need `iteration.manage`; reading
+needs `issue.view`. `IterationStarted` lists the issues it holds (the
+committed scope); `IterationLoaded` lists the issues `added` and
+`removed`, and why they left when it wasn't the iteration's own command
+(`moved` to another iteration, `issue_deleted`, `issue_moved` to another
+project, `workflow` post-action). Each issue records
+`IssueIterationChanged` as well.
 
 ### Release
 Name, description, start and release dates, state (`unreleased`, `released`,
@@ -213,7 +231,7 @@ settings are aggregates too: changing them emits events
 
 | When | Then | Notes |
 |------|------|-------|
-| `IssueDeleted` | Remove the issue from its iteration's scope (`IterationLoaded`) | Storm policy 1 |
+| `IssueDeleted` | Remove the issue from its iteration's scope (`IterationLoaded`) | Storm policy 1. Applied in the deleting transaction: the tombstone keeps no iteration id to act on later. Moves and workflow post-actions that clear the iteration do the same |
 | `IterationCompleted` | Apply the completion policy | Storm policy 2, generalised |
 | `IssueDeleted` | Delete its links, comments, attachments; handle children as chosen | See [Deletion](#deletion) |
 | Git PR merged referencing an issue | Transition to the configured status, if allowed | Configurable per project |
@@ -230,6 +248,13 @@ Configurable at workspace level, overridable per project
 | `archive_all` | Every issue in the iteration is archived. The storm's original reading |
 | `archive_done_rollover_rest` *(default)* | Issues in a final category (outcome `completed` or `abandoned`) are archived; others move to the next iteration or to the backlog, chosen by the facilitator when closing |
 | `none` | Nothing changes; issues stay in the completed iteration |
+
+`IterationCompleted` records the policy in effect and the rollover target
+(an open iteration of the project, or none for the backlog); the `policy`
+worker then applies it to the issues still in the iteration, as commands of
+their own (`IssueArchived`, `IssueIterationChanged`, with `IterationLoaded`
+on both iterations). It works from the current state, so applying it twice
+changes nothing.
 
 ## Deletion
 

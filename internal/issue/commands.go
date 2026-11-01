@@ -313,16 +313,27 @@ func (s *Service) Transition(ctx context.Context, ic Context, version int32, toS
 		s.trackOutcome(e, from)
 		changes := []change{{"IssueStatusUpdated", map[string]any{"from": from, "to": tr.To, "transition_id": tr.ID}}}
 		for _, pa := range tr.Rules.PostActions {
-			before := i.AssigneeID
+			before, iteration, release := i.AssigneeID, i.IterationID, i.ReleaseID
 			switch pa.Op {
 			case "set_actor":
 				i.AssigneeID = uuid.NullUUID{UUID: ic.Principal.User.ID, Valid: true}
 			default:
 				clearField(e, pa.Field)
 			}
-			if pa.Field == "assignee" && before != i.AssigneeID {
-				changes = append(changes, change{"IssueAssigned", map[string]any{"from": before, "to": i.AssigneeID, "by": "workflow"}})
-			} else if pa.Field != "assignee" {
+			switch pa.Field {
+			case "assignee":
+				if before != i.AssigneeID {
+					changes = append(changes, change{"IssueAssigned", map[string]any{"from": before, "to": i.AssigneeID, "by": "workflow"}})
+				}
+			case "iteration":
+				if iteration.Valid {
+					changes = append(changes, change{"IssueIterationChanged", map[string]any{"from": iteration, "to": nil, "by": "workflow"}})
+				}
+			case "release":
+				if release.Valid {
+					changes = append(changes, change{"IssueReleaseChanged", map[string]any{"from": release, "to": nil, "by": "workflow"}})
+				}
+			default:
 				changes = append(changes, change{"IssueUpdated", map[string]any{"fields": []string{pa.Field}, "by": "workflow"}})
 			}
 		}
