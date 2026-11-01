@@ -38,6 +38,7 @@ type fixture struct {
 	issues   *issue.Service
 	plans    *planning.Service
 	proj     *report.Projector
+	acc      *access.Service
 	owner    identity.Principal
 	acme     workspace.Workspace
 	hzn      project.Project
@@ -52,6 +53,7 @@ func newFixture(t *testing.T) *fixture {
 	base := &url.URL{Scheme: "https", Host: "horizon.example.com"}
 	f.ids = identity.New(identity.Options{Pool: f.pool, Log: zerolog.Nop(), BaseURL: base, SessionSecret: "test-session-secret-at-least-32-chars"})
 	acc := access.New(f.pool, nil)
+	f.acc = acc
 	f.cfg = configdef.New(f.pool, acc, nil, nil)
 	f.ws = workspace.New(workspace.Options{Pool: f.pool, Log: zerolog.Nop(), Identity: f.ids, Access: acc, Mail: &platformmail.Memory{}, BaseURL: base,
 		OnCreate: []workspace.CreateHook{f.cfg.SeedDefaults}})
@@ -207,4 +209,9 @@ func (f *fixture) catchUp() int {
 		f.t.Fatal(err)
 	}
 	return n
+}
+
+// reports is the report service on the fixture's clock.
+func (f *fixture) reports() *report.Service {
+	return report.New(f.pool, f.acc, f.cfg, f.projects, f.issues, f.plans, func() time.Time { return f.now })
 }

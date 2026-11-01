@@ -5380,6 +5380,156 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/reports/{report}": {
+            "get": {
+                "description": "report: burndown, burnup (SprintSeries; iteration=), sprint (SprintReport; iteration=), velocity (Velocity; projects=KEY, last=), progress (Progress; release= or milestone=). Options as query parameters, filter as JSON, lists comma-separated; metric=count|estimate (estimate falls back to count when scales are none or differ, and says so).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Run a report",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "burndown",
+                            "burnup",
+                            "sprint",
+                            "velocity",
+                            "progress"
+                        ],
+                        "type": "string",
+                        "description": "Report",
+                        "name": "report",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter (JSON), as in /issues/query",
+                        "name": "filter",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project keys, comma-separated",
+                        "name": "projects",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Iteration id",
+                        "name": "iteration",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Release id",
+                        "name": "release",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Milestone id",
+                        "name": "milestone",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "count or estimate",
+                        "name": "metric",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "First day",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Last day",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Iterations (velocity)",
+                        "name": "last",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/report.SprintSeries"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "As GET, with the options in a JSON body.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Run a report (JSON)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "burndown",
+                            "burnup",
+                            "sprint",
+                            "velocity",
+                            "progress"
+                        ],
+                        "type": "string",
+                        "description": "Report",
+                        "name": "report",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Scope and options",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/report.Request"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/report.SprintSeries"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/roadmap": {
             "post": {
                 "description": "Top-level issues (no parent) that have children, across the projects the caller sees (or those named), matching the query; each with its children's count, outcomes and date span, and its bar: its own dates, else its children's (derived).",
@@ -9337,6 +9487,171 @@
                 "field": {
                     "type": "string",
                     "example": "rank"
+                }
+            }
+        },
+        "report.IterationRef": {
+            "type": "object",
+            "properties": {
+                "completed_at": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "report.Request": {
+            "type": "object",
+            "properties": {
+                "archived": {
+                    "type": "boolean"
+                },
+                "by": {
+                    "description": "By is what cumulative flow stacks: outcome (default) or category\n(one project only).",
+                    "type": "string",
+                    "enum": [
+                        "outcome",
+                        "category"
+                    ]
+                },
+                "filter": {
+                    "$ref": "#/definitions/query.Node"
+                },
+                "from": {
+                    "description": "From and To bound time series (dates, inclusive); defaults per report.",
+                    "type": "string",
+                    "example": "2026-10-01"
+                },
+                "group": {
+                    "description": "Group is what distribution groups by: assignee, type, priority,\nlabel, project, or cf:\u003cselect field id\u003e.",
+                    "type": "string",
+                    "example": "assignee"
+                },
+                "iteration": {
+                    "description": "Iteration, Release and Milestone scope sprint and progress reports.",
+                    "type": "string"
+                },
+                "last": {
+                    "description": "Last is how many iterations velocity shows (default 7, at most 20).",
+                    "type": "integer"
+                },
+                "metric": {
+                    "description": "Metric is count (default) or estimate.",
+                    "type": "string",
+                    "enum": [
+                        "count",
+                        "estimate"
+                    ]
+                },
+                "milestone": {
+                    "type": "string"
+                },
+                "period": {
+                    "description": "Period buckets throughput and created vs resolved: week (default) or month.",
+                    "type": "string",
+                    "enum": [
+                        "week",
+                        "month"
+                    ]
+                },
+                "projects": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "HZN"
+                    ]
+                },
+                "release": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string",
+                    "example": "2026-11-30"
+                }
+            }
+        },
+        "report.SprintSeries": {
+            "type": "object",
+            "properties": {
+                "completed": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "days": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ideal": {
+                    "description": "Ideal goes from the scope committed at the start to nothing at the end.",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "iteration": {
+                    "$ref": "#/definitions/report.IterationRef"
+                },
+                "metric": {
+                    "type": "string",
+                    "enum": [
+                        "count",
+                        "estimate"
+                    ]
+                },
+                "metric_fallback": {
+                    "description": "Fallback says why it is in count though estimate was asked.",
+                    "type": "string",
+                    "enum": [
+                        "no_estimates",
+                        "mixed_scales"
+                    ]
+                },
+                "remaining": {
+                    "description": "Remaining is the open scope (neither completed nor abandoned).",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "scope": {
+                    "description": "Scope is everything in the iteration but what was abandoned.",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "time_zone": {
+                    "type": "string",
+                    "example": "Europe/Paris"
+                },
+                "working": {
+                    "description": "Working says which days are worked (the ideal line is flat on others).",
+                    "type": "array",
+                    "items": {
+                        "type": "boolean"
+                    }
                 }
             }
         },

@@ -122,8 +122,19 @@ with whatever it missed, so it never depends on the stream's retention.
 ## API
 
 `GET /api/v1/w/{ws}/reports/{report}` with the filter and options as query
-parameters (the same encoding as the shareable URL), or `POST` with a JSON
-body. Responses are series and tables; the SPA uses the same endpoints.
+parameters (the same encoding as the shareable URL: `filter` as JSON, lists
+comma-separated), or `POST` with a JSON body. Responses are series and
+tables; the SPA uses the same endpoints. Every response says its `metric`,
+`metric_fallback` when estimate was asked but scales are `none` or differ,
+and the `time_zone` its days are in. Daily series have one value per day,
+read at the day's end (now for today), `null` for days to come.
+
+| `report` | Scope | Response |
+|----------|-------|----------|
+| `burndown`, `burnup` | `iteration` | Days from start to end date: `remaining` (neither completed nor abandoned), `scope` (all but abandoned), `completed`, `ideal` (the open scope committed at the start, down an equal share each working day), `working` |
+| `sprint` | `iteration` | Each issue: committed, added, removed, and how it `ended` (completed, abandoned, rolled_over, removed, open); `totals` |
+| `velocity` | `projects` (one), `last` | Committed at the start and completed at the end of the last completed iterations; `average` |
+| `progress` | `release` or `milestone` | `by_outcome` now, and `scope`/`completed` per day from the release's start date (else the first issue's creation). Today's issues count from their creation: who was targeted when isn't projected |
 
 `GET /api/v1/w/{ws}/projects/{key}/overview` returns all overview blocks in one
 response.

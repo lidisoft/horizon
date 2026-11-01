@@ -39,6 +39,7 @@ import (
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
 	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/realtime"
+	"github.com/lidisoft/horizon/internal/report"
 	"github.com/lidisoft/horizon/internal/search"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/testenv"
@@ -275,6 +276,7 @@ func appServer(t *testing.T) app {
 	planningSvc := planning.New(pool, acc, config, projectSvc, issueSvc, nil)
 	plans := planning.NewHTTP(planningSvc)
 	viewsHTTP := views.NewHTTP(views.New(pool, acc, projectSvc))
+	reportsHTTP := report.NewHTTP(report.New(pool, acc, config, projectSvc, issueSvc, planningSvc, nil))
 	searchHTTP := search.NewHTTP(search.New(pool, acc, projectSvc, issueSvc))
 
 	// Events reach sockets as in production: outbox relay, JetStream, hub.
@@ -290,6 +292,8 @@ func appServer(t *testing.T) app {
 	go func() { _ = hub.Run(ctx) }()
 	go func() { _ = relay.Run(ctx) }()
 	go func() { _ = bus.Stream.Consume(ctx, bus.JetStream, planningSvc.PolicyConsumer(), zerolog.Nop()) }()
+	projector := report.NewProjector(pool, zerolog.Nop())
+	go func() { _ = bus.Stream.Consume(ctx, bus.JetStream, projector.Consumer(), zerolog.Nop()) }()
 
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
@@ -297,7 +301,7 @@ func appServer(t *testing.T) app {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
 		hub.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register,
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register,
 			func(ws *gin.RouterGroup) {
 				projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject)
 			})

@@ -34,15 +34,22 @@ func (s *Service) Query(ctx context.Context, wc workspace.Context, q query.Query
 	return s.query(ctx, wc, q, projects, cursor, "TRUE")
 }
 
-// query runs q with a further condition on i (trusted SQL, no arguments).
-func (s *Service) query(ctx context.Context, wc workspace.Context, q query.Query, projects []string, cursor, also string) (QueryResult, error) {
+// compiled is a query ready to run: its FROM … WHERE over issues i (with
+// their status s and category sc), and the arguments.
+type compiled struct {
+	from    string
+	orderBy string
+	args    []any
+	keys    map[uuid.UUID]string // project keys by id, of the projects looked in
+}
+
+// compile prepares q over the visible projects named, with a further
+// condition on i (trusted SQL, no arguments); ok is false when no project
+// is visible.
+func (s *Service) compile(ctx context.Context, wc workspace.Context, q query.Query, projects []string, also string) (compiled, bool, error) {
 	visible, err := s.queryProjects(ctx, wc, projects)
-	if err != nil {
-		return QueryResult{}, err
-	}
-	out := QueryResult{Items: []Issue{}}
-	if len(visible) == 0 {
-		return out, nil
+	if err != nil || len(visible) == 0 {
+		return compiled{}, false, err
 	}
 	keys := map[uuid.UUID]string{}
 	byKey := map[string]uuid.UUID{}
@@ -57,16 +64,74 @@ func (s *Service) query(ctx context.Context, wc workspace.Context, q query.Query
 	}
 	qc, err := s.queryContext(ctx, wc, ids, byKey)
 	if err != nil {
-		return QueryResult{}, err
+		return compiled{}, false, err
 	}
-	compiled, err := query.Compile(q, qc, 3)
+	c, err := query.Compile(q, qc, 3)
 	if err != nil {
 		var qe *query.Error
 		if errors.As(err, &qe) {
-			return QueryResult{}, apperr.Invalid(apperr.Field{Field: qe.Path, Code: qe.Code})
+			return compiled{}, false, apperr.Invalid(apperr.Field{Field: qe.Path, Code: qe.Code})
 		}
-		return QueryResult{}, err
+		return compiled{}, false, err
 	}
+	return compiled{
+		from: `FROM issues i JOIN statuses s ON s.id = i.status_id JOIN status_categories sc ON sc.id = s.category_id
+		WHERE i.workspace_id = $1 AND i.project_id = ANY($2::uuid[]) AND (` + c.Where + `) AND (` + also + `)`,
+		orderBy: c.OrderBy,
+		args:    append([]any{wc.Workspace.ID, ids}, c.Args...),
+		keys:    keys,
+	}, true, nil
+}
+
+// VisibleProjects are the projects the caller sees issues of (keys by id).
+func (s *Service) VisibleProjects(ctx context.Context, wc workspace.Context) (map[uuid.UUID]string, error) {
+	visible, err := s.queryProjects(ctx, wc, nil)
+	out := make(map[uuid.UUID]string, len(visible))
+	for _, p := range visible {
+		out[p.ID] = p.Key
+	}
+	return out, err
+}
+
+// MaxScope bounds the issues a report covers.
+const MaxScope = 20000
+
+// Scope is the issues a query matches now, for reports: their ids, and
+// the projects looked in (key by id).
+type Scope struct {
+	IDs      []uuid.UUID
+	Projects map[uuid.UUID]string
+}
+
+// Scope runs q without paging (archived issues only with q.Archived), up
+// to MaxScope issues (422 scope_too_large beyond).
+func (s *Service) Scope(ctx context.Context, wc workspace.Context, q query.Query, projects []string) (Scope, error) {
+	c, ok, err := s.compile(ctx, wc, q, projects, "TRUE")
+	if err != nil || !ok {
+		return Scope{Projects: map[uuid.UUID]string{}}, err
+	}
+	rows, err := s.pool.Query(ctx, "SELECT i.id "+c.from+" LIMIT "+strconv.Itoa(MaxScope+1), c.args...)
+	if err != nil {
+		return Scope{}, err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return Scope{}, err
+	}
+	if len(ids) > MaxScope {
+		return Scope{}, apperr.Invalid(apperr.Field{Field: "filter", Code: "scope_too_large"})
+	}
+	return Scope{IDs: ids, Projects: c.keys}, nil
+}
+
+// query runs q with a further condition on i (trusted SQL, no arguments).
+func (s *Service) query(ctx context.Context, wc workspace.Context, q query.Query, projects []string, cursor, also string) (QueryResult, error) {
+	out := QueryResult{Items: []Issue{}}
+	c, ok, err := s.compile(ctx, wc, q, projects, also)
+	if err != nil || !ok {
+		return out, err
+	}
+	keys := c.keys
 	limit := q.Limit
 	if limit <= 0 {
 		limit = query.DefaultLimit
@@ -78,13 +143,11 @@ func (s *Service) query(ctx context.Context, wc workspace.Context, q query.Query
 			return QueryResult{}, apperr.Invalid(apperr.Field{Field: "cursor", Code: "invalid"})
 		}
 	}
-	from := `FROM issues i JOIN statuses s ON s.id = i.status_id JOIN status_categories sc ON sc.id = s.category_id
-		WHERE i.workspace_id = $1 AND i.project_id = ANY($2::uuid[]) AND (` + compiled.Where + `) AND (` + also + `)`
-	args := append([]any{wc.Workspace.ID, ids}, compiled.Args...)
+	from, args := c.from, c.args
 	if err := s.pool.QueryRow(ctx, "SELECT count(*) "+from, args...).Scan(&out.Total); err != nil {
 		return QueryResult{}, err
 	}
-	rows, err := s.pool.Query(ctx, "SELECT i.id "+from+" ORDER BY "+compiled.OrderBy+
+	rows, err := s.pool.Query(ctx, "SELECT i.id "+from+" ORDER BY "+c.orderBy+
 		" LIMIT "+strconv.Itoa(limit)+" OFFSET "+strconv.Itoa(offset), args...)
 	if err != nil {
 		return QueryResult{}, err
