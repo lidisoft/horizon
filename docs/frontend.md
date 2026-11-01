@@ -158,10 +158,10 @@ semantic tokens only, `:host` display):
 | `hzn-milestone-list` | Milestones with progress and linked issues; create, edit, link issues (by key) and delete them |
 | `hzn-release-dialog`, `hzn-milestone-dialog` | Create and edit releases; create, edit and link milestones |
 | `hzn-iteration-dialog` | Plan or edit an iteration (name, goal, dates, prefilled with the suggested next one); complete one, saying what the policy will do and where unfinished issues go |
-| `hzn-grid` | Table view with field columns and inline editing |
+| `hzn-table` (view) | `/w/{ws}/p/{key}/table`: the issues as a grid. Columns from the built-in fields and the project's custom fields (a picker in an `lds-popover`); headers sort through the query (`?sort=key:desc`). A saved table view keeps its columns (`display.columns`) and sort; without one, columns are remembered per project in the browser. Cells edit in place (Enter or double click; Enter or a choice saves with `If-Match`, Escape cancels; title, status, priority, assignee, estimate, dates and text, number, date, select and checkbox fields); arrow keys move between cells, Space selects the row. Selected rows take a status (by name, in each issue's workflow), a priority, an assignee or archiving, one request per issue, with a summary of what was skipped or failed |
 | `hzn-timeline` | Gantt: bars, dependencies, drag to reschedule, milestones |
 | `hzn-calendar` | Month and week calendar |
-| `hzn-view-bar` | On the list and the board: the saved views picker (save as new, save changes, delete; picking a view of another layout goes there), the filter as chips (an AND of conditions built field → condition → value in an `lds-popover`) and text search. The address carries `?view=` and, while it differs from the view's, `?filter=` (JSON); a filter switches the layout to `POST /issues/query` |
+| `hzn-view-bar` | On the list, the board and the table: the saved views picker (save as new, save changes, delete; picking a view of another layout goes there), the filter as chips (an AND of conditions built field → condition → value in an `lds-popover`) and text search. The address carries `?view=` and, while it differs from the view's, `?filter=` (JSON); a filter switches the layout to `POST /issues/query` |
 | `hzn-editor` | Block editor: descriptions, comments ([Block editor](#block-editor)) |
 | `hzn-*-picker` | Status, priority, assignee, labels, estimate, iteration, release pickers: `lds-combobox` wrappers that load options from the store and apply mutations |
 | `hzn-inbox` | Notifications |

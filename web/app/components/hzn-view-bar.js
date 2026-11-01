@@ -1,8 +1,11 @@
 // <hzn-view-bar>: a project layout's saved views and filter (phase 6).
 //
-//   await bar.setup({ ws, data, layout, display })  data from projectData;
-//       layout "list" or "board"; display() returns the layout's options to
-//       save with a view. Reads ?view= and ?filter= from the address.
+//   await bar.setup({ ws, data, layout, display, sort, changedDisplay })
+//       data from projectData; layout "list", "board" or "table";
+//       display() returns the layout's options to save with a view, sort()
+//       its sort keys; changedDisplay() says whether they differ from the
+//       view's. Reads ?view= and ?filter= from the address.
+//   bar.refresh()  re-renders after the layout's sort or display changed
 //   bar.filter     the filter in force (a query AST, docs/api.md#querying-issues), or null
 //   bar.view       the saved view in force, or null
 //   bar.saveDisplay(display)  stores display options in the view in force
@@ -19,7 +22,7 @@ import { html, keepOpenOnInsidePress, sheet } from "horizon/core/dom.js";
 import { busy, clearFieldErrors, errorMessage, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
 
 /** Where each layout lives under /w/:ws/p/:key/. */
-export const LAYOUT_ROUTES = { list: "issues", board: "board" };
+export const LAYOUT_ROUTES = { list: "issues", board: "board", table: "table" };
 
 const styles = sheet(`
   :host { display: contents; }
@@ -95,8 +98,8 @@ class HznViewBar extends HTMLElement {
     clearTimeout(this.timer);
   }
 
-  async setup({ ws, data, layout, display = () => ({}) }) {
-    Object.assign(this, { ws, data, layout, display });
+  async setup({ ws, data, layout, display = () => ({}), sort = null, changedDisplay = () => false }) {
+    Object.assign(this, { ws, data, layout, display, sort, changedDisplay });
     const query = this.context.router.current?.query;
     let iterations = [];
     try {
@@ -120,8 +123,27 @@ class HznViewBar extends HTMLElement {
     return `/w/${encodeURIComponent(this.ws)}`;
   }
 
+  /** Whether the filter differs from the view's (or there's one without a view). */
   get dirty() {
     return !same(this.filter, this.view?.query.filter ?? null);
+  }
+
+  /** Whether anything differs from the view in force: the filter, the sort, the display. */
+  get modified() {
+    if (this.dirty) return true;
+    if (!this.view) return false;
+    return (this.sort && !same(this.sort() ?? [], this.view.query.sort ?? [])) || this.changedDisplay();
+  }
+
+  refresh() {
+    if (this.fields) this.render();
+  }
+
+  /** The query to save: the filter, and the layout's sort. */
+  query(base = {}) {
+    const q = { ...base, filter: this.filter ?? undefined };
+    if (this.sort) q.sort = this.sort()?.length ? this.sort() : undefined;
+    return q;
   }
 
   async reloadViews() {
@@ -149,7 +171,7 @@ class HznViewBar extends HTMLElement {
       <div class="bar">
         <lds-menu placement="bottom-start">
           <lds-button slot="trigger" variant="ghost" size="sm" data-picker>
-            <lds-icon slot="start" name="layers" size="sm"></lds-icon>${this.view ? this.view.name : t("views.none")}${this.view && this.dirty ? " *" : ""}
+            <lds-icon slot="start" name="layers" size="sm"></lds-icon>${this.view ? this.view.name : t("views.none")}${this.view && this.modified ? " *" : ""}
             <lds-icon slot="end" name="chevron-down" size="sm"></lds-icon>
           </lds-button>
           <lds-menu-item data-action="pick" data-id="">${t("views.none")}</lds-menu-item>
@@ -159,7 +181,7 @@ class HznViewBar extends HTMLElement {
               <span slot="end">${t(`views.layout.${v.layout}`)}</span>
             </lds-menu-item>`)}
           <hr>
-          ${this.view?.can_edit && this.dirty ? html`<lds-menu-item data-action="update"><lds-icon slot="start" name="check"></lds-icon>${t("views.saveChanges")}</lds-menu-item>` : ""}
+          ${this.view?.can_edit && this.modified ? html`<lds-menu-item data-action="update"><lds-icon slot="start" name="check"></lds-icon>${t("views.saveChanges")}</lds-menu-item>` : ""}
           <lds-menu-item data-action="save-as"><lds-icon slot="start" name="plus"></lds-icon>${t("views.saveAs")}</lds-menu-item>
           ${this.view?.can_edit ? html`<lds-menu-item data-action="delete"><lds-icon slot="start" name="trash-2"></lds-icon>${t("views.delete")}</lds-menu-item>` : ""}
         </lds-menu>
@@ -267,7 +289,7 @@ class HznViewBar extends HTMLElement {
       case "submit-save":
         return this.shadowRoot.querySelector("[data-save] form").requestSubmit();
       case "update":
-        return this.update({ query: { ...this.view.query, filter: this.filter ?? undefined }, display: this.display() });
+        return this.update({ query: this.query(this.view.query), display: this.display() });
       case "delete":
         return this.remove();
     }
@@ -350,7 +372,7 @@ class HznViewBar extends HTMLElement {
     await busy(modal.querySelector('[data-action="submit-save"]'), async () => {
       try {
         const { data } = await api.post(`${this.base}/views`, {
-          body: { project: this.data.project.key, name, layout: this.layout, shared, query: { filter: this.filter ?? undefined }, display: this.display() },
+          body: { project: this.data.project.key, name, layout: this.layout, shared, query: this.query(), display: this.display() },
         });
         modal.removeAttribute("open");
         this.views = [...this.views, data];

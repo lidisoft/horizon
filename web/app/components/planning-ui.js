@@ -16,7 +16,7 @@ export const planningStyles = sheet(`
 `);
 
 /** The layouts of a project's issues, in the switcher's order. */
-export const LAYOUTS = ["issues", "board", "backlog", "releases"];
+export const LAYOUTS = ["issues", "board", "table", "backlog", "releases"];
 
 /** The layout switcher (wireframes: ViewSwitch). */
 export function viewSwitch(t, ws, key, active) {
@@ -93,15 +93,17 @@ export function progress(stats, i18n) {
 
 /**
  * Every issue of a project in rank order, or those a filter (a query AST)
- * matches, a page of 500 at a time.
+ * matches in the sort given, a page of 500 at a time.
  */
-export async function fetchIssues(context, ws, key, filter) {
+export async function fetchIssues(context, ws, key, filter, sort) {
   const { api } = context;
   const items = [];
   let cursor = "";
   do {
-    const { data } = filter
-      ? await api.post(`/w/${encodeURIComponent(ws)}/issues/query`, { body: { projects: [key], filter, sort: [{ field: "rank" }], limit: 500, cursor: cursor || undefined } })
+    const { data } = filter || sort?.length
+      ? await api.post(`/w/${encodeURIComponent(ws)}/issues/query`, {
+        body: { projects: [key], filter: filter ?? undefined, sort: sort?.length ? sort : [{ field: "rank" }], limit: 500, cursor: cursor || undefined },
+      })
       : await api.get(`/w/${encodeURIComponent(ws)}/projects/${encodeURIComponent(key)}/issues`, { query: { limit: 500, cursor: cursor || undefined } });
     items.push(...data.items);
     cursor = data.next_cursor;

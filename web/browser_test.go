@@ -1293,6 +1293,110 @@ func TestViews(t *testing.T) {
 	pg.logs.failOnErrors(t)
 }
 
+// TestTable edits cells in place, sorts, picks columns and changes
+// selected rows together.
+func TestTable(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	if status, body := pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`); status != 201 {
+		t.Fatalf("create project: %d %s", status, body)
+	}
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID, Name string } `json:"issue_types"`
+	}
+	if err := json.Unmarshal([]byte(cfg), &resolved); err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Outbox relay", "Replay after reconnect", "Saved views"} {
+		if status, body := pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"`+title+`"}`); status != 201 {
+			t.Fatalf("create issue: %d %s", status, body)
+		}
+	}
+	field := func(key, name string) string {
+		_, body := pg.api("GET", "/w/acme/issues/"+key, "")
+		var v map[string]any
+		_ = json.Unmarshal([]byte(body), &v)
+		return fmt.Sprint(v[name])
+	}
+	emit := func(sel, detail string) {
+		pg.eval(`(() => { const s = ` + sel + `; const d = ` + detail + `; if (d.value !== undefined) s.setAttribute("value", d.value);
+			s.dispatchEvent(new CustomEvent("lds-change", { detail: d, bubbles: true, composed: true })); })()`)
+	}
+	cell := func(key, col string) string {
+		return view + `.querySelector('tr[data-key="` + key + `"] td[data-col="` + col + `"]')`
+	}
+	heads := func() string {
+		return pg.poll(`[...` + view + `.querySelectorAll("thead th")].map((h) => h.textContent.trim()).filter(Boolean).join(",")`)
+	}
+
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/table"))
+	pg.poll(view + `.querySelectorAll("tbody tr").length === 3 && "table"`)
+	if got := heads(); got != "Key,Title,Status,Priority,Assignee,Labels,Estimate,Due" {
+		t.Errorf("columns = %s", got)
+	}
+
+	// A title edits in place: double click, type, Enter.
+	pg.eval(cell("HZN-1", "title") + `.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, composed: true }))`)
+	editor := cell("HZN-1", "title") + `.querySelector("[data-editor]")`
+	pg.poll(editor + ` && "editing"`)
+	pg.eval(editor + `.shadowRoot.querySelector("input").select()`)
+	pg.typeInto(editor, "Outbox relay v2\r")
+	pg.poll(cell("HZN-1", "title") + `?.textContent.trim() === "Outbox relay v2" && "saved"`)
+	if got := field("HZN-1", "title"); got != "Outbox relay v2" {
+		t.Errorf("title = %s", got)
+	}
+
+	// Enter on the priority cell opens a select; a choice saves it.
+	pg.click(cell("HZN-2", "priority"))
+	pg.do(chromedp.KeyEvent(kb.Enter))
+	pg.poll(cell("HZN-2", "priority") + `.querySelector("[data-editor]") && "select"`)
+	emit(cell("HZN-2", "priority")+`.querySelector("[data-editor]")`, `{ value: "high" }`)
+	pg.poll(cell("HZN-2", "priority") + `?.textContent.includes("High") && "prioritized"`)
+	// The arrow keys move the active cell.
+	pg.poll(cell("HZN-2", "priority") + `.hasAttribute("data-active") && "active"`)
+	pg.do(chromedp.KeyEvent(kb.ArrowDown))
+	pg.poll(cell("HZN-3", "priority") + `.hasAttribute("data-active") && "moved"`)
+
+	// Sorting by key, descending, goes to the address.
+	pg.click(view + `.querySelector('[data-sort="key"]')`)
+	pg.click(view + `.querySelector('[data-sort="key"]')`)
+	pg.poll(view + `.querySelector("tbody tr")?.dataset.key === "HZN-3" && "sorted"`)
+	pg.poll(`new URLSearchParams(location.search).get("sort") === "key:desc" && "in address"`)
+
+	// Columns: add the type.
+	emit(view+`.querySelector('[data-toggle-column="type"]')`, `{ checked: true }`)
+	if got := heads(); got != "Key,Title,Status,Type,Priority,Assignee,Labels,Estimate,Due" {
+		t.Errorf("columns = %s", got)
+	}
+
+	// Two rows selected take a priority together.
+	emit(view+`.querySelector('[data-pick="HZN-1"]')`, `{ checked: true }`)
+	emit(view+`.querySelector('[data-pick="HZN-3"]')`, `{ checked: true }`)
+	pg.poll(view + `.querySelector("[data-bulk]:not([hidden]) strong")?.textContent === "2 selected" && "selected"`)
+	emit(view+`.querySelector('[data-bulk-action="priority"]')`, `{ value: "urgent" }`)
+	pg.poll(cell("HZN-1", "priority") + `?.textContent.includes("Urgent") && ` + cell("HZN-3", "priority") + `?.textContent.includes("Urgent") && "bulk"`)
+	if got := field("HZN-2", "priority"); got != "high" {
+		t.Errorf("unselected HZN-2 priority = %s", got)
+	}
+
+	// Saved as a view, the table keeps its columns and sort.
+	bar := view + `.querySelector("hzn-view-bar").shadowRoot`
+	pg.eval(bar + `.querySelector('[data-action="save-as"]').click()`)
+	pg.typeInto(bar+`.querySelector('[data-save] [name="name"]')`, "Triage\r")
+	pg.poll(`new URLSearchParams(location.search).has("view") && "saved"`)
+	_, list := pg.api("GET", "/w/acme/views?project=HZN", "")
+	if !strings.Contains(list, `"sort":[{"field":"key","dir":"desc"}]`) || !strings.Contains(list, `"columns":["status","type","priority"`) {
+		t.Errorf("views = %s", list)
+	}
+	pg.logs.failOnErrors(t)
+}
+
 // TestReleases creates and ships a release, and plans a milestone with
 // its issues, from the project's Releases page and the workspace's
 // Milestones page.

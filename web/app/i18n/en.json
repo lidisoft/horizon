@@ -883,6 +883,7 @@
   "planning.layout": "Project views",
   "planning.layouts.issues": "List",
   "planning.layouts.board": "Board",
+  "planning.layouts.table": "Table",
   "planning.layouts.backlog": "Backlog",
   "planning.backlog": "Backlog",
   "planning.velocity": "Velocity (last 3)",
@@ -1056,6 +1057,45 @@
   "board.wipOver": "Over the WIP limit",
   "error.view_not_found": "That view no longer exists.",
   "error.query.unknown_field": "That field doesn't exist.",
+  "table.label": "Issues",
+  "table.columns": "Columns",
+  "table.selectAll": "Select all issues",
+  "table.select": "Select {key}",
+  "table.selected": {
+    "one": "{count} selected",
+    "other": "{count} selected"
+  },
+  "table.setStatus": "Set status…",
+  "table.setPriority": "Set priority…",
+  "table.setAssignee": "Assign to…",
+  "table.archive": "Archive",
+  "table.clearSelection": "Clear selection",
+  "table.bulkDone": {
+    "one": "{count} issue updated.",
+    "other": "{count} issues updated."
+  },
+  "table.bulkSkipped": {
+    "one": "{count} has no such status in its workflow.",
+    "other": "{count} have no such status in their workflow."
+  },
+  "table.bulkFailed": {
+    "one": "{count} couldn't be changed.",
+    "other": "{count} couldn't be changed."
+  },
+  "table.col.key": "Key",
+  "table.col.title": "Title",
+  "table.col.status": "Status",
+  "table.col.type": "Type",
+  "table.col.priority": "Priority",
+  "table.col.assignee": "Assignee",
+  "table.col.labels": "Labels",
+  "table.col.estimate": "Estimate",
+  "table.col.iteration": "Iteration",
+  "table.col.release": "Release",
+  "table.col.start_date": "Start",
+  "table.col.due_date": "Due",
+  "table.col.created": "Created",
+  "table.col.updated": "Updated",
   "shortcut.columnLeft": "Previous column",
   "shortcut.columnRight": "Next column",
   "shortcut.moveLeft": "Move the issue to the previous column",

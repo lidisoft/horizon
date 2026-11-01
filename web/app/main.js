@@ -9,6 +9,7 @@ import { HznApp, applyStoredTheme } from "horizon/components/hzn-app.js";
 import "horizon/views/hzn-account.js";
 import "horizon/views/hzn-backlog.js";
 import "horizon/views/hzn-board.js";
+import "horizon/views/hzn-table.js";
 import "horizon/views/hzn-forgot-password.js";
 import "horizon/views/hzn-home.js";
 import "horizon/views/hzn-invitation.js";
