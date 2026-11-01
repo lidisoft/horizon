@@ -14,7 +14,7 @@ import (
 )
 
 const aggregateEvents = `-- name: AggregateEvents :many
-SELECT id, workspace_id, aggregate_type, aggregate_id, aggregate_version, type, actor_id, occurred_at, payload, published_at
+SELECT id, workspace_id, aggregate_type, aggregate_id, aggregate_version, type, actor_id, occurred_at, payload, published_at, reported_at
 FROM events
 WHERE aggregate_type = $1 AND aggregate_id = $2
 ORDER BY aggregate_version, id
@@ -46,6 +46,7 @@ func (q *Queries) AggregateEvents(ctx context.Context, arg AggregateEventsParams
 			&i.OccurredAt,
 			&i.Payload,
 			&i.PublishedAt,
+			&i.ReportedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -58,7 +59,7 @@ func (q *Queries) AggregateEvents(ctx context.Context, arg AggregateEventsParams
 }
 
 const aggregateEventsBefore = `-- name: AggregateEventsBefore :many
-SELECT id, workspace_id, aggregate_type, aggregate_id, aggregate_version, type, actor_id, occurred_at, payload, published_at
+SELECT id, workspace_id, aggregate_type, aggregate_id, aggregate_version, type, actor_id, occurred_at, payload, published_at, reported_at
 FROM events
 WHERE workspace_id = $1 AND aggregate_type = $2 AND aggregate_id = $3
   AND ($4::uuid IS NULL OR id < $4::uuid)
@@ -101,6 +102,7 @@ func (q *Queries) AggregateEventsBefore(ctx context.Context, arg AggregateEvents
 			&i.OccurredAt,
 			&i.Payload,
 			&i.PublishedAt,
+			&i.ReportedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -322,7 +324,7 @@ func (q *Queries) QueuePurge(ctx context.Context, arg QueuePurgeParams) error {
 }
 
 const workspaceEventsAfter = `-- name: WorkspaceEventsAfter :many
-SELECT id, workspace_id, aggregate_type, aggregate_id, aggregate_version, type, actor_id, occurred_at, payload, published_at
+SELECT id, workspace_id, aggregate_type, aggregate_id, aggregate_version, type, actor_id, occurred_at, payload, published_at, reported_at
 FROM events
 WHERE workspace_id = $1 AND id > $2
 ORDER BY id
@@ -356,6 +358,7 @@ func (q *Queries) WorkspaceEventsAfter(ctx context.Context, arg WorkspaceEventsA
 			&i.OccurredAt,
 			&i.Payload,
 			&i.PublishedAt,
+			&i.ReportedAt,
 		); err != nil {
 			return nil, err
 		}

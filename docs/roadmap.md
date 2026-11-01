@@ -73,7 +73,7 @@ usable exists early.
 
 ## Phase 7 — Reports
 
-- [ ] `reports` worker and projections, `admin rebuild-reports`
+- [x] `reports` worker and projections, `admin rebuild-reports`
 - [ ] SVG chart components
 - [ ] Sprint reports, flow reports, release and milestone progress, workload
 - [ ] Project overview page

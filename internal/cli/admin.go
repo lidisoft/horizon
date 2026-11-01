@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 
 	"github.com/lidisoft/horizon/internal/access"
@@ -19,6 +21,7 @@ import (
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
+	"github.com/lidisoft/horizon/internal/report"
 	"github.com/lidisoft/horizon/internal/workspace"
 )
 
@@ -65,6 +68,11 @@ func adminCommand() *cli.Command {
 				Action: admin(setDeactivated(true)),
 			},
 			{
+				Name:   "rebuild-reports",
+				Usage:  "Empty the report projections and replay every event into them",
+				Action: admin(rebuildReports),
+			},
+			{
 				Name:   "reactivate-user",
 				Usage:  "Allow a deactivated account to sign in again",
 				Flags:  []cli.Flag{email},
@@ -79,6 +87,8 @@ type adminFunc func(ctx context.Context, cmd *cli.Command, svc adminServices) er
 type adminServices struct {
 	ids        *identity.Service
 	workspaces *workspace.Service
+	pool       *pgxpool.Pool
+	log        zerolog.Logger
 }
 
 // admin connects to PostgreSQL only: admin commands must work while NATS or
@@ -101,7 +111,7 @@ func admin(fn adminFunc) cli.ActionFunc {
 			Pool: pool, Log: log, Identity: ids, Access: acc, BaseURL: cfg.BaseURL,
 			OnCreate: []workspace.CreateHook{configdef.New(pool, acc, nil, nil).SeedDefaults},
 		})
-		return describe(fn(ctx, cmd, adminServices{ids: ids, workspaces: ws}))
+		return describe(fn(ctx, cmd, adminServices{ids: ids, workspaces: ws, pool: pool, log: log}))
 	}
 }
 
@@ -214,4 +224,20 @@ func readLine(r io.Reader) (string, error) {
 		return "", err
 	}
 	return strings.TrimRight(line, "\r\n"), nil
+}
+
+// rebuildReports replays the events table into empty projections, here
+// and now (docs/reports.md#how-reports-are-computed); workers keep serving
+// meanwhile, and reports fill up as it goes.
+func rebuildReports(ctx context.Context, cmd *cli.Command, svc adminServices) error {
+	p := report.NewProjector(svc.pool, svc.log)
+	if err := p.Rebuild(ctx); err != nil {
+		return err
+	}
+	n, err := p.CatchUp(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(cmd.Writer, "replayed %d events into the report projections\n", n)
+	return nil
 }

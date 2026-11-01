@@ -109,6 +109,7 @@ type Event struct {
 	OccurredAt       time.Time
 	Payload          json.RawMessage
 	PublishedAt      *time.Time
+	ReportedAt       *time.Time
 }
 
 type Invitation struct {
@@ -312,6 +313,46 @@ type Release struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	Version     int32
+}
+
+type ReportEstimate struct {
+	WorkspaceID uuid.UUID
+	ID          int64
+	IssueID     uuid.UUID
+	Weight      *float64
+	ValidFrom   time.Time
+	ValidTo     *time.Time
+}
+
+type ReportIssueMilestone struct {
+	WorkspaceID    uuid.UUID
+	IssueID        uuid.UUID
+	ProjectID      uuid.UUID
+	CreatedAt      time.Time
+	FirstStartedAt *time.Time
+	CompletedAt    *time.Time
+	AbandonedAt    *time.Time
+}
+
+type ReportIterationScope struct {
+	WorkspaceID uuid.UUID
+	ID          int64
+	IterationID uuid.UUID
+	IssueID     uuid.UUID
+	AddedAt     time.Time
+	RemovedAt   *time.Time
+}
+
+type ReportStatusInterval struct {
+	WorkspaceID uuid.UUID
+	ID          int64
+	ProjectID   uuid.UUID
+	IssueID     uuid.UUID
+	StatusID    uuid.UUID
+	CategoryID  uuid.NullUUID
+	Outcome     string
+	EnteredAt   time.Time
+	LeftAt      *time.Time
 }
 
 type Role struct {

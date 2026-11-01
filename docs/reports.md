@@ -84,26 +84,40 @@ One fixed page per project, not customisable in v1:
 
 ## How reports are computed
 
-A `reports` worker consumes domain events from JetStream and maintains
-projection tables ([ADR-0021](adr/0021-report-projections.md)):
+A `reports` worker maintains projection tables from the domain events
+([ADR-0021](adr/0021-report-projections.md)):
 
 | Table | Fed by | Serves |
 |-------|--------|--------|
-| `report_status_intervals` | `IssueCreated`, `IssueStatusUpdated`, `IssueMoved`, workflow migrations | Cycle/lead time, cumulative flow, created vs resolved, throughput |
-| `report_iteration_scope` | `IterationLoaded`, `IterationStarted`, `IterationCompleted`, `IssueEstimated`, status changes of loaded issues | Burndown, burnup, sprint report, velocity |
-| `report_daily_totals` | Nightly rollup of the two tables above per project | Fast long-range charts |
+| `report_status_intervals` | `IssueCreated`, `IssueStatusUpdated` (transitions, type changes, workflow migrations), `IssueMoved`, `StatusCategoryUpdated` | Cumulative flow, burndown and burnup (what was done when), created vs resolved |
+| `report_issue_milestones` | The same, derived per issue | Lead and cycle time, throughput |
+| `report_iteration_scope` | `IssueIterationChanged` (loading, unloading, rollover, iteration deletion) | Burndown, burnup, sprint report, velocity |
+| `report_estimates` | `IssueCreated`, `IssueEstimated` | Every report measured in estimate, as it was on each day |
 
-Columns are described in [data-model.md](data-model.md#reports).
+Columns are described in [data-model.md](data-model.md#reports). Committed,
+added and removed scope, and how each issue ended (completed, abandoned,
+rolled over), follow from the iteration's `started_at` and `completed_at`.
+Status events carry the category and outcome of the status entered, and
+`IssueEstimated` the scale's weight, as they were: workflows and scales
+change later. Reports compute their daily series from these tables per
+request; a daily rollup can come when long ranges need it.
+
+The worker applies the PostgreSQL `events` table, in id order, a batch per
+transaction that also sets the events' `reported_at`, so each event counts
+exactly once. Batches run one at a time across worker replicas (an advisory
+lock). Each JetStream event wakes it up, and a job every minute catches up
+with whatever it missed, so it never depends on the stream's retention.
 
 - Projections store ids, outcomes, estimate weights and timestamps only, never
   issue content.
 - Queries join projections with the current `issues` row to apply the filter
   and permissions.
 - A tombstone (`IssueDeleted`) removes the issue's projection rows.
-- `horizon admin rebuild-reports` truncates and replays the projections from
-  the PostgreSQL `events` table (for new reports, or after a bug fix).
-- Category changes (a category's outcome edited) trigger a rebuild for the
-  affected scope.
+- `horizon admin rebuild-reports` empties the projections, clears
+  `reported_at` and replays the PostgreSQL `events` table (for new reports, or
+  after a bug fix).
+- A category's outcome edited (`StatusCategoryUpdated`) changes the outcome of
+  every stay in its statuses, and the milestones of the issues concerned.
 
 ## API
 

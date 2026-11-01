@@ -178,7 +178,7 @@ func (s *Service) changeType(ctx context.Context, e *edit, fields *apperr.Fields
 	changes := []change{{"IssueTypeChanged", map[string]any{"from": old.ID, "to": typeID}}}
 	if i.StatusID != from {
 		s.trackOutcome(e, from)
-		changes = append(changes, change{"IssueStatusUpdated", map[string]any{"from": from, "to": i.StatusID}})
+		changes = append(changes, change{"IssueStatusUpdated", statusFacts(e.r, i.StatusID, map[string]any{"from": from, "to": i.StatusID})})
 	}
 	return changes, nil
 }
@@ -341,7 +341,7 @@ func (s *Service) Transition(ctx context.Context, ic Context, version int32, toS
 		from := i.StatusID
 		i.StatusID = tr.To
 		s.trackOutcome(e, from)
-		changes := []change{{"IssueStatusUpdated", map[string]any{"from": from, "to": tr.To, "transition_id": tr.ID}}}
+		changes := []change{{"IssueStatusUpdated", statusFacts(e.r, tr.To, map[string]any{"from": from, "to": tr.To, "transition_id": tr.ID})}}
 		for _, pa := range tr.Rules.PostActions {
 			before, iteration, release := i.AssigneeID, i.IterationID, i.ReleaseID
 			switch pa.Op {
@@ -405,7 +405,11 @@ func (s *Service) Estimate(ctx context.Context, ic Context, version int32, value
 		}
 		from := e.next.Estimate
 		e.next.Estimate = v
-		return []change{{"IssueEstimated", map[string]any{"from": from, "to": v}}}, nil
+		payload := map[string]any{"from": from, "to": v}
+		if w, ok := weightOf(e.r, v); ok {
+			payload["weight"] = w // the scale's weight now, for reports
+		}
+		return []change{{"IssueEstimated", payload}}, nil
 	})
 }
 

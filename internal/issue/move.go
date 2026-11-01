@@ -199,10 +199,10 @@ func (s *Service) moveOne(ctx context.Context, tx pgx.Tx, ic Context, target pro
 			return db.Issue{}, err
 		}
 	}
-	payload := map[string]any{
+	payload := statusFacts(dstCfg, m.statusID, map[string]any{
 		"from_project_id": m.cur.ProjectID, "to_project_id": target.Project.ID, "from_key": m.key, "to_key": keyOf(target.Project.Key, n),
 		"type_id": m.typeID, "status_id": m.statusID,
-	}
+	})
 	if len(m.dropped) > 0 {
 		payload["dropped"] = m.dropped
 	}

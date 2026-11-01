@@ -12,6 +12,7 @@ import (
 	"github.com/lidisoft/horizon/internal/issue"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/platform/nats"
+	"github.com/lidisoft/horizon/internal/report"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/worker"
 )
@@ -45,6 +46,7 @@ func runWorker(ctx context.Context, rt *runtime) error {
 		return err
 	}
 	d := rt.domain()
+	reports := report.NewProjector(rt.pool, logging.WithSystem(rt.log, "reports"))
 	return worker.Run(ctx, worker.Deps{
 		Log:           logging.WithSystem(rt.log, "worker"),
 		Pool:          rt.pool,
@@ -52,9 +54,15 @@ func runWorker(ctx context.Context, rt *runtime) error {
 		Stream:        eventlog.DefaultStream(rt.cfg.EventsRetention),
 		Metrics:       rt.metrics,
 		DeleteObjects: rt.s3.Delete,
-		Consumers:     []eventlog.Consumer{d.planning.PolicyConsumer()},
+		Consumers:     []eventlog.Consumer{d.planning.PolicyConsumer(), reports.Consumer()},
 		Jobs: []worker.Job{
 			{Name: "identity-cleanup", Every: time.Hour, Run: rt.identity().Cleanup},
+			// The consumer wakes the projector on each event; this catches
+			// up whatever it missed (a rebuild, events of a stopped relay).
+			{Name: "reports", Every: time.Minute, Run: func(ctx context.Context) error {
+				_, err := reports.CatchUp(ctx)
+				return err
+			}},
 			{Name: "describe", Every: 10 * time.Second, Run: func(ctx context.Context) error {
 				_, err := d.issues.DescribeQuiet(ctx)
 				return err

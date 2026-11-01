@@ -344,10 +344,14 @@ func (s *Service) Create(ctx context.Context, pc project.Context, in NewIssue) (
 			}
 		}
 		createdDoc = description
-		return eventlog.Append(ctx, tx, s.event(pc.Context, created, "IssueCreated", map[string]any{
+		payload := statusFacts(r, created.StatusID, map[string]any{
 			"project_id": created.ProjectID, "key": keyOf(pc.Project.Key, created.Number), "type_id": created.TypeID,
 			"status_id": created.StatusID, "parent_id": created.ParentID, "assignee_id": created.AssigneeID,
-		}))
+		})
+		if w, ok := weightOf(r, created.Estimate); ok {
+			payload["estimate_weight"] = w
+		}
+		return eventlog.Append(ctx, tx, s.event(pc.Context, created, "IssueCreated", payload))
 	})
 	if err != nil {
 		return Issue{}, err
@@ -490,6 +494,30 @@ func (s *Service) event(wc workspace.Context, i db.Issue, typ string, payload ma
 		ActorID:    uuid.NullUUID{UUID: wc.Principal.User.ID, Valid: wc.Principal.User.ID != uuid.Nil},
 		OccurredAt: s.now(), Payload: eventlog.Payload(payload),
 	}
+}
+
+// statusFacts adds what report projections need about the status an issue
+// enters (docs/reports.md#how-reports-are-computed): its category and that
+// category's outcome when it happened, since workflows change later.
+func statusFacts(r *configdef.Resolved, statusID uuid.UUID, payload map[string]any) map[string]any {
+	if st, _, ok := r.Status(statusID); ok {
+		payload["category_id"] = st.CategoryID
+		payload["outcome"] = r.Categories[st.CategoryID].Outcome
+	}
+	return payload
+}
+
+// weightOf is the scale's numeric weight of an estimate label.
+func weightOf(r *configdef.Resolved, label *string) (float64, bool) {
+	if label == nil {
+		return 0, false
+	}
+	for _, v := range r.Estimation.Values {
+		if v.Label == *label {
+			return v.Weight, true
+		}
+	}
+	return 0, false
 }
 
 // --- Validation helpers -------------------------------------------------------------

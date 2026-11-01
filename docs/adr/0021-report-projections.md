@@ -17,6 +17,11 @@ tables (status intervals, iteration scope, daily totals). Reports query those
 tables joined with current issue rows. Projections are rebuildable at any time
 by replaying the PostgreSQL `events` table.
 
+The worker applies the `events` table itself, claiming unreported events
+in id order a batch at a time (marked `reported_at` in the same
+transaction); JetStream only wakes it. Projections are thus exact even
+when the stream's retention has dropped old events.
+
 ## Consequences
 
 - Report queries are fast and independent of event payload shapes.

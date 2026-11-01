@@ -129,10 +129,10 @@ They hold ids, outcomes, weights and timestamps only.
 | Table | Key columns |
 |-------|-------------|
 | `report_status_intervals` | workspace_id, project_id, issue_id, status_id, category_id, outcome, entered_at, left_at (null = current) |
-| `report_iteration_scope` | workspace_id, iteration_id, issue_id, added_at, removed_at, committed (bool: present at start), estimate_weight, completed_at, abandoned_at, ended_as (completed, abandoned, rolled_over, removed) |
-| `report_issue_milestones` | workspace_id, issue_id, created_at, first_started_at, last_completed_at, abandoned_at — derived per issue for lead/cycle time |
-| `report_daily_totals` | workspace_id, project_id, day, outcome, issue_count, estimate_total |
-| `report_cursor` | consumer name, last event id — for replay and rebuild |
+| `report_issue_milestones` | workspace_id, issue_id, project_id, created_at, first_started_at, completed_at (start of its last run of completed stays; null when not completed), abandoned_at (likewise) — for lead and cycle time |
+| `report_iteration_scope` | workspace_id, iteration_id, issue_id, added_at, removed_at (null: still in it) — one row per stay |
+| `report_estimates` | workspace_id, issue_id, weight (null: no estimate), valid_from, valid_to |
+| `events.reported_at` | The projector's queue: events applied (null: not yet) |
 
 ## Hard delete
 

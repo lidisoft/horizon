@@ -85,7 +85,7 @@ func (s *Service) moveStatuses(ctx context.Context, tx pgx.Tx, actor, typeID uui
 				return err
 			}
 			if err := eventlog.Append(ctx, tx, s.systemEvent(saved, actor, "IssueStatusUpdated",
-				map[string]any{"from": from, "to": to, "by": reason})); err != nil {
+				statusFacts(cfg, to, map[string]any{"from": from, "to": to, "by": reason}))); err != nil {
 				return err
 			}
 		}
