@@ -914,13 +914,25 @@ func TestIssues(t *testing.T) {
 	pg.eval(`document.activeElement?.blur()`)
 	pg.do(chromedp.KeyEvent("k", chromedp.KeyModifiers(chromedp.ModifierCtrl)))
 	palette := appRoot + `.getElementById("palette")`
-	pg.poll(palette + `.hasAttribute("open") && "open"`)
+	pg.poll(palette + `.hasAttribute("open") && ` + palette + `.shadowRoot.activeElement?.localName === "input" && "open"`)
 	if got := pg.poll(palette + `.querySelector("[data-dynamic] lds-command-group")?.getAttribute("heading")`); got != "Issue HZN-1" {
 		t.Errorf("palette group = %q", got)
 	}
 	// Words find issues as you type; a typed key offers to open it.
 	pg.do(chromedp.KeyEvent("replay"))
-	pg.poll(palette + `.querySelector('[value="goto:HZN-2"]')?.textContent.includes("Replay after reconnect") && "found"`)
+	found := palette + `.querySelector('[value="goto:HZN-2"]')?.textContent.includes("Replay after reconnect")`
+	if _, err := chromedp.Run(pg.ctx, chromedp.Poll[bool](`(() => { try { return !!(`+found+`); } catch { return false; } })()`,
+		chromedp.WithPollingInterval(50*time.Millisecond), chromedp.WithPollingTimeout(10*time.Second))); err != nil {
+		// What the palette holds, and what the search answers, to tell a lost
+		// keystroke from a lost answer.
+		state, _ := chromedp.Run(pg.ctx, chromedp.Evaluate[string](`(async () => { const p = `+palette+`;
+			const api = await fetch("/api/v1/w/acme/search?q=replay&limit=8").then((r) => r.status + " " + r.statusText).catch(String);
+			return "path=" + location.pathname + " open=" + p.hasAttribute("open") + " query=" + JSON.stringify(p.shadowRoot.querySelector("input").value) +
+				" focus=" + p.shadowRoot.activeElement?.localName + " issues=" + p.querySelector("[data-goto]").textContent.replace(/\s+/g, " ").trim() + " api=" + api; })()`,
+			chromedp.EvalAwaitPromise))
+		pg.logs.failOnErrors(t)
+		t.Fatalf("palette search: %v\n%s", err, state)
+	}
 	pg.eval(`(() => { const i = ` + palette + `.shadowRoot.querySelector("input"); i.value = ""; i.dispatchEvent(new Event("input", { bubbles: true, composed: true })); })()`)
 	pg.do(chromedp.KeyEvent("hzn-2"))
 	pg.poll(palette + `.querySelector('[value="goto:HZN-2"]') && "offered"`)

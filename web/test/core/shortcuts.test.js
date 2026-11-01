@@ -60,6 +60,19 @@ describe("shortcuts", () => {
     }
   });
 
+  test("pause holds back all but the shortcuts allowed in inputs", () => {
+    const { target, shortcuts, fired, add } = setup();
+    add("comment", "r");
+    add("palette", "mod+k", { allowInInputs: true });
+    const resume = shortcuts.pause();
+    target.dispatchEvent(key("r"));
+    target.dispatchEvent(key("k", { ctrlKey: true }));
+    resume();
+    resume(); // idempotent
+    target.dispatchEvent(key("r"));
+    assert.deepEqual(fired, ["palette", "comment"]);
+  });
+
   test("scopes limit shortcuts to the active view", () => {
     const { target, shortcuts, fired, add } = setup();
     add("global", "?");

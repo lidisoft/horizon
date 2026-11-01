@@ -208,7 +208,7 @@ export class HznApp extends HTMLElement {
       "sign-out": () => session.logout(),
       theme: () => this.toggleTheme(),
       help: () => this.showHelp(),
-      palette: () => this.palette.setAttribute("open", ""),
+      palette: () => this.openPalette(),
       "create-issue": () => this.createIssue(),
     };
     shortcuts.register({ id: "palette", keys: "mod+k", description: "shortcut.palette", allowInInputs: true, handler: actions.palette });
@@ -217,7 +217,16 @@ export class HznApp extends HTMLElement {
     shortcuts.register({ id: "create-issue", keys: "c", description: "shortcut.createIssue", handler: actions["create-issue"] });
 
     // Commands of the open issue, and "Open <KEY>" for a typed issue key.
-    this.palette.addEventListener("lds-open", () => this.renderCommands());
+    // While it is open, keys belong to it, not to the page's shortcuts.
+    this.palette.addEventListener("lds-open", (event) => event.target === this.palette && this.renderCommands());
+    new MutationObserver(() => {
+      const open = this.palette.hasAttribute("open");
+      if (open && !this.resumeShortcuts) this.resumeShortcuts = shortcuts.pause();
+      if (!open && this.resumeShortcuts) {
+        this.resumeShortcuts();
+        this.resumeShortcuts = null;
+      }
+    }).observe(this.palette, { attributes: true, attributeFilter: ["open"] });
     this.palette.addEventListener("input", (event) => this.searchPalette(event.composedPath()[0]?.value ?? ""));
 
     this.palette.addEventListener("lds-select", (event) => {
@@ -266,6 +275,15 @@ export class HznApp extends HTMLElement {
       // routes send the user to sign-in, which reports errors as they occur.
     }
     this.context.router.start();
+  }
+
+  /**
+   * Opens ⌘K with its input focused straight away (lds-command v0.0.5
+   * focuses it a frame later).
+   */
+  openPalette() {
+    this.palette.setAttribute("open", "");
+    this.palette.shadowRoot?.querySelector("input")?.focus();
   }
 
   /** Renders the commands views registered, for the palette about to open. */
