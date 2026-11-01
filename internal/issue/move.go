@@ -181,6 +181,12 @@ func (s *Service) moveOne(ctx context.Context, tx pgx.Tx, ic Context, target pro
 	if err != nil {
 		return db.Issue{}, err
 	}
+	// Milestones of the project it leaves no longer track it.
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM milestone_issues mi USING milestones m
+		WHERE mi.milestone_id = m.id AND mi.issue_id = $1 AND m.project_id = $2`, m.cur.ID, m.cur.ProjectID); err != nil {
+		return db.Issue{}, err
+	}
 	if err := q.AddIssueAlias(ctx, db.AddIssueAliasParams{WorkspaceID: m.cur.WorkspaceID, ProjectID: m.cur.ProjectID, Number: m.cur.Number,
 		IssueID: m.cur.ID, CreatedAt: now}); err != nil {
 		return db.Issue{}, err

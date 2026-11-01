@@ -210,13 +210,23 @@ project, `workflow` post-action). Each issue records
 `IssueIterationChanged` as well.
 
 ### Release
-Name, description, start and release dates, state (`unreleased`, `released`,
-`archived`). Events: `ReleaseCreated`, `ReleaseUpdated`, `ReleaseReleased`,
-`ReleaseArchived`, `ReleaseDeleted`.
+Name (unique in the project, ignoring case), description, start and release
+dates, state (`unreleased`, `released`, `archived`). Events:
+`ReleaseCreated`, `ReleaseUpdated`, `ReleaseReleased`, `ReleaseArchived`,
+`ReleaseDeleted`. Managing releases needs `release.manage`; targeting an
+issue to one is an edit of the issue (`issue.edit`, `IssueReleaseChanged`).
+Releasing sets the release date to today when it had none; issues stay
+targeted, finished or not. Archived releases take no new issues. Deleting a
+release clears it from its issues.
 
 ### Milestone
 Name, date, optional project (none means workspace-level), linked issues.
-Events: `MilestoneCreated`, `MilestoneUpdated`, `MilestoneDeleted`.
+Events: `MilestoneCreated`, `MilestoneUpdated` (also for issues linked and
+unlinked), `MilestoneDeleted`. `milestone.manage` on the project, or on the
+workspace for a workspace milestone. A project milestone links its
+project's issues only (an issue moved away leaves it); a workspace
+milestone links any issue the person sees. Progress counts only the linked
+issues the reader sees.
 
 ### View
 Owner, scope (personal, project or workspace), layout, filter tree, grouping,

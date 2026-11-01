@@ -60,8 +60,8 @@ PostgreSQL schema outline. Authoritative definitions live in
 | `comments` | workspace_id, issue_id, author_id, body (plain text until phase 5, then document_id), edited_at, version |
 | `attachments` | workspace_id, issue_id, uploader_id, filename, content_type (sniffed), size, object_key, state (pending, ready), completed_at |
 | `iterations` | workspace_id, project_id, name, goal, state (`planned`, `scheduled`, `active`, `completed`, `archived`), start_date, end_date, started_at, completed_at, archived_at, completion JSONB (`{policy, rollover_to}`), version; `issues.iteration_id` references it (`ON DELETE SET NULL`) |
-| `releases` | workspace_id, project_id, name, description, state, start_date, release_date |
-| `milestones` | workspace_id, project_id (nullable), name, date |
+| `releases` | workspace_id, project_id, name (unique per project, ignoring case), description, state, start_date, release_date, released_at, archived_at, version; `issues.release_id` references it (`ON DELETE SET NULL`) |
+| `milestones` | workspace_id, project_id (nullable), name, description, date, version |
 | `milestone_issues` | milestone_id, issue_id |
 
 Notable indexes:

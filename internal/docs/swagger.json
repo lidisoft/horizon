@@ -3313,6 +3313,60 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/issues/{issue}/release": {
+            "post": {
+                "description": "Needs issue.edit. A release of the issue's project, not archived (422 release_id unknown or archived); null clears it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Set an issue's release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Release, or null",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/issue.ReleaseRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/issue.Issue"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/issues/{issue}/transition": {
             "post": {
                 "description": "Through an allowed transition of the workflow: 409 transition_not_allowed, children_open; 403 transition_forbidden (roles); 422 transition_requires_fields lists missing fields.",
@@ -3547,6 +3601,270 @@
                         "description": "cannot_change_self",
                         "schema": {
                             "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/milestones": {
+            "get": {
+                "description": "The workspace's milestones and those of visible projects, by date, each with the progress of its linked issues.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "List milestones",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.MilestoneList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Needs milestone.manage on the project, or on the workspace for a workspace milestone. Name and date required.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Create a milestone",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Milestone",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/planning.MilestoneRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Milestone"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/milestones/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Get a milestone",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Milestone id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Milestone"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Needs milestone.manage on its scope; only a MilestoneDeleted tombstone remains of its history.",
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Delete a milestone",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Milestone id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Update a milestone",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Milestone id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Milestone version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/planning.MilestoneRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Milestone"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/milestones/{id}/issues": {
+            "get": {
+                "description": "The keys of the linked issues the caller sees.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "List a milestone's issues",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Milestone id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.MilestoneIssueList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Needs milestone.manage on its scope. A project milestone takes its project's issues only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Link issues to a milestone",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Milestone id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Issue keys",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/planning.LinkRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Milestone"
                         }
                     }
                 }
@@ -4430,6 +4748,41 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/projects/{key}/milestones": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "List a project's milestones",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.MilestoneList"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/projects/{key}/people": {
             "get": {
                 "description": "Active members who see the project, for assignee pickers. Readable by whoever sees the project, guests included.",
@@ -4461,6 +4814,327 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/project.PeopleList"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/releases": {
+            "get": {
+                "description": "Unreleased ones by release date, then released ones, latest first (archived ones with ?archived=true), each with the progress of its issues.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "List releases",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Include archived releases",
+                        "name": "archived",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.ReleaseList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Needs release.manage. Names are unique in the project, ignoring case.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Create a release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Name required",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/planning.ReleaseRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Release"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/releases/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Get a release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Release id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Release"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Needs release.manage. Its issues lose it; only a ReleaseDeleted tombstone remains of its history.",
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Delete a release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Release id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "description": "Archived releases don't change (409 release_archived).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Update a release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Release id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Release version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/planning.ReleaseRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Release"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/releases/{id}/archive": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Archive a release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Release id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Release version",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Release"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/projects/{key}/releases/{id}/release": {
+            "post": {
+                "description": "Needs release.manage. The release date becomes today if it had none; issues stay targeted to it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "planning"
+                ],
+                "summary": "Release a release",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Release id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Release version",
+                        "name": "If-Match",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/planning.Release"
                         }
                     }
                 }
@@ -7043,6 +7717,14 @@
                 }
             }
         },
+        "issue.ReleaseRequest": {
+            "type": "object",
+            "properties": {
+                "release_id": {
+                    "type": "string"
+                }
+            }
+        },
         "issue.TransitionList": {
             "type": "object",
             "properties": {
@@ -7254,6 +7936,26 @@
                 }
             }
         },
+        "planning.LinkRequest": {
+            "type": "object",
+            "properties": {
+                "add": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "HZN-41"
+                    ]
+                },
+                "remove": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "planning.LoadRequest": {
             "type": "object",
             "properties": {
@@ -7272,6 +7974,96 @@
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "planning.Milestone": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "description": "CanManage is true when the caller holds milestone.manage on its scope.",
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "date": {
+                    "type": "string",
+                    "example": "2026-12-18"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Beta"
+                },
+                "progress": {
+                    "description": "Progress counts its linked issues the caller can see.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/planning.Stats"
+                        }
+                    ]
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "planning.MilestoneIssueList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "HZN-41",
+                        "OPS-7"
+                    ]
+                }
+            }
+        },
+        "planning.MilestoneList": {
+            "type": "object",
+            "properties": {
+                "can_create": {
+                    "description": "CanCreate is true when the caller may add workspace milestones.",
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/planning.Milestone"
+                    }
+                }
+            }
+        },
+        "planning.MilestoneRequest": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "example": "2026-12-18"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Beta"
+                },
+                "project": {
+                    "type": "string",
+                    "example": "HZN"
                 }
             }
         },
@@ -7309,6 +8101,95 @@
                 "start_date": {
                     "type": "string",
                     "example": "2026-11-16"
+                }
+            }
+        },
+        "planning.Release": {
+            "type": "object",
+            "properties": {
+                "archived_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "v0.1"
+                },
+                "progress": {
+                    "description": "Progress counts the issues targeted to it (lists and reads).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/planning.Stats"
+                        }
+                    ]
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "release_date": {
+                    "type": "string",
+                    "example": "2026-12-18"
+                },
+                "released_at": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2026-11-02"
+                },
+                "state": {
+                    "type": "string",
+                    "enum": [
+                        "unreleased",
+                        "released",
+                        "archived"
+                    ]
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "planning.ReleaseList": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "description": "CanManage is true when the caller holds release.manage.",
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/planning.Release"
+                    }
+                }
+            }
+        },
+        "planning.ReleaseRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "v0.1"
+                },
+                "release_date": {
+                    "type": "string",
+                    "example": "2026-12-18"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2026-11-02"
                 }
             }
         },

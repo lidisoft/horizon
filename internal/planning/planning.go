@@ -1,7 +1,7 @@
-// Package planning owns what a project plans its issues into: iterations
-// (docs/domain.md#iteration). Issues hold their iteration
-// (issues.iteration_id); this package moves them in and out through the
-// issue module and records each iteration's side of it.
+// Package planning owns what issues are planned into: iterations, releases
+// and milestones (docs/domain.md#iteration). Issues hold their iteration
+// and release (issues.iteration_id, release_id); this package moves them
+// through the issue module and records each iteration's side of it.
 package planning
 
 import (
@@ -61,13 +61,16 @@ func (s *Service) settings(ctx context.Context, conn db.DBTX, pc project.Context
 	})
 }
 
-// event builds a planning event; every payload names the project, so
-// pushes reach its viewers (docs/realtime.md#topics).
+// event builds a planning event. Payloads name the project when there is
+// one, so pushes reach its viewers (docs/realtime.md#topics); workspace
+// milestones have none and go to the workspace.
 func (s *Service) event(wc workspace.Context, aggregate string, id, projectID uuid.UUID, version int32, typ string, payload map[string]any) eventlog.Event {
 	if payload == nil {
 		payload = map[string]any{}
 	}
-	payload["project_id"] = projectID
+	if projectID != uuid.Nil {
+		payload["project_id"] = projectID
+	}
 	return eventlog.Event{
 		WorkspaceID: uuid.NullUUID{UUID: wc.Workspace.ID, Valid: true}, AggregateType: aggregate, AggregateID: id,
 		AggregateVersion: int64(version), Type: typ,
@@ -76,16 +79,22 @@ func (s *Service) event(wc workspace.Context, aggregate string, id, projectID uu
 	}
 }
 
-// deleteProject removes a deleted project's iterations and scrubs their
-// history (a project.DeleteHook; ProjectDeleted is their tombstone).
+// deleteProject removes a deleted project's iterations, releases and
+// milestones and scrubs their history (a project.DeleteHook;
+// ProjectDeleted is their tombstone).
 func (s *Service) deleteProject(ctx context.Context, tx pgx.Tx, pc project.Context) error {
-	rows, err := tx.Query(ctx, `DELETE FROM iterations WHERE workspace_id = $1 AND project_id = $2 RETURNING id`, pc.Workspace.ID, pc.Project.ID)
-	if err != nil {
-		return err
+	for _, t := range []struct{ table, aggregate string }{{"iterations", "iteration"}, {"releases", "release"}, {"milestones", "milestone"}} {
+		rows, err := tx.Query(ctx, `DELETE FROM `+t.table+` WHERE workspace_id = $1 AND project_id = $2 RETURNING id`, pc.Workspace.ID, pc.Project.ID)
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return err
+		}
+		if err := eventlog.Scrub(ctx, tx, uuid.NullUUID{UUID: pc.Workspace.ID, Valid: true}, t.aggregate, ids); err != nil {
+			return err
+		}
 	}
-	ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-	if err != nil {
-		return err
-	}
-	return eventlog.Scrub(ctx, tx, uuid.NullUUID{UUID: pc.Workspace.ID, Valid: true}, "iteration", ids)
+	return nil
 }

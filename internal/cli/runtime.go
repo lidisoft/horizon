@@ -150,7 +150,7 @@ func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
 		hub.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, func(ws *gin.RouterGroup) {
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, func(ws *gin.RouterGroup) {
 			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject)
 		})
 	}, hub

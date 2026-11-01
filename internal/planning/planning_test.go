@@ -535,3 +535,5 @@ func TestWorkflowClearsIteration(t *testing.T) {
 		t.Errorf("issue history = %v", ih)
 	}
 }
+
+func issueMove(project string) issue.MoveInput { return issue.MoveInput{Project: project} }

@@ -173,7 +173,7 @@ func (s *Service) Iterations(ctx context.Context, pc project.Context, archived b
 		it := iterationFrom(r)
 		st := stats[r.ID]
 		if st == nil {
-			st = &Stats{ByOutcome: map[string]Tally{}}
+			st = newStats()
 		}
 		it.Stats = st
 		if r.State == StateCompleted || r.State == StateArchived {
@@ -216,7 +216,7 @@ func (s *Service) Iteration(ctx context.Context, pc project.Context, id uuid.UUI
 	it := iterationFrom(r)
 	it.Stats = stats[id]
 	if it.Stats == nil {
-		it.Stats = &Stats{ByOutcome: map[string]Tally{}}
+		it.Stats = newStats()
 	}
 	return it, nil
 }
@@ -235,25 +235,29 @@ func (s *Service) stats(ctx context.Context, pc project.Context) (map[uuid.UUID]
 	}
 	out := map[uuid.UUID]*Stats{}
 	for _, row := range rows {
-		st := out[row.IterationID]
-		if st == nil {
-			st = &Stats{ByOutcome: map[string]Tally{}}
-			out[row.IterationID] = st
+		if out[row.IterationID] == nil {
+			out[row.IterationID] = newStats()
 		}
-		n := int(row.Issues)
-		points := 0.0
-		if row.Estimate != nil {
-			points = weight(r.Estimation, *row.Estimate) * float64(n)
-			st.Estimated += n
-		}
-		st.Issues += n
-		st.Points += points
-		t := st.ByOutcome[row.Outcome]
-		t.Issues += n
-		t.Points += points
-		st.ByOutcome[row.Outcome] = t
+		out[row.IterationID].add(r.Estimation, row.Estimate, row.Outcome, int(row.Issues))
 	}
 	return out, nil
+}
+
+func newStats() *Stats { return &Stats{ByOutcome: map[string]Tally{}} }
+
+// add counts n issues of one estimate and outcome.
+func (st *Stats) add(scale configdef.Estimation, estimate *string, outcome string, n int) {
+	points := 0.0
+	if estimate != nil {
+		points = weight(scale, *estimate) * float64(n)
+		st.Estimated += n
+	}
+	st.Issues += n
+	st.Points += points
+	t := st.ByOutcome[outcome]
+	t.Issues += n
+	t.Points += points
+	st.ByOutcome[outcome] = t
 }
 
 // weight is the points an estimate counts for.
@@ -368,13 +372,7 @@ func validDates(fields *apperr.Fields, start, end string) (pgtype.Date, pgtype.D
 }
 
 func (s *Service) checkProject(ctx context.Context, pc project.Context) error {
-	if err := s.require(ctx, pc, access.IterationManage); err != nil {
-		return err
-	}
-	if pc.Project.ArchivedAt != nil {
-		return apperr.Conflict("project_archived")
-	}
-	return nil
+	return s.requireManage(ctx, pc, access.IterationManage)
 }
 
 // Plan adds an iteration to the project (iteration.manage).
@@ -415,7 +413,7 @@ func (s *Service) Plan(ctx context.Context, pc project.Context, in PlanInput) (I
 		return Iteration{}, err
 	}
 	it := iterationFrom(created)
-	it.Stats = &Stats{ByOutcome: map[string]Tally{}}
+	it.Stats = newStats()
 	return it, nil
 }
 

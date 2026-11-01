@@ -51,6 +51,7 @@ func (h *HTTP) RegisterWorkspace(ws *gin.RouterGroup) {
 	g.POST("/transition", h.transition)
 	g.POST("/assign", h.assign)
 	g.POST("/estimate", h.estimate)
+	g.POST("/release", h.release)
 	g.POST("/prioritize", h.prioritize)
 	g.POST("/rank", h.rank)
 	g.POST("/archive", h.archive)
@@ -311,6 +312,39 @@ func (h *HTTP) assign(c *gin.Context) {
 	}
 	if v, ok := version(c); ok {
 		i, err := h.svc.Assign(c, current(c), v, id)
+		reply(c, http.StatusOK, i, err)
+	}
+}
+
+// ReleaseRequest names the release; null clears it.
+type ReleaseRequest struct {
+	ReleaseID *uuid.UUID `json:"release_id"`
+}
+
+// release targets the issue to a release.
+//
+//	@Summary		Set an issue's release
+//	@Description	Needs issue.edit. A release of the issue's project, not archived (422 release_id unknown or archived); null clears it.
+//	@Tags			issues
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws			path		string			true	"Workspace slug"
+//	@Param			issue		path		string			true	"Issue key"
+//	@Param			If-Match	header		string			false	"Issue version"
+//	@Param			body		body		ReleaseRequest	true	"Release, or null"
+//	@Success		200			{object}	Issue
+//	@Router			/api/v1/w/{ws}/issues/{issue}/release [post]
+func (h *HTTP) release(c *gin.Context) {
+	var req ReleaseRequest
+	if !bind(c, &req) {
+		return
+	}
+	var id uuid.NullUUID
+	if req.ReleaseID != nil {
+		id = uuid.NullUUID{UUID: *req.ReleaseID, Valid: true}
+	}
+	if v, ok := version(c); ok {
+		i, err := h.svc.SetRelease(c, current(c), v, id)
 		reply(c, http.StatusOK, i, err)
 	}
 }

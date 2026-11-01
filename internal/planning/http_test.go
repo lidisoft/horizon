@@ -38,7 +38,7 @@ func (f *fixture) client(email string) *client {
 	h := server.NewEngine(server.Deps{Log: zerolog.Nop(), API: func(api *gin.RouterGroup) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
-		ws.Register(api, config.RegisterWorkspace, issues.RegisterWorkspace, func(w *gin.RouterGroup) {
+		ws.Register(api, config.RegisterWorkspace, issues.RegisterWorkspace, plans.RegisterWorkspace, func(w *gin.RouterGroup) {
 			projects.Register(w, config.RegisterProject, issues.RegisterProject, plans.RegisterProject)
 		})
 	}})
@@ -121,4 +121,32 @@ func TestHTTPIterations(t *testing.T) {
 	c.want(c.do("PUT", settings, `{"completion_policy":"none","iteration_length_weeks":3}`), http.StatusOK, `"value":"none","workspace":"archive_done_rollover_rest","overridden":true`)
 	c.want(c.do("PUT", settings, `{"completion_policy":null}`), http.StatusOK, `"completion_policy":{"value":"archive_done_rollover_rest"`)
 	c.want(c.do("PUT", settings, `{"completion_policy":"sometimes"}`), http.StatusUnprocessableEntity, "completion_policy")
+}
+
+func TestHTTPReleasesAndMilestones(t *testing.T) {
+	f := newFixture(t)
+	f.create("HZN", "A", "5")
+	c := f.client("owner@example.com")
+
+	rec := c.do("POST", "/api/v1/w/acme/projects/HZN/releases", `{"name":"v0.1","release_date":"2026-12-18"}`)
+	c.want(rec, http.StatusCreated, `"state":"unreleased"`)
+	var r planning.Release
+	_ = json.Unmarshal(rec.Body.Bytes(), &r)
+	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-1/release", `{"release_id":"`+r.ID.String()+`"}`), http.StatusOK, `"release_id":"`+r.ID.String()+`"`)
+	c.want(c.do("GET", "/api/v1/w/acme/projects/HZN/releases", ""), http.StatusOK, `"points":5`)
+	c.want(c.do("POST", "/api/v1/w/acme/projects/HZN/releases/"+r.ID.String()+"/release", ""), http.StatusOK, `"state":"released"`)
+	c.want(c.do("POST", "/api/v1/w/acme/issues/HZN-1/release", `{"release_id":null}`), http.StatusOK, `"release_id":null`)
+
+	rec = c.do("POST", "/api/v1/w/acme/milestones", `{"name":"Launch","date":"2027-01-15"}`)
+	c.want(rec, http.StatusCreated, `"project_id":null`)
+	var m planning.Milestone
+	_ = json.Unmarshal(rec.Body.Bytes(), &m)
+	c.want(c.do("POST", "/api/v1/w/acme/milestones/"+m.ID.String()+"/issues", `{"add":["HZN-1"]}`), http.StatusOK, `"issues":1`)
+	c.want(c.do("GET", "/api/v1/w/acme/milestones/"+m.ID.String()+"/issues", ""), http.StatusOK, `["HZN-1"]`)
+	c.want(c.do("GET", "/api/v1/w/acme/projects/HZN/milestones", ""), http.StatusOK, `"name":"Launch"`)
+	rec = c.do("DELETE", "/api/v1/w/acme/milestones/"+m.ID.String(), "")
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body)
+	}
+	c.want(c.do("GET", "/api/v1/w/acme/milestones/"+m.ID.String(), ""), http.StatusNotFound, "milestone_not_found")
 }

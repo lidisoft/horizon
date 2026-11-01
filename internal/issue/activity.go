@@ -199,7 +199,9 @@ func (n *namer) resolve(ctx context.Context) error {
 		JOIN workspace_members m ON m.user_id = u.id AND m.workspace_id = $1
 		WHERE u.id = ANY($2::uuid[])
 		UNION ALL
-		SELECT it.id, it.name FROM iterations it WHERE it.workspace_id = $1 AND it.id = ANY($2::uuid[])`, n.ic.Workspace.ID, rest)
+		SELECT it.id, it.name FROM iterations it WHERE it.workspace_id = $1 AND it.id = ANY($2::uuid[])
+		UNION ALL
+		SELECT r.id, r.name FROM releases r WHERE r.workspace_id = $1 AND r.id = ANY($2::uuid[])`, n.ic.Workspace.ID, rest)
 	if err != nil {
 		return err
 	}

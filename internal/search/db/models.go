@@ -215,6 +215,24 @@ type Label struct {
 	Version     int32
 }
 
+type Milestone struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	ProjectID   uuid.NullUUID
+	Name        string
+	Description string
+	Date        pgtype.Date
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
+type MilestoneIssue struct {
+	WorkspaceID uuid.UUID
+	MilestoneID uuid.UUID
+	IssueID     uuid.UUID
+}
+
 type PasswordReset struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
@@ -257,6 +275,22 @@ type Purge struct {
 	Objects       []string
 	CreatedAt     time.Time
 	Attempts      int32
+}
+
+type Release struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	ProjectID   uuid.UUID
+	Name        string
+	Description string
+	State       string
+	StartDate   pgtype.Date
+	ReleaseDate pgtype.Date
+	ReleasedAt  *time.Time
+	ArchivedAt  *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
 }
 
 type Role struct {

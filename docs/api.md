@@ -73,12 +73,15 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
     /iterations/{id}                       GET | PATCH (If-Match) | DELETE (not while active)
     /iterations/{id}/issues                POST {add: [keys], remove: [keys]} — load
     /iterations/{id}/start|complete|archive  POST (If-Match optional); complete takes {rollover_to}
-    /releases  /milestones
+    /releases                              GET (progress; ?archived=true) | POST (release.manage)
+    /releases/{id}                         GET | PATCH (If-Match) | DELETE; /release  /archive  POST
+    /milestones                            GET the project's and the workspace's
   /projects/{key}/issues                   GET in rank order (?cursor, ?limit, ?archived=true)
   /issues                                  POST {project, type_id, title, …}; filter via view query (POST /issues/query)
   /issues/{key}                            GET (former keys resolve; "parent" names a visible parent) | PATCH (If-Match: version) | DELETE ?children=
     /transitions                           GET those available from the current status ("blocked" when not allowed)
     /transition  /assign  /estimate  /prioritize  /rank  /archive  /unarchive   POST (If-Match optional)
+    /release                               POST {release_id | null} (issue.edit)
     /links  /links/{id}                    GET | POST {type, target, lag_days?} | DELETE; seen from the issue (blocks / blocked_by …)
     /children  /move  /move/preview
     /comments  /comments/{id}               GET (oldest first) | POST {body} | PATCH (author) | DELETE (author, or issue.comment.moderate)
@@ -88,7 +91,9 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
     /subscription
   /search                                  GET ?q=&limit=&archived=&project= — issues by key, words (prefixes) in titles,
                                            descriptions and comments, and near titles; snippets mark words with U+0002/U+0003
-  /views  /milestones
+  /views
+  /milestones  /milestones/{id}            GET (visible ones, with progress) | POST {project?, name, date, description} | PATCH | DELETE
+    /issues                                GET linked keys | POST {add: [keys], remove: [keys]} (milestone.manage)
   /reports/{report}                        report data (see reports.md)
   /projects/{key}/overview                 project overview blocks
   /webhooks  /webhooks/{id}/deliveries
