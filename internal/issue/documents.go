@@ -85,7 +85,7 @@ func docJSON(n *document.Node) json.RawMessage {
 }
 
 // descriptionOf returns the issue's description document and its version
-// (0: never written as a document).
+// (0: never written as a document): the snapshot with the batches since.
 func descriptionOf(ctx context.Context, conn db.DBTX, i db.Issue) (*document.Node, int64, error) {
 	d, err := db.New(conn).DescriptionDocument(ctx, i.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -94,19 +94,8 @@ func descriptionOf(ctx context.Context, conn db.DBTX, i db.Issue) (*document.Nod
 	if err != nil {
 		return nil, 0, err
 	}
-	n, err := docSchema.ParseJSON(d.Content)
-	if err != nil {
-		return nil, 0, err
-	}
-	return n, d.Version, nil
-}
-
-// saveDescription writes the description document whole.
-func (s *Service) saveDescription(ctx context.Context, tx pgx.Tx, i db.Issue, doc *document.Node) error {
-	_, err := db.New(tx).SaveDescription(ctx, db.SaveDescriptionParams{
-		WorkspaceID: i.WorkspaceID, ID: uuid.Must(uuid.NewV7()), IssueID: i.ID, Content: docJSON(doc), UpdatedAt: s.now(),
-	})
-	return err
+	n, err := currentDoc(ctx, conn, d)
+	return n, d.Version, err
 }
 
 // bodyOf returns a comment's document.

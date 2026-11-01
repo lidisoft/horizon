@@ -181,9 +181,52 @@ class HznEditor extends HTMLElement {
     if (this.hasAttribute("autofocus")) requestAnimationFrame(() => this.focus());
   }
 
+  disconnectedCallback() {
+    this.collab?.stop();
+    this.collab = null;
+  }
+
+  /**
+   * Edits collaboratively through collab (horizon/editor/collab.js): read
+   * only until it has joined; local steps go to it, remote ones come back
+   * through receive.
+   */
+  attachCollab(collab) {
+    this.collab?.stop();
+    this.collab = collab;
+    this.setOffline(true);
+    collab.start();
+  }
+
+  /** The document as the server has it (joining from scratch). */
+  reset(json) {
+    this.value = json;
+  }
+
+  /** Others' steps: the document after them and the mapping for the selection and history. */
+  receive(doc, mapping) {
+    const state = this.view.state;
+    let selection = state.selection.map(mapping);
+    try {
+      if (!doc.resolve(selection.head).parent.isTextblock) selection = Selection.near(doc, selection.head);
+    } catch {
+      selection = Selection.atEnd(doc);
+    }
+    this.history.mapThrough(mapping);
+    this.view.updateState(new EditorState(doc, selection, state.storedMarks));
+    this.refreshToolbar();
+    this.dispatchEvent(new CustomEvent("hzn-change", { bubbles: true, composed: true, detail: { doc: doc.toJSON(), steps: [], remote: true } }));
+  }
+
+  /** Stops (or resumes) editing while the connection is away. */
+  setOffline(offline) {
+    this.offline = offline;
+    this.view?.setEditable(!offline && !this.hasAttribute("readonly"));
+  }
+
   attributeChangedCallback(name) {
     if (!this.view) return;
-    if (name === "readonly") this.view.setEditable(!this.hasAttribute("readonly"));
+    if (name === "readonly") this.view.setEditable(!this.hasAttribute("readonly") && !this.offline);
     if (name === "placeholder") this.view.dom.dataset.placeholder = this.getAttribute("placeholder") ?? "";
   }
 
@@ -235,6 +278,7 @@ class HznEditor extends HTMLElement {
     const before = this.view.state.selection;
     if (tr.docChanged && !tr.meta.history) this.history.record(tr, before);
     this.view.updateState(this.view.state.apply(tr));
+    if (tr.docChanged) this.collab?.local(tr.steps);
     if (tr.meta.typing === "insert" && !tr.meta.rule) {
       const rule = inputRule(this.view.state);
       if (rule) rule(this.view.state, (rtr) => this.dispatch(rtr.setMeta("rule", true)));

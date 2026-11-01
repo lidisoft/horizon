@@ -52,6 +52,9 @@ type Hub struct {
 
 	slugMu sync.Mutex
 	slugs  map[uuid.UUID]string
+
+	docMu    sync.Mutex
+	docConns map[uuid.UUID]map[*conn]struct{} // sockets editing each description
 }
 
 // New returns a hub; Run feeds it.
@@ -59,11 +62,20 @@ func New(o Options) *Hub {
 	if o.MaxAge == 0 {
 		o.MaxAge = time.Hour
 	}
-	return &Hub{o: o, conns: map[*conn]struct{}{}, slugs: map[uuid.UUID]string{}}
+	h := &Hub{o: o, conns: map[*conn]struct{}{}, slugs: map[uuid.UUID]string{}, docConns: map[uuid.UUID]map[*conn]struct{}{}}
+	if o.Issues != nil {
+		o.Issues.OnDocSteps(h.publishDoc)
+	}
+	return h
 }
 
 // Run receives the published events until ctx ends.
 func (h *Hub) Run(ctx context.Context) error {
+	go func() {
+		if err := h.runDocs(ctx); err != nil {
+			h.o.Log.Error().Err(err).Msg("could not subscribe to document steps")
+		}
+	}()
 	ch := make(chan *nats.Msg, 1024)
 	sub, err := h.o.NATS.ChanSubscribe(h.o.Stream.Prefix+".*.*.*.*", ch)
 	if err != nil {
@@ -206,6 +218,7 @@ func (h *Hub) add(c *conn) {
 }
 
 func (h *Hub) remove(c *conn) {
+	c.leaveAll()
 	h.mu.Lock()
 	delete(h.conns, c)
 	h.mu.Unlock()

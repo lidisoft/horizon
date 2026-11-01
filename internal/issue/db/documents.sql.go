@@ -13,32 +13,53 @@ import (
 	"github.com/google/uuid"
 )
 
-const descriptionDocument = `-- name: DescriptionDocument :one
-SELECT workspace_id, id, issue_id, version, content, updated_at FROM documents WHERE issue_id = $1
+const addSteps = `-- name: AddSteps :exec
+INSERT INTO document_steps (document_id, version, steps, client_id, user_id, created_at) VALUES ($1, $2, $3, $4, $5, $6)
 `
 
-func (q *Queries) DescriptionDocument(ctx context.Context, issueID uuid.UUID) (Document, error) {
-	row := q.db.QueryRow(ctx, descriptionDocument, issueID)
-	var i Document
-	err := row.Scan(
-		&i.WorkspaceID,
-		&i.ID,
-		&i.IssueID,
-		&i.Version,
-		&i.Content,
-		&i.UpdatedAt,
-	)
-	return i, err
+type AddStepsParams struct {
+	DocumentID uuid.UUID
+	Version    int64
+	Steps      json.RawMessage
+	ClientID   string
+	UserID     uuid.NullUUID
+	CreatedAt  time.Time
 }
 
-const saveDescription = `-- name: SaveDescription :one
-INSERT INTO documents (workspace_id, id, issue_id, version, content, updated_at)
-VALUES ($1, $2, $3, 1, $4, $5)
-ON CONFLICT (issue_id) DO UPDATE SET content = EXCLUDED.content, version = documents.version + 1, updated_at = EXCLUDED.updated_at
-RETURNING workspace_id, id, issue_id, version, content, updated_at
+func (q *Queries) AddSteps(ctx context.Context, arg AddStepsParams) error {
+	_, err := q.db.Exec(ctx, addSteps,
+		arg.DocumentID,
+		arg.Version,
+		arg.Steps,
+		arg.ClientID,
+		arg.UserID,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const compactSteps = `-- name: CompactSteps :exec
+DELETE FROM document_steps WHERE document_id = $1 AND version < $2
 `
 
-type SaveDescriptionParams struct {
+type CompactStepsParams struct {
+	DocumentID uuid.UUID
+	Version    int64
+}
+
+func (q *Queries) CompactSteps(ctx context.Context, arg CompactStepsParams) error {
+	_, err := q.db.Exec(ctx, compactSteps, arg.DocumentID, arg.Version)
+	return err
+}
+
+const createDescription = `-- name: CreateDescription :one
+INSERT INTO documents (workspace_id, id, issue_id, version, snapshot_version, content, updated_at)
+VALUES ($1, $2, $3, 0, 0, $4, $5)
+ON CONFLICT (issue_id) DO NOTHING
+RETURNING workspace_id, id, issue_id, version, content, updated_at, snapshot_version
+`
+
+type CreateDescriptionParams struct {
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID
 	IssueID     uuid.UUID
@@ -46,9 +67,8 @@ type SaveDescriptionParams struct {
 	UpdatedAt   time.Time
 }
 
-// Writes an issue's description document whole (a new version).
-func (q *Queries) SaveDescription(ctx context.Context, arg SaveDescriptionParams) (Document, error) {
-	row := q.db.QueryRow(ctx, saveDescription,
+func (q *Queries) CreateDescription(ctx context.Context, arg CreateDescriptionParams) (Document, error) {
+	row := q.db.QueryRow(ctx, createDescription,
 		arg.WorkspaceID,
 		arg.ID,
 		arg.IssueID,
@@ -63,6 +83,119 @@ func (q *Queries) SaveDescription(ctx context.Context, arg SaveDescriptionParams
 		&i.Version,
 		&i.Content,
 		&i.UpdatedAt,
+		&i.SnapshotVersion,
 	)
 	return i, err
+}
+
+const descriptionDocument = `-- name: DescriptionDocument :one
+SELECT workspace_id, id, issue_id, version, content, updated_at, snapshot_version FROM documents WHERE issue_id = $1
+`
+
+func (q *Queries) DescriptionDocument(ctx context.Context, issueID uuid.UUID) (Document, error) {
+	row := q.db.QueryRow(ctx, descriptionDocument, issueID)
+	var i Document
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.ID,
+		&i.IssueID,
+		&i.Version,
+		&i.Content,
+		&i.UpdatedAt,
+		&i.SnapshotVersion,
+	)
+	return i, err
+}
+
+const lockDescription = `-- name: LockDescription :one
+SELECT workspace_id, id, issue_id, version, content, updated_at, snapshot_version FROM documents WHERE issue_id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockDescription(ctx context.Context, issueID uuid.UUID) (Document, error) {
+	row := q.db.QueryRow(ctx, lockDescription, issueID)
+	var i Document
+	err := row.Scan(
+		&i.WorkspaceID,
+		&i.ID,
+		&i.IssueID,
+		&i.Version,
+		&i.Content,
+		&i.UpdatedAt,
+		&i.SnapshotVersion,
+	)
+	return i, err
+}
+
+const setDocumentVersion = `-- name: SetDocumentVersion :exec
+UPDATE documents SET version = $2, updated_at = $3 WHERE id = $1
+`
+
+type SetDocumentVersionParams struct {
+	ID        uuid.UUID
+	Version   int64
+	UpdatedAt time.Time
+}
+
+func (q *Queries) SetDocumentVersion(ctx context.Context, arg SetDocumentVersionParams) error {
+	_, err := q.db.Exec(ctx, setDocumentVersion, arg.ID, arg.Version, arg.UpdatedAt)
+	return err
+}
+
+const snapshot = `-- name: Snapshot :exec
+UPDATE documents SET content = $2, snapshot_version = $3, updated_at = $4 WHERE id = $1
+`
+
+type SnapshotParams struct {
+	ID              uuid.UUID
+	Content         json.RawMessage
+	SnapshotVersion int64
+	UpdatedAt       time.Time
+}
+
+// The content at version; batches older than the retained window go.
+func (q *Queries) Snapshot(ctx context.Context, arg SnapshotParams) error {
+	_, err := q.db.Exec(ctx, snapshot,
+		arg.ID,
+		arg.Content,
+		arg.SnapshotVersion,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const stepsSince = `-- name: StepsSince :many
+SELECT document_id, version, steps, client_id, user_id, created_at FROM document_steps WHERE document_id = $1 AND version >= $2 ORDER BY version
+`
+
+type StepsSinceParams struct {
+	DocumentID uuid.UUID
+	Version    int64
+}
+
+// The batches applied since version (each against the version it names).
+func (q *Queries) StepsSince(ctx context.Context, arg StepsSinceParams) ([]DocumentStep, error) {
+	rows, err := q.db.Query(ctx, stepsSince, arg.DocumentID, arg.Version)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DocumentStep
+	for rows.Next() {
+		var i DocumentStep
+		if err := rows.Scan(
+			&i.DocumentID,
+			&i.Version,
+			&i.Steps,
+			&i.ClientID,
+			&i.UserID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

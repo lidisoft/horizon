@@ -44,6 +44,7 @@ type Service struct {
 	now      func() time.Time
 
 	leaveIteration IterationHook
+	docSteps       func(DocSteps)
 }
 
 // New returns a Service and plugs it into config as its Issues, so
@@ -337,7 +338,8 @@ func (s *Service) Create(ctx context.Context, pc project.Context, in NewIssue) (
 			return apperr.Invalid(apperr.Field{Field: "description_doc", Code: "unknown_attachment"})
 		}
 		if in.Description.IsSet() {
-			if err := s.saveDescription(ctx, tx, created, description); err != nil {
+			if _, err := q.CreateDescription(ctx, db.CreateDescriptionParams{WorkspaceID: created.WorkspaceID, ID: uuid.Must(uuid.NewV7()),
+				IssueID: created.ID, Content: docJSON(description), UpdatedAt: s.now()}); err != nil {
 				return err
 			}
 		}
@@ -386,6 +388,7 @@ func (s *Service) mutate(ctx context.Context, ic Context, version int32, perm ac
 	}
 	var saved db.Issue
 	var labels []uuid.UUID
+	var described *DocSteps
 	err := postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
 		q := db.New(tx)
 		cur, err := q.LockIssue(ctx, db.LockIssueParams{WorkspaceID: ic.Workspace.ID, ID: ic.Issue.ID})
@@ -422,7 +425,8 @@ func (s *Service) mutate(ctx context.Context, ic Context, version int32, perm ac
 			return err
 		}
 		if e.description != nil {
-			if err := s.saveDescription(ctx, tx, saved, e.description); err != nil {
+			// One replace step, so whoever edits it receives it.
+			if described, err = s.replaceDescription(ctx, tx, saved, e.description, uuid.NullUUID{UUID: ic.Principal.User.ID, Valid: true}); err != nil {
 				return err
 			}
 		}
@@ -456,6 +460,9 @@ func (s *Service) mutate(ctx context.Context, ic Context, version int32, perm ac
 	})
 	if err != nil {
 		return Issue{}, err
+	}
+	if described != nil {
+		s.broadcast(*described)
 	}
 	return issueFrom(saved, ic.Project.Key, labels), nil
 }

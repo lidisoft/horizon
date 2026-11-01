@@ -39,11 +39,11 @@ export class History {
   }
 
   /**
-   * Maps every entry through steps made by others (a remote transaction or
-   * a rebase), so they still apply afterwards.
+   * Maps every entry through steps made by others (a Mapping, or a list of
+   * step maps), so they still apply afterwards.
    */
   mapThrough(maps) {
-    const mapping = new Mapping(maps);
+    const mapping = maps instanceof Mapping ? maps : new Mapping(maps);
     const mapEntry = (e) => {
       const steps = e.steps.map((s) => s.map(mapping)).filter(Boolean);
       return steps.length ? { steps, selection: e.selection.map(mapping), typing: e.typing } : null;

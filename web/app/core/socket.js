@@ -31,7 +31,9 @@ export function createSocket({ url = "/api/v1/ws", store, WebSocket: Impl = glob
   }
 
   function send(t, d) {
-    if (open) ws.send(JSON.stringify({ t, id: String(++seq), d }));
+    if (!open) return false;
+    ws.send(JSON.stringify({ t, id: String(++seq), d }));
+    return true;
   }
 
   function notify(message) {
@@ -118,6 +120,14 @@ export function createSocket({ url = "/api/v1/ws", store, WebSocket: Impl = glob
 
     /** The current topics. */
     topics: () => [...topics],
+
+    /** Sends a message (doc.join, doc.steps…); false when not connected. */
+    send,
+
+    /** Whether the socket is open. */
+    get open() {
+      return open;
+    },
 
     /** Calls fn with every message: {t: "event", d}, resync, open, close… */
     on(fn) {

@@ -1337,13 +1337,12 @@ func TestEditor(t *testing.T) {
 	pg.do(chromedp.KeyEvent("z", ctrl))
 	pg.poll(`JSON.stringify(` + ed + `.value).includes('{"type":"text","text":"end"}') && "undone"`)
 
-	// Leaving the editor saves the description.
+	// The steps reach the server as they are typed; its text follows when
+	// the last editor leaves.
 	final := doc()
-	pg.eval(`document.activeElement?.blur(); ` + ed + `.shadowRoot.querySelector(".editor").blur()`)
 	pg.poll(`fetch("/api/v1/w/acme/issues/HZN-1").then((r) => r.json()).then((i) => JSON.stringify(i.description_doc) === ` + strconv.Quote(final) + ` && "saved")`)
-	if _, body := pg.api("GET", "/w/acme/issues/HZN-1", ""); !strings.Contains(body, `"description":"Context\nThe relay publishes events\n- one\n- two\nend"`) {
-		t.Errorf("text = %s", body)
-	}
+	pg.do(chromedp.Navigate(a.base + "/w/acme"))
+	pg.poll(`fetch("/api/v1/w/acme/issues/HZN-1").then((r) => r.json()).then((i) => i.description === "Context\nThe relay publishes events\n- one\n- two\nend" && "text")`)
 	pg.logs.failOnErrors(t)
 }
 
@@ -1407,4 +1406,55 @@ func TestEditorExtras(t *testing.T) {
 	})()`)
 	has("pasted tasks", `{"type":"task_item","attrs":{"checked":true},"content":[{"type":"paragraph","content":[{"type":"text","text":"shipped"}]}]}`)
 	pg.logs.failOnErrors(t)
+}
+
+// TestCollaboration: two browsers edit one description at once, through
+// the server and NATS; both end with the same document, and so does the
+// server.
+func TestCollaboration(t *testing.T) {
+	a := appServer(t)
+	one, two := newPage(t), newPage(t)
+	one.do(chromedp.Navigate(a.base + "/"))
+	one.signIn("ada@example.com", testPassword)
+	one.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	one.eval(view + `.querySelector("form").requestSubmit()`)
+	one.poll(`location.pathname === "/w/acme" && "workspace"`)
+	one.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`)
+	_, cfg := one.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID string } `json:"issue_types"`
+	}
+	_ = json.Unmarshal([]byte(cfg), &resolved)
+	if status, body := one.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"Shared","description":"middle"}`); status != 201 {
+		t.Fatalf("create issue: %d %s", status, body)
+	}
+	two.do(chromedp.Navigate(a.base + "/"))
+	two.signIn("ada@example.com", testPassword)
+	two.do(chromedp.Navigate(a.base + "/w/acme/issues/HZN-1"))
+	one.do(chromedp.Navigate(a.base + "/w/acme/issues/HZN-1"))
+	ed := view + `.querySelector("hzn-issue-detail").shadowRoot.querySelector("[data-description]")`
+	ready := ed + ` && ` + ed + `.view.editable && "joined"`
+	one.poll(ready)
+	two.poll(ready)
+	text := `(` + ed + `.state.doc.textContent())`
+
+	// One types at the end; two sees it.
+	one.eval(ed + `.focus()`)
+	one.do(chromedp.KeyEvent(kb.End))
+	one.do(chromedp.KeyEvent(" end"))
+	two.poll(text + ` === "middle end" && "received"`)
+
+	// Both type at once: one at the end, two at the start.
+	two.eval(ed + `.focus()`)
+	two.do(chromedp.KeyEvent(kb.Home))
+	for i := 0; i < 5; i++ {
+		one.do(chromedp.KeyEvent("a"))
+		two.do(chromedp.KeyEvent("b"))
+	}
+	same := text + ` === "bbbbbmiddle endaaaaa" && "converged"`
+	one.poll(same)
+	two.poll(same)
+	one.poll(`fetch("/api/v1/w/acme/issues/HZN-1").then((r) => r.json()).then((i) => JSON.stringify(i.description_doc).includes("bbbbbmiddle endaaaaa") && "stored")`)
+	one.logs.failOnErrors(t)
+	two.logs.failOnErrors(t)
 }

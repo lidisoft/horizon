@@ -79,12 +79,22 @@ type CustomField struct {
 }
 
 type Document struct {
-	WorkspaceID uuid.UUID
-	ID          uuid.UUID
-	IssueID     uuid.UUID
-	Version     int64
-	Content     json.RawMessage
-	UpdatedAt   time.Time
+	WorkspaceID     uuid.UUID
+	ID              uuid.UUID
+	IssueID         uuid.UUID
+	Version         int64
+	Content         json.RawMessage
+	UpdatedAt       time.Time
+	SnapshotVersion int64
+}
+
+type DocumentStep struct {
+	DocumentID uuid.UUID
+	Version    int64
+	Steps      json.RawMessage
+	ClientID   string
+	UserID     uuid.NullUUID
+	CreatedAt  time.Time
 }
 
 type Event struct {

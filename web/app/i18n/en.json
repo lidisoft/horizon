@@ -1098,5 +1098,6 @@
   "editor.divider": "Divider",
   "editor.table": "Table",
   "editor.image": "Image",
-  "editor.uploadFailed": "{name} could not be uploaded: {error}"
+  "editor.uploadFailed": "{name} could not be uploaded: {error}",
+  "editor.resynced": "The description was out of step with the server and has been reloaded."
 }

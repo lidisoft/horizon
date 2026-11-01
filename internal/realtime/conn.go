@@ -23,7 +23,7 @@ import (
 
 // Limits of a socket.
 const (
-	maxMessage   = 64 << 10
+	maxMessage   = 2 << 20 // a batch of steps can carry a pasted document
 	maxTopics    = 200
 	sendBuffer   = 256
 	idleTimeout  = 75 * time.Second // the client pings every 25 s
@@ -78,6 +78,7 @@ type conn struct {
 	wcs     map[uuid.UUID]workspace.Context // per workspace entered
 	sees    map[uuid.UUID]bool              // workspace-wide events allowed
 	visible map[[2]uuid.UUID]visibility     // (project, 0 or 1: issue.view) → allowed
+	docs    map[uuid.UUID]joined            // descriptions joined, by document id
 }
 
 // Register mounts GET /ws on the API group.
@@ -112,7 +113,7 @@ func (h *Hub) serve(c *gin.Context) {
 	ws.SetReadLimit(maxMessage)
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(c.Request.Context()), h.o.MaxAge)
 	cn := &conn{hub: h, ws: ws, principal: p, send: make(chan []byte, sendBuffer), cancel: cancel,
-		topics: map[string]topic{}, wcs: map[uuid.UUID]workspace.Context{}, sees: map[uuid.UUID]bool{}, visible: map[[2]uuid.UUID]visibility{}}
+		topics: map[string]topic{}, wcs: map[uuid.UUID]workspace.Context{}, sees: map[uuid.UUID]bool{}, visible: map[[2]uuid.UUID]visibility{}, docs: map[uuid.UUID]joined{}}
 	h.add(cn)
 	defer h.remove(cn)
 	go cn.writeLoop(ctx)
@@ -180,6 +181,8 @@ func (c *conn) readLoop(ctx context.Context) error {
 			c.reply(message{T: "pong", ID: in.ID})
 		case "sub":
 			c.subscribe(ctx, in)
+		case "doc.join", "doc.steps", "doc.leave":
+			c.handleDoc(ctx, in)
 		case "unsub":
 			var d struct {
 				Topics []string `json:"topics"`

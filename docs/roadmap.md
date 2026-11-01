@@ -57,7 +57,7 @@ usable exists early.
 
 - [x] Shared schema and step test corpus (Go + JS)
 - [x] Single-user block editor replacing plain-text descriptions and comments
-- [ ] Server-authoritative step protocol, rebase, snapshots
+- [x] Server-authoritative step protocol, rebase, snapshots
 - [ ] Presence, remote cursors
 - [ ] `IssueDescribed` session events
 

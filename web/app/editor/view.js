@@ -49,8 +49,13 @@ export class EditorView {
     on(dom, "compositionstart", () => (this.composing = true));
     on(dom, "compositionend", () => this.onCompositionEnd());
     on(dom, "mousedown", (e) => this.onMouseDown(e));
-    // On focus, the state's selection wins over where the browser puts the caret.
-    on(dom, "focus", () => requestAnimationFrame(() => this.hasFocus() && this.writeSelection()));
+    // On focus the browser may park the caret between blocks: read it
+    // (snapping into a textblock), then show where it went.
+    on(dom, "focus", () => requestAnimationFrame(() => {
+      if (!this.hasFocus()) return;
+      this.readSelection();
+      this.writeSelection();
+    }));
     on(document, "selectionchange", () => this.onSelectionChange());
     this.render();
   }

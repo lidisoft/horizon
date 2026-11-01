@@ -417,8 +417,8 @@ export function stepFromJSON(json, schema = defaultSchema) {
 
 /**
  * Carries local steps (made on base) over remote ones (also made on base,
- * and accepted first): returns the document after both and the local steps
- * as they now apply. Each local step's inverse mirrors its rebased self, so
+ * and accepted first): returns the document after both, the local steps
+ * as they now apply, and the mapping from before to after. Each local step's inverse mirrors its rebased self, so
  * positions inside content a local step inserted survive.
  */
 export function rebase(base, local, remote) {
@@ -450,5 +450,7 @@ export function rebase(base, local, remote) {
     mapping.appendMap(mapped.getMap(), mapFrom);
     rebased.push(mapped);
   }
-  return { doc, steps: rebased };
+  // mapping takes positions of the document after the local steps to the
+  // one after it all.
+  return { doc, steps: rebased, mapping };
 }

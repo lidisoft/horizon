@@ -23,8 +23,9 @@ latency or ordering. See [ADR-0008](adr/0008-websockets-for-realtime.md).
 | `sub` | `{ "topics": ["ws:acme", "project:acme/HZN", "issue:acme/HZN-42"], "since": "<event id>" }` | Subscribe; `since` (optional) replays what was missed |
 | `unsub` | `{ "topics": [...] }` | Unsubscribe |
 | `presence` | `{ "issue": "HZN-42", "state": "viewing" \| "editing" }` | Announce presence |
-| `doc.join` | `{ "doc": "<id>", "version": n }` | Start editing; server replies with missed steps |
-| `doc.steps` | `{ "doc": "<id>", "version": n, "client": "<id>", "steps": [...] }` | Submit steps |
+| `doc.join` | `{ "ws": "acme", "issue": "HZN-42", "version": n }` | Start editing a description (`issue.view`); `version` (optional) is the one the client holds |
+| `doc.steps` | `{ "ws", "issue", "version": n, "client": "<id>", "steps": [...] }` | Submit a batch of steps made against `version` (`issue.edit`) |
+| `doc.leave` | `{ "ws", "issue" }` | Stop editing (closing the socket does too) |
 | `doc.cursor` | `{ "doc": "<id>", "anchor": p, "head": p }` | Share selection |
 | `ping` | — | Keepalive (every 25 s) |
 
@@ -36,8 +37,11 @@ latency or ordering. See [ADR-0008](adr/0008-websockets-for-realtime.md).
 | `error` | `{ "code": "bad_message" \| "unknown_type" }` |
 | `event` | A domain event (see [api.md](api.md#domain-event-format)) |
 | `presence` | Users viewing/editing a subscribed issue |
-| `doc.steps` | Accepted steps with the new version and the author client id |
-| `doc.reject` | Steps rejected as stale; includes the steps the client is missing |
+| `doc.joined` | `{ issue, version, steps: [batches since the client's version], doc? }`: `doc` (the whole document) when the client named no version or the batches since are gone |
+| `doc.steps` | An accepted batch, to everyone editing: `{ issue, version (it applied to), steps, client, user }` |
+| `doc.ack` | The sender's batch is in: `{ issue, version (after it) }` |
+| `doc.reject` | The batch was made against an old version: `{ issue, version, steps: [the batches since] }`; the client rebases and sends again |
+| `doc.error` | `{ issue, code }`: `invalid_steps`, `too_large`, `resync`, `forbidden`, `issue_archived`; the client starts over from the server's document |
 | `doc.cursor` | Other users' selections |
 | `resync` | The client missed too much; refetch the listed topics |
 | `pong` | — |
@@ -158,7 +162,20 @@ ranges.
 4. On reject, the client **rebases**: maps its unconfirmed steps through the
    missing steps, reapplies them, and resends.
 5. The server writes a full snapshot to `documents.content` every N steps
-   (default 50) and when the last editor leaves.
+   (default 50) and when the last editor leaves, and the issue's plain
+   text (`issues.description`, search) with it. Reading a description
+   replays the batches since the snapshot; batches more than 1,000 steps
+   behind the snapshot are dropped (a client further behind joins from the
+   whole document).
+
+Batches are stored in `document_steps`, keyed by the version they applied
+to, and travel between replicas on NATS core (`<prefix>.docs.<document
+id>`). A description written whole through the API (`PATCH`, workflow
+post-actions) becomes one `replace` step of the whole content, so editors
+receive it too. The client (`web/app/editor/collab.js`) sends its
+unconfirmed steps in batches 50 ms apart, one batch in flight; a batch from
+someone else rebases them (`rebase`), and the selection and undo history
+are mapped through what changed.
 
 The server never transforms steps; only clients rebase. This keeps the server
 simple and makes the shared test corpus the main correctness tool.

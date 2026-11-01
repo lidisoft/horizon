@@ -12,6 +12,7 @@ import {
   PRIORITIES, avatar, issueHref, issueStyles, priorityIcon, projectData, statusGlyph,
 } from "horizon/components/issue-ui.js";
 import { isOpen } from "horizon/components/planning-ui.js";
+import { Collab } from "horizon/editor/collab.js";
 import { docStyles, renderDoc } from "horizon/editor/render.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
@@ -92,12 +93,10 @@ class HznIssueDetail extends HTMLElement {
     root.addEventListener("keydown", (e) => this.onKey(e));
     // The comment being written survives re-renders; the description saves
     // a moment after typing stops, and when the editor loses focus.
+    // The comment being written survives re-renders. The description is
+    // edited collaboratively: its steps go over the socket (Collab).
     root.addEventListener("hzn-change", (e) => {
       if (e.target.closest?.("[data-composer]")) this.draftDoc = e.detail.doc;
-      if (e.target.matches?.("[data-description]")) this.scheduleDescription(e.detail.doc);
-    });
-    root.addEventListener("hzn-blur", (e) => {
-      if (e.target.matches?.("[data-description]")) this.saveDescription();
     });
     // Pushed changes wait until the control being edited loses focus.
     root.addEventListener("focusout", () => {
@@ -263,25 +262,15 @@ class HznIssueDetail extends HTMLElement {
     const description = this.shadowRoot.querySelector("[data-description]");
     if (description) {
       description.people = this.data.people;
-      description.value = this.pendingDescription ?? i.description_doc;
+      description.value = i.description_doc;
+      const { socket, i18n } = this.context;
+      description.attachCollab(new Collab({
+        socket, ws: this.ws, issue: i.key, editor: description,
+        onError: (code) => code !== "lost" && globalThis.LDS?.toast?.({ intent: "warning", title: i18n.t("editor.resynced") }),
+      }));
     }
     const composer = this.shadowRoot.querySelector("[data-composer-editor]");
     if (composer && this.draftDoc) composer.value = this.draftDoc;
-  }
-
-  /** Saves the description a moment after the last change. */
-  scheduleDescription(doc) {
-    this.pendingDescription = doc;
-    clearTimeout(this.descriptionTimer);
-    this.descriptionTimer = setTimeout(() => this.saveDescription(), 800);
-  }
-
-  async saveDescription() {
-    clearTimeout(this.descriptionTimer);
-    const doc = this.pendingDescription;
-    if (!doc) return;
-    this.pendingDescription = null;
-    await this.patch({ description_doc: doc });
   }
 
   menu() {
