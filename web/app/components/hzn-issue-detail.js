@@ -183,8 +183,14 @@ class HznIssueDetail extends HTMLElement {
     }
     this.issue = issue;
     this.etag = etag;
-    this.stale = false;
     this.parent = issue.parent ?? null;
+    // Never re-render under someone typing: a draft would lose its focus,
+    // and the next keys would go to the page's shortcuts.
+    if (this.editing()) {
+      this.stale = true;
+      return;
+    }
+    this.stale = false;
     this.render();
     this.registerCommands();
     this.dispatchEvent(new CustomEvent("hzn-issue-loaded", { detail: { key: issue.key, parent: this.parent?.key ?? "" }, bubbles: true, composed: true }));
@@ -195,6 +201,13 @@ class HznIssueDetail extends HTMLElement {
   }
 
   render() {
+    const focused = this.shadowRoot.activeElement;
+    const keep = focused?.dataset?.prop ? `[data-prop="${focused.dataset.prop}"]` : focused?.dataset?.field ? `[data-field="${focused.dataset.field}"]` : null;
+    this.paint();
+    if (keep) this.shadowRoot.querySelector(keep)?.focus();
+  }
+
+  paint() {
     const { i18n } = this.context;
     const { t } = i18n;
     const i = this.issue;
@@ -793,15 +806,14 @@ class HznIssueDetail extends HTMLElement {
     }
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
-      if (this.editing()) this.stale = true;
-      else this.load();
+      this.load();
     }, 150);
   }
 
-  /** Whether a text control of the issue has focus. */
+  /** Whether a draft has focus: a comment, a link target, a title being edited. */
   editing() {
     const el = this.shadowRoot.activeElement;
-    return !!el && ["lds-input", "lds-textarea", "lds-combobox", "lds-date-picker"].includes(el.localName);
+    return ["lds-input", "lds-textarea"].includes(el?.localName) && !!el.closest("[data-composer], [data-linker], [data-comment], [data-title-input]");
   }
 }
 

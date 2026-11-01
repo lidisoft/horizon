@@ -897,7 +897,12 @@ func TestIssues(t *testing.T) {
 	pg.poll(`[...` + view + `.querySelectorAll(".group")].map((g) => g.textContent.replace(/\s+/g, " ").trim()).join(",") === "Backlog 1,Todo 1" && "moved"`)
 
 	// A comment from the peek shows in the activity.
-	pg.typeInto(peek+`.querySelector("[data-composer] lds-textarea")`, "Looks good")
+	// A change saved mid-comment doesn't take the focus away: the rest of
+	// the typing would go to the list's shortcuts (O opens the page).
+	pg.typeInto(peek+`.querySelector("[data-composer] lds-textarea")`, "Looks")
+	change(peek, `[data-prop="priority"]`, "low") // saves and reloads the peek, focus staying in the comment
+	pg.poll(view + `.querySelector('.row[data-key="HZN-1"] .priority')?.dataset.priority === "low" && "saved"`)
+	pg.do(chromedp.KeyEvent(" good"))
 	pg.click(peek + `.querySelector('[data-action="comment"]')`)
 	pg.poll(peek + `.querySelector("[data-comment] .body")?.textContent === "Looks good" && "commented"`)
 
