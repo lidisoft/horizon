@@ -16,7 +16,7 @@ export const planningStyles = sheet(`
 `);
 
 /** The layouts of a project's issues, in the switcher's order. */
-export const LAYOUTS = ["issues", "board", "table", "timeline", "calendar", "backlog", "releases"];
+export const LAYOUTS = ["issues", "board", "table", "timeline", "calendar", "backlog", "releases", "reports"];
 
 /** The layout switcher (wireframes: ViewSwitch). */
 export function viewSwitch(t, ws, key, active) {

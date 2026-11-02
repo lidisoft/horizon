@@ -1721,6 +1721,98 @@ func TestRoadmap(t *testing.T) {
 	pg.logs.failOnErrors(t)
 }
 
+// TestReports runs an iteration and reads its reports, then the flow and
+// workload ones, as charts and as tables.
+func TestReports(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	must := func(status int, body string) string {
+		t.Helper()
+		if status >= 300 {
+			t.Fatalf("%d %s", status, body)
+		}
+		return body
+	}
+	must(pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`))
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID, Name string } `json:"issue_types"`
+		Workflows  []struct {
+			Statuses []struct{ ID, Name string }
+		}
+	}
+	if err := json.Unmarshal([]byte(cfg), &resolved); err != nil {
+		t.Fatal(err)
+	}
+	status := func(name string) string {
+		for _, st := range resolved.Workflows[0].Statuses {
+			if st.Name == name {
+				return st.ID
+			}
+		}
+		t.Fatalf("no status %s", name)
+		return ""
+	}
+	for _, title := range []string{"Relay", "Replay", "Search"} {
+		must(pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"`+title+`","estimate":"3"}`))
+	}
+	today := time.Now().UTC()
+	body := must(pg.api("POST", "/w/acme/projects/HZN/iterations", `{"name":"Sprint 1","start_date":"`+today.AddDate(0, 0, -3).Format(time.DateOnly)+
+		`","end_date":"`+today.AddDate(0, 0, 10).Format(time.DateOnly)+`"}`))
+	var it struct{ ID string }
+	_ = json.Unmarshal([]byte(body), &it)
+	must(pg.api("POST", "/w/acme/projects/HZN/iterations/"+it.ID+"/issues", `{"add":["HZN-1","HZN-2"]}`))
+	must(pg.api("POST", "/w/acme/projects/HZN/iterations/"+it.ID+"/start", ""))
+	for _, s := range []string{"Todo", "In progress", "Done"} {
+		must(pg.api("POST", "/w/acme/issues/HZN-1/transition", `{"status_id":"`+status(s)+`"}`))
+	}
+
+	chart := func(tag string, n int) string {
+		return `[...` + view + `.querySelectorAll("` + tag + `")][` + strconv.Itoa(n) + `]?.shadowRoot`
+	}
+	// The projections follow through JetStream: reload until HZN-1 shows as done.
+	row := view + `?.querySelector('[data-item="HZN-1"]')?.textContent.replace(/\s+/g, " ").trim()`
+	got := ""
+	for range 30 {
+		pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/reports"))
+		if got = pg.poll(row); strings.Contains(got, "Completed") {
+			break
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	if !strings.Contains(got, "Committed") || !strings.Contains(got, "Completed") {
+		t.Errorf("HZN-1 = %s", got)
+	}
+	pg.poll(chart("hzn-chart-line", 0) + `?.querySelectorAll("path.line").length === 2 && "burndown"`)
+	pg.poll(`new URLSearchParams(location.search).get("iteration") === "` + it.ID + `" || "no iteration in the address"`)
+
+	// The burndown as a table: a row per day.
+	pg.eval(chart("hzn-chart-line", 0) + `.querySelector("[data-toggle]").click()`)
+	if got := pg.poll(`String(` + chart("hzn-chart-line", 0) + `?.querySelectorAll("tbody tr").length)`); got != "14" {
+		t.Errorf("burndown rows = %s", got)
+	}
+
+	// Estimate, then the flow and workload tabs.
+	emit := func(sel, value string) {
+		pg.eval(`(() => { const s = ` + view + `.querySelector("` + sel + `"); s.setAttribute("value", "` + value + `");
+			s.dispatchEvent(new CustomEvent("lds-change", { detail: { value: "` + value + `" }, bubbles: true, composed: true })); })()`)
+	}
+	emit("[data-metric]", "estimate")
+	pg.poll(`new URLSearchParams(location.search).get("metric") === "estimate" && "estimate"`)
+	pg.poll(view + `.querySelector('[data-item="HZN-1"] td.num')?.textContent === "3" && "weighted"`)
+	emit("[data-tab]", "flow")
+	pg.poll(chart("hzn-chart-area", 0) + `?.querySelectorAll("path.area").length > 0 && "cfd"`)
+	pg.poll(chart("hzn-chart-scatter", 0) + `?.querySelectorAll("circle.point").length === 1 && "cycle time"`)
+	emit("[data-tab]", "workload")
+	pg.poll(chart("hzn-chart-bar", 0) + `?.querySelectorAll("rect.bar").length === 1 && "distribution"`)
+	pg.logs.failOnErrors(t)
+}
+
 // TestReleases creates and ships a release, and plans a milestone with
 // its issues, from the project's Releases page and the workspace's
 // Milestones page.

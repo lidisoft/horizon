@@ -42,6 +42,7 @@ export const ROUTES = [
   { name: "project-table", path: "/w/:ws/p/:key/table", view: "hzn-table" },
   { name: "project-timeline", path: "/w/:ws/p/:key/timeline", view: "hzn-timeline" },
   { name: "project-calendar", path: "/w/:ws/p/:key/calendar", view: "hzn-calendar" },
+  { name: "project-reports", path: "/w/:ws/p/:key/reports", view: "hzn-reports" },
   { name: "project-backlog", path: "/w/:ws/p/:key/backlog", view: "hzn-backlog" },
   { name: "issue", path: "/w/:ws/issues/:issue", view: "hzn-issue" },
   { name: "search", path: "/w/:ws/search", view: "hzn-search" },
