@@ -1,11 +1,13 @@
 -- name: ClaimUnreported :many
--- A batch of events the projections haven't seen, oldest first.
+-- A batch of events the projections haven't seen, oldest first. No row
+-- locks: the projector's advisory lock serializes batches, and SKIP LOCKED
+-- would pass over an event the relay is publishing, whose wake-up may be
+-- the one now running.
 SELECT id, workspace_id, aggregate_type, aggregate_id, type, occurred_at, payload
 FROM events
 WHERE reported_at IS NULL
 ORDER BY id
-LIMIT sqlc.arg(batch_size)
-FOR UPDATE SKIP LOCKED;
+LIMIT sqlc.arg(batch_size);
 
 -- name: MarkReported :exec
 UPDATE events SET reported_at = now() WHERE id = ANY(sqlc.arg(ids)::uuid[]);

@@ -54,8 +54,9 @@ func (p *Projector) Consumer() eventlog.Consumer {
 	}
 }
 
-// CatchUp applies every event not reported yet; it returns how many. When
-// another replica holds the lock it returns at once: that one catches up.
+// CatchUp applies every event not reported yet; it returns how many. It
+// waits for a batch another replica is applying: giving up instead would
+// leave the events committed meanwhile to the next wake-up.
 func (p *Projector) CatchUp(ctx context.Context) (int, error) {
 	total := 0
 	for {
@@ -70,8 +71,7 @@ func (p *Projector) CatchUp(ctx context.Context) (int, error) {
 func (p *Projector) batch(ctx context.Context) (int, error) {
 	n := 0
 	err := postgres.InTx(ctx, p.pool, func(tx pgx.Tx) error {
-		var locked bool
-		if err := tx.QueryRow(ctx, `SELECT pg_try_advisory_xact_lock($1)`, int64(lockKey)).Scan(&locked); err != nil || !locked {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, int64(lockKey)); err != nil {
 			return err
 		}
 		q := db.New(tx)

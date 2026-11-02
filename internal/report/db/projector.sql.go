@@ -19,7 +19,6 @@ FROM events
 WHERE reported_at IS NULL
 ORDER BY id
 LIMIT $1
-FOR UPDATE SKIP LOCKED
 `
 
 type ClaimUnreportedRow struct {
@@ -32,7 +31,10 @@ type ClaimUnreportedRow struct {
 	Payload       json.RawMessage
 }
 
-// A batch of events the projections haven't seen, oldest first.
+// A batch of events the projections haven't seen, oldest first. No row
+// locks: the projector's advisory lock serializes batches, and SKIP LOCKED
+// would pass over an event the relay is publishing, whose wake-up may be
+// the one now running.
 func (q *Queries) ClaimUnreported(ctx context.Context, batchSize int32) ([]ClaimUnreportedRow, error) {
 	rows, err := q.db.Query(ctx, claimUnreported, batchSize)
 	if err != nil {
