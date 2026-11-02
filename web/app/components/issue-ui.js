@@ -140,3 +140,18 @@ export function shortDate(value, i18n) {
 export function issueHref(ws, key) {
   return `/w/${encodeURIComponent(ws)}/issues/${encodeURIComponent(key)}`;
 }
+
+/** One line for an event of an issue's activity: "moved it from Todo to Done". */
+export function describeEvent(i18n, e) {
+  const { t } = i18n;
+  const name = (v) => (v && typeof v === "object" ? v.key ? `${v.key} ${v.name ?? ""}`.trim() : v.name ?? "" : v ?? "");
+  const p = e.payload;
+  let kind = e.type.replace(/^issue\./, "");
+  // In or out of an iteration or a release.
+  if (kind === "iteration_changed" || kind === "release_changed") kind = `${kind.split("_")[0]}_${p.to ? "set" : "cleared"}`;
+  const key = `activity.${kind}`;
+  return i18n.has(key)
+    ? t(key, { from: name(p.from), to: name(p.to), issue: name(p.issue_id), type: p.type ? t(`link.${p.type}`) : "",
+      fields: (p.fields ?? []).join(", "), fromKey: p.from_key ?? "", toKey: p.to_key ?? "" })
+    : kind.replaceAll("_", " ");
+}

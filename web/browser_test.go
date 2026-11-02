@@ -303,7 +303,7 @@ func appServer(t *testing.T) app {
 		hub.Register(api)
 		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register,
 			func(ws *gin.RouterGroup) {
-				projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject)
+				projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject, reportsHTTP.RegisterProject)
 			})
 	}}))
 	return a
@@ -654,7 +654,7 @@ func TestProjects(t *testing.T) {
 		t.Errorf("suggested key = %q", got)
 	}
 	admin.eval(view + `.querySelector('[data-action="create"]').click()`)
-	admin.poll(`location.pathname === "/w/acme/p/DS/issues" && "created"`)
+	admin.poll(`location.pathname === "/w/acme/p/DS" && "created"`) // its overview
 	item := appRoot + `.querySelector('lds-nav-item[data-project="DS"]')`
 	if got := admin.poll(item + `?.textContent.trim() + " | " + ` + item + `?.querySelector(".project-key")?.textContent`); got != "Design systemDS | DS" {
 		t.Errorf("sidebar item = %q", got)
@@ -669,7 +669,7 @@ func TestProjects(t *testing.T) {
 	admin.eval(view + `.querySelector('[data-action="save"]').click()`)
 	admin.poll(`location.pathname === "/w/acme/settings/projects/LDS" && "renamed"`)
 	admin.do(chromedp.Navigate(a.base + "/w/acme/p/DS"))
-	admin.poll(`location.pathname === "/w/acme/p/LDS/issues" && "redirected"`)
+	admin.poll(`location.pathname === "/w/acme/p/LDS" && "redirected"`)
 
 	// Invite Grace as Viewer: she sees the project until it turns private.
 	admin.do(chromedp.Navigate(a.base + "/w/acme/settings/members"))
@@ -875,9 +875,10 @@ func TestIssues(t *testing.T) {
 		t.Fatalf("create project: %q, %v", got, err)
 	}
 
-	// The project leads to its (empty) issue list.
+	// The project's key in any case leads to its overview; its issue list is empty.
 	pg.do(chromedp.Navigate(a.base + "/w/acme/p/hzn"))
-	pg.poll(`location.pathname === "/w/acme/p/HZN/issues" && "list"`)
+	pg.poll(`location.pathname === "/w/acme/p/HZN" && "overview"`)
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/issues"))
 	pg.poll(view + `.querySelector("lds-empty-state") && "empty"`)
 
 	// New issue, from the button, then from the keyboard.
@@ -1810,6 +1811,73 @@ func TestReports(t *testing.T) {
 	pg.poll(chart("hzn-chart-scatter", 0) + `?.querySelectorAll("circle.point").length === 1 && "cycle time"`)
 	emit("[data-tab]", "workload")
 	pg.poll(chart("hzn-chart-bar", 0) + `?.querySelectorAll("rect.bar").length === 1 && "distribution"`)
+	pg.logs.failOnErrors(t)
+}
+
+// TestOverview shows a project's active sprint, flow, activity and the
+// viewer's work on its home page.
+func TestOverview(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	must := func(status int, body string) string {
+		t.Helper()
+		if status >= 300 {
+			t.Fatalf("%d %s", status, body)
+		}
+		return body
+	}
+	must(pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`))
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID, Name string } `json:"issue_types"`
+	}
+	if err := json.Unmarshal([]byte(cfg), &resolved); err != nil {
+		t.Fatal(err)
+	}
+	var me struct{ User struct{ ID string } }
+	_ = json.Unmarshal([]byte(must(pg.api("GET", "/me", ""))), &me)
+	for _, title := range []string{"Relay", "Replay"} {
+		must(pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[2].ID+`","title":"`+title+`"}`))
+	}
+	must(pg.api("POST", "/w/acme/issues/HZN-1/assign", `{"assignee_id":"`+me.User.ID+`"}`))
+	today := time.Now().UTC()
+	body := must(pg.api("POST", "/w/acme/projects/HZN/iterations", `{"name":"Sprint 1","goal":"Ship the relay","start_date":"`+today.Format(time.DateOnly)+
+		`","end_date":"`+today.AddDate(0, 0, 13).Format(time.DateOnly)+`"}`))
+	var it struct{ ID string }
+	_ = json.Unmarshal([]byte(body), &it)
+	must(pg.api("POST", "/w/acme/projects/HZN/iterations/"+it.ID+"/issues", `{"add":["HZN-1","HZN-2"]}`))
+	must(pg.api("POST", "/w/acme/projects/HZN/iterations/"+it.ID+"/start", ""))
+
+	block := func(name string) string { return view + `?.querySelector('[data-block="` + name + `"]')` }
+	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN"))
+	pg.poll(block("sprint") + `?.textContent.includes("Sprint 1") && ` + block("sprint") + `.textContent.includes("Ship the relay") && "sprint"`)
+	pg.poll(block("mine") + `.querySelector('a[href$="/issues/HZN-1"]') && "my work"`)
+	if got := pg.poll(block("mine") + `.textContent`); strings.Contains(got, "HZN-2") {
+		t.Errorf("someone else's issue in my work: %s", got)
+	}
+	pg.poll(block("activity") + `.querySelectorAll("li a.key").length > 0 && "activity"`)
+	pg.poll(block("sprint") + `.querySelector("hzn-sparkline")?.shadowRoot?.querySelector("path.line") && "sparkline"`)
+	pg.poll(block("sprint") + `.querySelector(".legend")?.textContent.includes("2 ") && "outcomes"`)
+
+	// A pushed change refreshes it: HZN-1 in progress shows in the WIP.
+	_, cfg = pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var wf struct {
+		Workflows []struct{ Statuses []struct{ ID, Name string } }
+	}
+	_ = json.Unmarshal([]byte(cfg), &wf)
+	for _, st := range []string{"Todo", "In progress"} {
+		for _, s := range wf.Workflows[0].Statuses {
+			if s.Name == st {
+				must(pg.api("POST", "/w/acme/issues/HZN-1/transition", `{"status_id":"`+s.ID+`"}`))
+			}
+		}
+	}
+	pg.poll(block("flow") + `?.querySelector(".wip")?.textContent.includes("In progress") && "wip"`)
 	pg.logs.failOnErrors(t)
 }
 

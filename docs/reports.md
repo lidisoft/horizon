@@ -142,7 +142,13 @@ read at the day's end (now for today), `null` for days to come.
 | `distribution` | `filter`, `projects`; `group` | Open issues (unstarted or started, not archived) by assignee (default), type, priority, label (an issue in each of its labels), project or `cf:<select field id>`, largest first; `key` "" for none |
 
 `GET /api/v1/w/{ws}/projects/{key}/overview` returns all overview blocks in one
-response.
+response, in issue count: `sprint` (the active iteration, its goal, working
+days left, burndown and scope by outcome), `next_release` (the soonest
+dated unreleased one) and `next_milestone` (the project's or the
+workspace's, from today) with their scope by outcome, `flow` (completed per
+week over the last 4, cycle time p50/p85 over 90 days, WIP by status), the
+last 10 events of its issues (`activity`), and the viewer's open issues
+(`my_work`). The overview is the project's page, `/w/{ws}/p/{key}`.
 
 ## Charts
 

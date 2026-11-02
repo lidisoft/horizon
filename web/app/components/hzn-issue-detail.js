@@ -9,7 +9,7 @@ import "horizon/components/hzn-editor.js";
 import "horizon/components/hzn-issue-create.js";
 import "horizon/components/hzn-move-issue.js";
 import {
-  PRIORITIES, avatar, issueHref, issueStyles, priorityIcon, projectData, statusGlyph,
+  PRIORITIES, avatar, describeEvent, issueHref, issueStyles, priorityIcon, projectData, statusGlyph,
 } from "horizon/components/issue-ui.js";
 import { isOpen } from "horizon/components/planning-ui.js";
 import { Collab } from "horizon/editor/collab.js";
@@ -517,17 +517,7 @@ class HznIssueDetail extends HTMLElement {
 
   /** One line for an event of the feed. */
   describe(e) {
-    const { t } = this.context.i18n;
-    const name = (v) => (v && typeof v === "object" ? v.key ? `${v.key} ${v.name ?? ""}`.trim() : v.name ?? "" : v ?? "");
-    const p = e.payload;
-    let kind = e.type.replace(/^issue\./, "");
-    // In or out of an iteration or a release.
-    if (kind === "iteration_changed" || kind === "release_changed") kind = `${kind.split("_")[0]}_${p.to ? "set" : "cleared"}`;
-    const key = `activity.${kind}`;
-    return this.context.i18n.has(key)
-      ? t(key, { from: name(p.from), to: name(p.to), issue: name(p.issue_id), type: p.type ? t(`link.${p.type}`) : "",
-        fields: (p.fields ?? []).join(", "), fromKey: p.from_key ?? "", toKey: p.to_key ?? "" })
-      : kind.replaceAll("_", " ");
+    return describeEvent(this.context.i18n, e);
   }
 
   dialogs() {

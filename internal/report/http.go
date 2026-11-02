@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/lidisoft/horizon/internal/apperr"
+	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/query"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/workspace"
@@ -53,6 +54,30 @@ func NewHTTP(svc *Service) *HTTP {
 func (h *HTTP) Register(ws *gin.RouterGroup) {
 	ws.GET("/reports/:report", h.get)
 	ws.POST("/reports/:report", h.post)
+}
+
+// RegisterProject mounts the overview on /w/:ws/projects/:key.
+func (h *HTTP) RegisterProject(p *gin.RouterGroup) {
+	p.GET("/overview", h.overview)
+}
+
+// overview returns a project's overview page.
+//
+//	@Summary		Project overview
+//	@Description	Every block of the overview page: the active iteration with its burndown, the next release and milestone, flow health (throughput of the last 4 weeks, cycle time over 90 days, WIP by status), recent activity, and the viewer's open issues.
+//	@Tags			reports
+//	@Produce		json
+//	@Param			ws	path		string	true	"Workspace slug"
+//	@Param			key	path		string	true	"Project key"
+//	@Success		200	{object}	Overview
+//	@Router			/api/v1/w/{ws}/projects/{key}/overview [get]
+func (h *HTTP) overview(c *gin.Context) {
+	out, err := h.svc.Overview(c, project.Current(c))
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
 }
 
 // requestFromQuery reads a Request from the URL (the shareable link):

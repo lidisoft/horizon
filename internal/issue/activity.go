@@ -9,9 +9,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/configdef"
 	"github.com/lidisoft/horizon/internal/eventlog"
+	"github.com/lidisoft/horizon/internal/issue/db"
+	"github.com/lidisoft/horizon/internal/project"
 )
 
 // Ref is an entity an event mentions, named at read time: stored payloads
@@ -296,4 +299,59 @@ func (s *Service) Public(ctx context.Context, e eventlog.Event) (Pushed, bool, e
 	}
 	out.Event = described[0]
 	return out, true, nil
+}
+
+// ProjectActivity is the latest events of the project's issues, newest
+// first (limit at most 50), for the project overview.
+func (s *Service) ProjectActivity(ctx context.Context, pc project.Context, limit int) ([]PublicEvent, error) {
+	if err := s.require(ctx, pc, access.IssueView); err != nil {
+		return nil, err
+	}
+	limit = min(max(limit, 1), 50)
+	rows, err := s.pool.Query(ctx, `
+		SELECT e.id, e.workspace_id, e.aggregate_type, e.aggregate_id, e.aggregate_version, e.type, e.actor_id, e.occurred_at, e.payload
+		FROM events e JOIN issues i ON i.id = e.aggregate_id
+		WHERE e.workspace_id = $1 AND e.aggregate_type = 'issue' AND i.project_id = $2 AND e.type NOT LIKE 'IssueComment%'
+		ORDER BY e.id DESC LIMIT $3`, pc.Workspace.ID, pc.Project.ID, limit)
+	if err != nil {
+		return nil, err
+	}
+	var events []eventlog.Event
+	for rows.Next() {
+		var e eventlog.Event
+		if err := rows.Scan(&e.ID, &e.WorkspaceID, &e.AggregateType, &e.AggregateID, &e.AggregateVersion, &e.Type, &e.ActorID, &e.OccurredAt, &e.Payload); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Described issue by issue, in their order.
+	out := make([]PublicEvent, len(events))
+	byIssue := map[uuid.UUID][]int{}
+	for k, e := range events {
+		byIssue[e.AggregateID] = append(byIssue[e.AggregateID], k)
+	}
+	for id, idx := range byIssue {
+		i, err := db.New(s.pool).IssueByID(ctx, db.IssueByIDParams{WorkspaceID: pc.Workspace.ID, ID: id})
+		if err != nil {
+			return nil, err
+		}
+		ic := Context{Context: pc, Issue: i}
+		batch := make([]eventlog.Event, len(idx))
+		for k, j := range idx {
+			batch[k] = events[j]
+		}
+		described, err := s.Describe(ctx, ic, batch)
+		if err != nil {
+			return nil, err
+		}
+		for k, j := range idx {
+			out[j] = described[k]
+		}
+	}
+	return out, nil
 }

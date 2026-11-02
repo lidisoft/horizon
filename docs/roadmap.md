@@ -76,7 +76,7 @@ usable exists early.
 - [x] `reports` worker and projections, `admin rebuild-reports`
 - [x] SVG chart components
 - [x] Sprint reports, flow reports, release and milestone progress, workload
-- [ ] Project overview page
+- [x] Project overview page
 
 ## Phase 8 — Notifications and integrations
 

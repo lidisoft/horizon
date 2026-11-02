@@ -453,10 +453,12 @@ class Sparkline extends HTMLElement {
     const values = d?.values ?? [];
     const max = Math.max(1, ...values.filter((v) => v != null), ...(d?.ref ?? []).filter((v) => v != null));
     const xs = (i) => 2 + (values.length <= 1 ? 0 : (i * (w - 4)) / (values.length - 1));
-    const y = (v) => h - 2 - (v / max) * (h - 4);
+    const y = (v) => h - 4 - (v / max) * (h - 8);
+    const last = values.findLastIndex((v) => v != null); // the latest value, marked
     this.shadowRoot.innerHTML = String(html`<svg role="img" aria-label="${this.getAttribute("label") ?? ""}" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
       ${d?.ref ? html`<path class="line dashed t-reference" d="${Chart.path(d.ref, xs, y)}"></path>` : ""}
-      <path class="line t-${d?.tone ?? "started"}" d="${Chart.path(values, xs, y)}"></path></svg>`);
+      <path class="line t-${d?.tone ?? "started"}" d="${Chart.path(values, xs, y)}"></path>
+      ${last >= 0 ? html`<circle class="point t-${d?.tone ?? "started"}" cx="${xs(last)}" cy="${y(values[last])}" r="3"></circle>` : ""}</svg>`);
   }
 }
 

@@ -4988,6 +4988,42 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/projects/{key}/overview": {
+            "get": {
+                "description": "Every block of the overview page: the active iteration with its burndown, the next release and milestone, flow health (throughput of the last 4 weeks, cycle time over 90 days, WIP by status), recent activity, and the viewer's open issues.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "reports"
+                ],
+                "summary": "Project overview",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Project key",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/report.Overview"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/projects/{key}/people": {
             "get": {
                 "description": "Active members who see the project, for assignee pickers. Readable by whoever sees the project, guests included.",
@@ -9500,6 +9536,33 @@
                 }
             }
         },
+        "report.FlowBlock": {
+            "type": "object",
+            "properties": {
+                "cycle": {
+                    "$ref": "#/definitions/report.Percentiles"
+                },
+                "throughput": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "weeks": {
+                    "description": "Throughput is the issues completed in each of the last 4 weeks.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "wip": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/report.WIPStatus"
+                    }
+                }
+            }
+        },
         "report.IterationRef": {
             "type": "object",
             "properties": {
@@ -9523,6 +9586,50 @@
                 },
                 "state": {
                     "type": "string"
+                }
+            }
+        },
+        "report.Overview": {
+            "type": "object",
+            "properties": {
+                "activity": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.PublicEvent"
+                    }
+                },
+                "flow": {
+                    "$ref": "#/definitions/report.FlowBlock"
+                },
+                "my_work": {
+                    "description": "MyWork is the viewer's open issues in the project, in rank order.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/issue.Issue"
+                    }
+                },
+                "next_milestone": {
+                    "$ref": "#/definitions/report.TargetBlock"
+                },
+                "next_release": {
+                    "$ref": "#/definitions/report.TargetBlock"
+                },
+                "sprint": {
+                    "$ref": "#/definitions/report.SprintBlock"
+                }
+            }
+        },
+        "report.Percentiles": {
+            "type": "object",
+            "properties": {
+                "p50": {
+                    "type": "number"
+                },
+                "p85": {
+                    "type": "number"
+                },
+                "p95": {
+                    "type": "number"
                 }
             }
         },
@@ -9598,6 +9705,42 @@
                 }
             }
         },
+        "report.SprintBlock": {
+            "type": "object",
+            "properties": {
+                "by_outcome": {
+                    "description": "ByOutcome is its issues now, by outcome.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "days_left": {
+                    "description": "DaysLeft counts the working days from today to the end date.",
+                    "type": "integer"
+                },
+                "goal": {
+                    "type": "string"
+                },
+                "ideal": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "iteration": {
+                    "$ref": "#/definitions/report.IterationRef"
+                },
+                "remaining": {
+                    "description": "Remaining and Ideal are its burndown, a value a day.",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                }
+            }
+        },
         "report.SprintSeries": {
             "type": "object",
             "properties": {
@@ -9662,6 +9805,39 @@
                     "items": {
                         "type": "boolean"
                     }
+                }
+            }
+        },
+        "report.TargetBlock": {
+            "type": "object",
+            "properties": {
+                "by_outcome": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "report.WIPStatus": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "In review"
                 }
             }
         },
