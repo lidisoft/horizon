@@ -352,8 +352,21 @@ func (p *page) eval(expr string) {
 // click clicks the middle of an element with the mouse, as a user would.
 func (p *page) click(selector string) {
 	p.t.Helper()
-	box := p.poll(`(() => { const r = (` + selector + `).getBoundingClientRect(); (` + selector + `).scrollIntoView({ block: "center" });
-		const b = (` + selector + `).getBoundingClientRect(); return JSON.stringify([b.x + b.width / 2, b.y + b.height / 2]); })()`)
+	// Where the target is once it holds still between two polls (50 ms
+	// apart), the same element in the same place: a view still rendering
+	// can move it from under the pointer, or replace it between the press
+	// and the release, and the click is lost.
+	p.eval(`window.__hznClickAt = ""; window.__hznClickEl = null`)
+	box := p.poll(`(() => {
+		const el = ` + selector + `;
+		el.scrollIntoView({ block: "center" });
+		const b = el.getBoundingClientRect();
+		const at = JSON.stringify([b.x + b.width / 2, b.y + b.height / 2]);
+		const still = window.__hznClickAt === at && window.__hznClickEl === el;
+		window.__hznClickAt = at;
+		window.__hznClickEl = el;
+		return still && at;
+	})()`)
 	var xy [2]float64
 	if err := json.Unmarshal([]byte(box), &xy); err != nil {
 		p.t.Fatalf("click %s: %v", selector, err)
@@ -1370,6 +1383,7 @@ func TestTable(t *testing.T) {
 
 	// Sorting by key, descending, goes to the address.
 	pg.click(view + `.querySelector('[data-sort="key"]')`)
+	pg.poll(view + `.querySelector('th[aria-sort="ascending"] [data-sort="key"]') && "ascending"`)
 	pg.click(view + `.querySelector('[data-sort="key"]')`)
 	pg.poll(view + `.querySelector("tbody tr")?.dataset.key === "HZN-3" && "sorted"`)
 	pg.poll(`new URLSearchParams(location.search).get("sort") === "key:desc" && "in address"`)
