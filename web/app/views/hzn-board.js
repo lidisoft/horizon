@@ -567,6 +567,7 @@ class HznBoard extends HTMLElement {
       this.items.splice(after ? this.items.findIndex((x) => x.key === after) + 1 : 0, 0, i);
       requests.push(() => api.post(`${base}/rank`, { body: { after } }));
     }
+    this.seq = (this.seq ?? 0) + 1; // a refresh begun before this change would undo it on screen
     this.renderBoard();
     this.focusCard(key);
     for (const r of requests) {

@@ -461,6 +461,7 @@ class HznBacklog extends HTMLElement {
       const pos = after ? this.items.findIndex((i) => i.key === after) + 1 : 0;
       this.items.splice(pos, 0, issue);
     }
+    this.seq = (this.seq ?? 0) + 1; // a refresh begun before this change would undo it on screen
     this.renderBuckets();
     this.focusRow(key);
     try {
