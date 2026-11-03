@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/chromedp"
 	"github.com/chromedp/chromedp/kb"
 	"github.com/gin-gonic/gin"
@@ -380,6 +382,25 @@ func (p *page) typeInto(selector, text string) {
 	p.poll(selector + ` && "found"`)
 	p.eval(selector + `.focus()`)
 	p.do(chromedp.KeyEvent(text))
+}
+
+// press presses a shortcut key. chromedp types a key as keydown, char and
+// keyup, and the char isn't cancelled with the keydown: a shortcut opening a
+// field quickly enough would get its own letter typed into it, which a
+// browser never does. So only keydown and keyup.
+func (p *page) press(key rune) {
+	p.t.Helper()
+	p.do(chromedp.Func(func(ctx context.Context, t *chromedp.Target) error {
+		for _, e := range kb.Encode(key) {
+			if e.Type == kb.KeyChar {
+				continue
+			}
+			if _, err := cdp.Call(ctx, t, input.DispatchKeyEvent, *e); err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
 }
 
 const appRoot = `document.querySelector("hzn-app").shadowRoot`
@@ -902,7 +923,7 @@ func TestIssues(t *testing.T) {
 	pg.poll(view + `.querySelector('.row[data-key="HZN-1"]') && "listed"`)
 	shell := appRoot + `.querySelector("hzn-issue-create").shadowRoot`
 	pg.eval(`document.activeElement?.blur()`)
-	pg.do(chromedp.KeyEvent("c"))
+	pg.press('c')
 	pg.poll(shell + `.querySelector("lds-modal").hasAttribute("open") && "open"`)
 	pg.typeInto(shell+`.querySelector('[name="title"]')`, "Replay after reconnect\r")
 	pg.poll(view + `.querySelector('.row[data-key="HZN-2"]') && "listed"`)
@@ -974,7 +995,7 @@ func TestIssues(t *testing.T) {
 	detail := view + `.querySelector("hzn-issue-detail").shadowRoot`
 	pg.poll(detail + `.querySelector("h1")?.textContent === "Replay after reconnect" && "loaded"`)
 	pg.eval(`document.activeElement?.blur()`)
-	pg.do(chromedp.KeyEvent("e"))
+	pg.press('e')
 	pg.poll(detail + `.querySelector("[data-title-input]") && "editing"`)
 	pg.eval(detail + `.querySelector("[data-title-input]").setAttribute("value", "")`)
 	pg.typeInto(detail+`.querySelector("[data-title-input]")`, "Replay missed events\r")
