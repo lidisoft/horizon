@@ -37,6 +37,7 @@ import (
 	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/issue"
+	"github.com/lidisoft/horizon/internal/notify"
 	"github.com/lidisoft/horizon/internal/planning"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
 	"github.com/lidisoft/horizon/internal/project"
@@ -242,6 +243,8 @@ func TestWebUnits(t *testing.T) {
 type app struct {
 	base string
 	mail *platformmail.Memory
+	ids  *identity.Service
+	ws   *workspace.Service
 }
 
 func appServer(t *testing.T) app {
@@ -296,6 +299,13 @@ func appServer(t *testing.T) app {
 	go func() { _ = bus.Stream.Consume(ctx, bus.JetStream, planningSvc.PolicyConsumer(), zerolog.Nop()) }()
 	projector := report.NewProjector(pool, zerolog.Nop())
 	go func() { _ = bus.Stream.Consume(ctx, bus.JetStream, projector.Consumer(), zerolog.Nop()) }()
+	notifySvc := notify.New(notify.Options{Pool: pool, Log: zerolog.Nop(), Identity: ids, Access: acc, Workspaces: workspaceSvc, Issues: issueSvc,
+		Publish: func(id uuid.UUID, data []byte) {
+			_ = bus.Conn.Publish(realtime.InboxSubject(bus.Stream.Prefix, id), data)
+		}})
+	go func() { _ = bus.Stream.Consume(ctx, bus.JetStream, notifySvc.Consumer(), zerolog.Nop()) }()
+	notifyHTTP := notify.NewHTTP(notifySvc)
+	a.ids, a.ws = ids, workspaceSvc
 
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
@@ -303,7 +313,9 @@ func appServer(t *testing.T) app {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
 		hub.Register(api)
+		notifyHTTP.Register(api)
 		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register,
+			notifyHTTP.RegisterWorkspace,
 			func(ws *gin.RouterGroup) {
 				projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject, reportsHTTP.RegisterProject)
 			})
@@ -2185,4 +2197,93 @@ func TestCollaboration(t *testing.T) {
 	one.poll(ed + `.shadowRoot.querySelector(".cursors .caret span")?.textContent === "Ada Lovelace" && "caret"`)
 	one.logs.failOnErrors(t)
 	two.logs.failOnErrors(t)
+}
+
+// TestInbox: Ada assigns Grace an issue and comments on it; Grace sees her
+// unread count and inbox follow along, opens the issue, which reads it,
+// and unsubscribes from it.
+func TestInbox(t *testing.T) {
+	a := appServer(t)
+	ada, grace := newPage(t), newPage(t)
+	ada.do(chromedp.Navigate(a.base + "/"))
+	ada.signIn("ada@example.com", testPassword)
+	ada.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	ada.eval(view + `.querySelector("form").requestSubmit()`)
+	ada.poll(`location.pathname === "/w/acme" && "workspace"`)
+	ada.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`)
+	ctx := context.Background()
+	g, err := a.ids.CreateUser(ctx, uuid.NullUUID{}, identity.NewUser{Email: "grace@example.com", Name: "Grace Hopper", Password: testPassword})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var acme uuid.UUID
+	_, ws := ada.api("GET", "/w/acme", "")
+	var w struct{ ID uuid.UUID }
+	_ = json.Unmarshal([]byte(ws), &w)
+	acme = w.ID
+	if err := a.ws.AddMember(ctx, acme, g.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	grace.do(chromedp.Navigate(a.base + "/w/acme"))
+	grace.signIn("grace@example.com", testPassword)
+	grace.poll(`location.pathname === "/w/acme" && "home"`)
+	badge := appRoot + `.querySelector("[data-unread]")`
+	noBadge := `getComputedStyle(` + badge + `).display === "none"`
+	grace.poll(noBadge + ` && "no badge"`)
+
+	// Ada creates HZN-1 for Grace: Grace's badge shows it.
+	_, cfg := ada.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID string } `json:"issue_types"`
+	}
+	_ = json.Unmarshal([]byte(cfg), &resolved)
+	if status, body := ada.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[0].ID+`","title":"Outbox relay","assignee_id":"`+g.ID.String()+`"}`); status != 201 {
+		t.Fatalf("create issue: %d %s", status, body)
+	}
+	grace.poll(`!(` + noBadge + `) && ` + badge + `.textContent === "1" && "badge"`)
+
+	// Her inbox lists it; Ada's comment bumps the row live.
+	grace.click(appRoot + `.querySelector('[data-nav="inbox"]')`)
+	grace.poll(`location.pathname === "/w/acme/inbox" && "inbox"`)
+	row := view + `.querySelector('.row[data-unread]')`
+	text := `(` + row + `?.textContent.replace(/\s+/g, " ").trim() ?? "")`
+	got := grace.poll(text + `.includes("Ada Lovelace created the issue") && ` + text)
+	if !strings.Contains(got, "HZN-1Outbox relay") || !strings.Contains(got, "Assigned") {
+		t.Errorf("row = %q", got)
+	}
+	ada.api("POST", "/w/acme/issues/HZN-1/comments", `{"body":"Looks good"}`)
+	grace.poll(text + `.includes("Ada Lovelace commented · 1 more update") && "bumped"`)
+	if got := grace.poll(badge + `.textContent`); got != "1" {
+		t.Errorf("badge = %q", got)
+	}
+
+	// Opening the row reads it and goes to the issue, Grace following it.
+	grace.click(row + `.querySelector("[data-open]")`)
+	grace.poll(`location.pathname === "/w/acme/issues/HZN-1" && "issue"`)
+	grace.poll(noBadge + ` && "read"`)
+	bell := view + `.querySelector("hzn-issue-detail").shadowRoot.querySelector('[data-action="subscription"]')`
+	grace.poll(bell + `?.getAttribute("aria-pressed") === "true" && "subscribed"`)
+	grace.click(bell)
+	grace.poll(bell + `?.getAttribute("aria-pressed") === "false" && "unsubscribed"`)
+	if _, body := grace.api("GET", "/w/acme/issues/HZN-1/subscription", ""); body != `{"subscribed":false}` {
+		t.Errorf("subscription = %s", body)
+	}
+
+	// The read row shows under All, not Unread.
+	grace.do(chromedp.Navigate(a.base + "/w/acme/inbox"))
+	grace.poll(view + `.querySelector("lds-empty-state") && "caught up"`)
+	grace.do(chromedp.Navigate(a.base + "/w/acme/inbox?state=all"))
+	grace.poll(view + `.querySelector('.row:not([data-unread])') && "all"`)
+
+	// Email settings save from the account page.
+	grace.do(chromedp.Navigate(a.base + "/account"))
+	digest := view + `.querySelector('[data-setting="digest"]')`
+	grace.poll(digest + ` && !` + digest + `.hasAttribute("disabled") && "loaded"`)
+	grace.click(digest)
+	grace.poll(view + `.querySelector("[data-notifications] [data-saved]").textContent !== "" && "saved"`)
+	if _, body := grace.api("GET", "/me/notifications", ""); body != `{"email":"unread","digest":true}` {
+		t.Errorf("settings = %s", body)
+	}
+	grace.logs.failOnErrors(t)
 }

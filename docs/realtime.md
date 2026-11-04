@@ -44,6 +44,7 @@ latency or ordering. See [ADR-0008](adr/0008-websockets-for-realtime.md).
 | `doc.error` | `{ issue, code }`: `invalid_steps`, `too_large`, `resync`, `forbidden`, `issue_archived`; the client starts over from the server's document |
 | `doc.cursor` | Another socket's selection: `{ issue, conn, user, name, version, anchor, head }`, or `gone: true` when it leaves; the client maps it from `version` to its document |
 | `resync` | The client missed too much; refetch the listed topics |
+| `inbox` | `{ workspace }`: the user's inbox there changed (sent to the user's sockets only, whatever they subscribed to); the client refetches its unread count |
 | `pong` | — |
 
 Presence and the `doc.*` messages came with the block editor (phase 5).

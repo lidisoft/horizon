@@ -320,6 +320,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/me/notifications": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Get notification settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/notify.Settings"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "email: unread (what stays unread for 10 minutes is emailed) or off; digest: a daily summary in the morning.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "me"
+                ],
+                "summary": "Set notification settings",
+                "parameters": [
+                    {
+                        "description": "Settings",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/notify.Settings"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/notify.Settings"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/me/password": {
             "post": {
                 "description": "Signs out the user's other sessions.",
@@ -2086,6 +2137,167 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/w/{ws}/inbox": {
+            "get": {
+                "description": "One row per issue the caller follows or was assigned or mentioned on, newest first. state: unread (default), all (read ones too) or snoozed. Rows on issues the caller no longer sees are left out.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inbox"
+                ],
+                "summary": "List the inbox",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "unread, all or snoozed",
+                        "name": "state",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "next_cursor of the previous page",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "At most 100; 50 by default",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/notify.Page"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/inbox/archive-read": {
+            "post": {
+                "tags": [
+                    "inbox"
+                ],
+                "summary": "Archive the read inbox rows",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/inbox/count": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inbox"
+                ],
+                "summary": "Count unread inbox rows",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/notify.UnreadCount"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/inbox/read-all": {
+            "post": {
+                "tags": [
+                    "inbox"
+                ],
+                "summary": "Mark the inbox read",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/inbox/{id}": {
+            "patch": {
+                "description": "Mark it read or unread, archive or restore it, or snooze it until a time (null wakes it). New activity on the issue brings it back unread.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "inbox"
+                ],
+                "summary": "Update an inbox row",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Row id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/notify.ItemUpdate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/invitations": {
             "get": {
                 "produces": [
@@ -3539,6 +3751,102 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/issue.SchedulePlan"
                         }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/subscription": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Get the caller's subscription to an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/notify.Subscription"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Subscribe to an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/notify.Subscription"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Being assigned or mentioned again subscribes the caller again.",
+                "tags": [
+                    "issues"
+                ],
+                "summary": "Unsubscribe from an issue",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     }
                 }
             }
@@ -8862,6 +9170,162 @@ const docTemplate = `{
                 "size": {
                     "type": "integer",
                     "example": 2048
+                }
+            }
+        },
+        "notify.IssueRef": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "HZN-42"
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/notify.Status"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "notify.Item": {
+            "type": "object",
+            "properties": {
+                "event": {
+                    "description": "Event is the latest event, in the domain event format (null once\nscrubbed).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/issue.PublicEvent"
+                        }
+                    ]
+                },
+                "id": {
+                    "type": "string"
+                },
+                "issue": {
+                    "$ref": "#/definitions/notify.IssueRef"
+                },
+                "read": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "description": "Reason is the strongest since the row was last read.",
+                    "type": "string",
+                    "enum": [
+                        "assigned",
+                        "mentioned",
+                        "subscribed"
+                    ]
+                },
+                "snoozed_until": {
+                    "type": "string"
+                },
+                "unread_count": {
+                    "description": "UnreadCount is the events since it was last read.",
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "notify.ItemUpdate": {
+            "type": "object",
+            "properties": {
+                "archived": {
+                    "type": "boolean"
+                },
+                "read": {
+                    "type": "boolean"
+                },
+                "snoozed_until": {
+                    "description": "SnoozedUntil hides the row until then (new activity brings it back\nsooner); null wakes it.",
+                    "type": "string",
+                    "format": "date-time"
+                }
+            }
+        },
+        "notify.Page": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/notify.Item"
+                    }
+                },
+                "next_cursor": {
+                    "type": "string"
+                }
+            }
+        },
+        "notify.Settings": {
+            "type": "object",
+            "properties": {
+                "digest": {
+                    "description": "Digest sends a daily summary of unread rows in the user's morning.",
+                    "type": "boolean"
+                },
+                "email": {
+                    "description": "Email \"unread\" sends what stays unread for EmailDelay; \"off\" sends\nnothing but the digest.",
+                    "type": "string",
+                    "enum": [
+                        "unread",
+                        "off"
+                    ]
+                }
+            }
+        },
+        "notify.Status": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "In progress"
+                },
+                "outcome": {
+                    "type": "string",
+                    "enum": [
+                        "unstarted",
+                        "started",
+                        "completed",
+                        "abandoned"
+                    ]
+                }
+            }
+        },
+        "notify.Subscription": {
+            "type": "object",
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "enum": [
+                        "creator",
+                        "assignee",
+                        "mention",
+                        "commenter",
+                        "manual"
+                    ]
+                },
+                "subscribed": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "notify.UnreadCount": {
+            "type": "object",
+            "properties": {
+                "unread": {
+                    "type": "integer"
                 }
             }
         },

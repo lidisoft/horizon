@@ -169,7 +169,7 @@ semantic tokens only, `:host` display):
 | `hzn-view-bar` | On the list, the board and the table: the saved views picker (save as new, save changes, delete; picking a view of another layout goes there), the filter as chips (an AND of conditions built field → condition → value in an `lds-popover`) and text search. The address carries `?view=` and, while it differs from the view's, `?filter=` (JSON); a filter switches the layout to `POST /issues/query` |
 | `hzn-editor` | Block editor: descriptions, comments ([Block editor](#block-editor)) |
 | `hzn-*-picker` | Status, priority, assignee, labels, estimate, iteration, release pickers: `lds-combobox` wrappers that load options from the store and apply mutations |
-| `hzn-inbox` | Notifications |
+| `hzn-inbox` (view) | `/w/{ws}/inbox?state=unread\|all\|snoozed`: one row per followed issue with its latest event, reason (assigned, mentioned) and the count of unread updates; opening a row reads it; mark read or unread, snooze (an hour, until tomorrow, until next week 08:00) and archive. The sidebar's Inbox item shows the unread count, refreshed by `inbox` socket messages; `G` then `I` goes there. The bell on an issue subscribes or unsubscribes; email settings are on the account page |
 
 ## Shell readiness
 

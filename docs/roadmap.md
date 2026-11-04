@@ -80,7 +80,7 @@ usable exists early.
 
 ## Phase 8 — Notifications and integrations
 
-- [ ] Subscriptions, inbox, email notifications and digests
+- [x] Subscriptions, inbox, email notifications and digests
 - [ ] Outbound webhooks with signing, retries, delivery log
 - [ ] Git integration: GitHub, GitLab, Forgejo
 - [ ] Magic link login, OIDC / SSO, enforced SSO

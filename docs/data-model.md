@@ -110,8 +110,9 @@ away. See [realtime.md](realtime.md).
 |-------|-------------|
 | `events` | id (UUIDv7), workspace_id (null = instance-level), aggregate_type, aggregate_id, aggregate_version, type, actor_id (null = system), occurred_at, payload JSONB, published_at |
 | `purges` | workspace_id, aggregate_type, aggregate_id, tombstone_id, objects text[], attempts — the `purge` job's queue after hard deletes |
-| `subscriptions` | user_id, issue_id, reason (creator, assignee, mention, manual) |
-| `inbox_items` | user_id, workspace_id, event_id, issue_id, read_at, snoozed_until, archived_at |
+| `subscriptions` | workspace_id, issue_id, user_id, reason (creator, assignee, mention, commenter, manual) |
+| `inbox_items` | workspace_id, user_id, issue_id (one row each), reason (assigned, mentioned, subscribed), event_id (latest), first_event_id (oldest unread), unread_count, updated_at, read_at, snoozed_until, archived_at, emailed_event_id |
+| `notification_settings` | user_id, email (unread, off), digest, digest_sent_at — no row: the defaults |
 | `webhooks` | workspace_id, project_id (nullable), url, secret, event_types text[], active |
 | `webhook_deliveries` | webhook_id, event_id, attempt, status_code, response_excerpt, next_attempt_at |
 | `vcs_connections` | workspace_id, provider, installation details (encrypted) |

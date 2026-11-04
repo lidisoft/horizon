@@ -39,6 +39,8 @@ const styles = sheet(`
   .crumbs a:hover { color: var(--lds-color-fg-default); }
   .crumbs lds-icon { color: var(--lds-color-fg-subtle); }
   .kind { display: flex; align-items: center; gap: var(--lds-space-2); }
+  .tools { display: flex; align-items: center; gap: var(--lds-space-1); }
+  [data-action="subscription"][aria-pressed="true"] lds-icon { color: var(--lds-color-accent-fg); }
   .kind .grow { flex: 1; }
   h1 { margin: var(--lds-space-2) 0 var(--lds-space-4); font-family: var(--lds-font-family-display); font-size: var(--lds-font-size-2xl);
     line-height: 1.25; cursor: text; overflow-wrap: anywhere; }
@@ -207,12 +209,13 @@ class HznIssueDetail extends HTMLElement {
     const projectKey = issue.key.slice(0, issue.key.lastIndexOf("-"));
     try {
       const plans = `/w/${enc}/projects/${encodeURIComponent(projectKey)}`;
-      const [data, children, links, comments, attachments, activity, transitions, iterations, releases] = await Promise.all([
+      const [data, children, links, comments, attachments, activity, transitions, iterations, releases, subscription] = await Promise.all([
         projectData(this.context, this.ws, projectKey),
         api.get(`${base}/children`), api.get(`${base}/links`), api.get(`${base}/comments`),
         api.get(`${base}/attachments`), api.get(`${base}/activity`), api.get(`${base}/transitions`),
-        api.get(`${plans}/iterations`), api.get(`${plans}/releases`),
+        api.get(`${plans}/iterations`), api.get(`${plans}/releases`), api.get(`${base}/subscription`),
       ]);
+      this.subscription = subscription.data;
       this.iterations = iterations.data.items;
       this.releases = releases.data.items;
       this.data = data;
@@ -264,7 +267,7 @@ class HznIssueDetail extends HTMLElement {
         <lds-badge size="sm">${type?.name ?? ""}</lds-badge><span class="key">${i.key}</span>
         <span class="presence" data-presence aria-label="${t("presence.label")}"></span>
         ${archived ? html`<lds-badge size="sm" intent="warning">${t("issues.archived")}</lds-badge>` : ""}
-        ${this.mode === "peek" ? html`<span class="grow"></span>${this.menu()}` : ""}
+        ${this.mode === "peek" ? html`<span class="grow"></span><span class="tools">${this.bell()}${this.menu()}</span>` : ""}
       </div>
       <h1 data-title tabindex="0" title="${t("issues.editTitle")}">${i.title}</h1>`;
     const body = html`
@@ -284,7 +287,7 @@ class HznIssueDetail extends HTMLElement {
             ${this.parent ? html`<lds-icon name="chevron-right" size="sm"></lds-icon><a href="${issueHref(this.ws, this.parent.key)}">${this.parent.key} ${this.parent.name}</a>` : ""}
             <lds-icon name="chevron-right" size="sm"></lds-icon><strong>${i.key}</strong>
           </nav>
-          ${this.menu()}
+          <span class="tools">${this.bell()}${this.menu()}</span>
         </header>
         <div class="layout">
           <main>${header}${body}</main>
@@ -308,6 +311,31 @@ class HznIssueDetail extends HTMLElement {
     }
     const composer = this.shadowRoot.querySelector("[data-composer-editor]");
     if (composer && this.draftDoc) composer.value = this.draftDoc;
+  }
+
+  /** Subscribe or unsubscribe: whether the caller hears of changes. */
+  bell() {
+    const { t } = this.context.i18n;
+    const on = !!this.subscription?.subscribed;
+    return html`<lds-button variant="ghost" size="sm" data-action="subscription" aria-pressed="${String(on)}"
+      label="${t(on ? "issue.unsubscribe" : "issue.subscribe")}" title="${on ? t("issue.subscribed") : t("issue.subscribe")}"><lds-icon name="bell"></lds-icon></lds-button>`;
+  }
+
+  async toggleSubscription() {
+    const { api, i18n } = this.context;
+    const url = `/w/${encodeURIComponent(this.ws)}/issues/${encodeURIComponent(this.issue.key)}/subscription`;
+    try {
+      if (this.subscription?.subscribed) {
+        await api.delete(url);
+        this.subscription = { subscribed: false };
+      } else {
+        ({ data: this.subscription } = await api.put(url));
+      }
+    } catch (err) {
+      globalThis.LDS?.toast?.({ intent: "danger", title: errorMessage(err, i18n) });
+      return;
+    }
+    for (const b of this.shadowRoot.querySelectorAll('[data-action="subscription"]')) b.outerHTML = String(this.bell());
   }
 
   menu() {
@@ -740,6 +768,8 @@ class HznIssueDetail extends HTMLElement {
         return this.copyLink();
       case "move":
         return this.move();
+      case "subscription":
+        return this.toggleSubscription();
       case "archive":
       case "unarchive":
         return this.post(el.dataset.action);

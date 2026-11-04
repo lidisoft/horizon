@@ -46,6 +46,7 @@ export const ROUTES = [
   { name: "project-backlog", path: "/w/:ws/p/:key/backlog", view: "hzn-backlog" },
   { name: "issue", path: "/w/:ws/issues/:issue", view: "hzn-issue" },
   { name: "search", path: "/w/:ws/search", view: "hzn-search" },
+  { name: "inbox", path: "/w/:ws/inbox", view: "hzn-inbox" },
   { name: "milestones", path: "/w/:ws/milestones", view: "hzn-milestones" },
   { name: "roadmap", path: "/w/:ws/roadmap", view: "hzn-roadmap" },
   { name: "project-releases", path: "/w/:ws/p/:key/releases", view: "hzn-releases" },
@@ -100,6 +101,7 @@ const styles = sheet(`
   lds-nav-item::part(label) { line-height: 1.25; }
   /* Project keys sit at the end of their row. */
   lds-nav-item[data-project]::part(label) { flex: 1; }
+  lds-badge[hidden] { display: none; } /* lds-badge sets its own display */
   .footer { display: grid; gap: var(--lds-space-1); }
   /* position: relative keeps absolutely positioned descendants (visually
      hidden labels) inside the scrolling area instead of stretching the page. */
@@ -173,6 +175,7 @@ export class HznApp extends HTMLElement {
             </lds-menu>
           </div>
           <lds-nav-item href="/" data-route="workspace" data-nav="home"><lds-icon slot="start" name="layers"></lds-icon>${t("nav.home")}</lds-nav-item>
+          <lds-nav-item href="/" data-route="inbox" data-nav="inbox" hidden><lds-icon slot="start" name="inbox"></lds-icon>${t("nav.inbox")}<lds-badge slot="end" size="sm" intent="info" data-unread hidden></lds-badge></lds-nav-item>
           <lds-nav-item href="/" data-route="search" data-nav="search" hidden><lds-icon slot="start" name="search"></lds-icon>${t("nav.search")}</lds-nav-item>
           <lds-nav-item href="/" data-route="roadmap" data-nav="roadmap" hidden><lds-icon slot="start" name="chart-gantt"></lds-icon>${t("nav.roadmap")}</lds-nav-item>
           <lds-nav-item href="/" data-route="milestones" data-nav="milestones" hidden><lds-icon slot="start" name="flag"></lds-icon>${t("nav.milestones")}</lds-nav-item>
@@ -217,6 +220,7 @@ export class HznApp extends HTMLElement {
 
     const actions = {
       home: () => router.navigate(this.currentSlug ? `/w/${this.currentSlug}` : "/"),
+      inbox: () => this.currentSlug && router.navigate(`/w/${this.currentSlug}/inbox`),
       account: () => router.navigate(router.href("account")),
       "sign-out": () => session.logout(),
       theme: () => this.toggleTheme(),
@@ -227,6 +231,7 @@ export class HznApp extends HTMLElement {
     shortcuts.register({ id: "palette", keys: "mod+k", description: "shortcut.palette", allowInInputs: true, handler: actions.palette });
     shortcuts.register({ id: "help", keys: "?", description: "shortcut.help", handler: actions.help });
     shortcuts.register({ id: "home", keys: "g h", description: "shortcut.home", handler: actions.home });
+    shortcuts.register({ id: "inbox", keys: "g i", description: "shortcut.inbox", handler: actions.inbox });
     shortcuts.register({ id: "create-issue", keys: "c", description: "shortcut.createIssue", handler: actions["create-issue"] });
 
     // Commands of the open issue, and "Open <KEY>" for a typed issue key.
@@ -264,6 +269,8 @@ export class HznApp extends HTMLElement {
     socket.on((m) => {
       // Another tab or person created, renamed or archived a project.
       if (m.t === "event" && m.d.aggregate?.type === "project") this.loadProjects();
+      // The inbox changed (here or in another tab), or the socket came back.
+      if ((m.t === "inbox" && m.d?.workspace === this.currentSlug) || m.t === "open") this.loadUnread();
     });
     session.subscribe(async (state) => {
       this.renderUser();
@@ -401,6 +408,7 @@ export class HznApp extends HTMLElement {
       this.renderSwitcher();
       if (changed) {
         this.loadProjects();
+        this.loadUnread();
         this.syncSocket();
       }
     }
@@ -434,6 +442,24 @@ export class HznApp extends HTMLElement {
     }
     this.renderSwitcher();
     return this.workspaces;
+  }
+
+  /** Shows the current workspace's unread inbox rows on the sidebar. */
+  async loadUnread() {
+    const slug = this.currentSlug;
+    const badge = this.shadowRoot.querySelector("[data-unread]");
+    let unread = 0;
+    if (slug && this.context.session.status === "signed-in") {
+      try {
+        ({ data: { unread } } = await this.context.api.get(`/w/${encodeURIComponent(slug)}/inbox/count`));
+      } catch {
+        // not a member, or offline: no badge
+      }
+    }
+    if (slug !== this.currentSlug) return;
+    badge.textContent = unread > 99 ? "99+" : String(unread);
+    badge.hidden = !unread;
+    badge.closest("lds-nav-item").setAttribute("aria-label", unread ? this.context.i18n.t("nav.inboxUnread", { count: unread }) : this.context.i18n.t("nav.inbox"));
   }
 
   /** Loads the current workspace's projects for the sidebar. */
@@ -497,6 +523,9 @@ export class HznApp extends HTMLElement {
     }
     const home = root.querySelector('[data-nav="home"]');
     const settings = root.querySelector('[data-nav="settings"]');
+    const inbox = root.querySelector('[data-nav="inbox"]');
+    inbox.hidden = !current;
+    if (current) inbox.setAttribute("href", `/w/${current.slug}/inbox`);
     const search = root.querySelector('[data-nav="search"]');
     search.hidden = !current;
     if (current) search.setAttribute("href", `/w/${current.slug}/search`);

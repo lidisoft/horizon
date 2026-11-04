@@ -16,6 +16,7 @@ const styles = sheet(`
   .muted { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
   td.end { text-align: end; white-space: nowrap; }
   [data-sessions] { margin-bottom: var(--lds-space-4); }
+  [data-notifications] lds-switch { display: flex; margin-block-end: var(--lds-space-3); }
   lds-alert:empty { display: none; }
 `);
 
@@ -54,6 +55,15 @@ class HznAccount extends HTMLElement {
               <span class="muted" role="status" data-saved></span>
             </div>
           </form>
+        </section>
+
+        <section aria-labelledby="notifications-title" data-notifications>
+          <h2 id="notifications-title">${t("account.notifications")}</h2>
+          <p class="lead">${t("account.notificationsHint")}</p>
+          <lds-alert intent="danger" role="alert"></lds-alert>
+          <lds-switch data-setting="email" disabled>${t("account.emailUnread")}</lds-switch>
+          <lds-switch data-setting="digest" disabled>${t("account.emailDigest")}</lds-switch>
+          <span class="muted" role="status" data-saved></span>
         </section>
 
         <section aria-labelledby="password-title">
@@ -109,7 +119,35 @@ class HznAccount extends HTMLElement {
       const id = event.target.closest?.("[data-revoke]")?.dataset.revoke;
       if (id) this.revoke(id);
     });
+    root.querySelector("[data-notifications]").addEventListener("lds-change", () => this.saveNotifications());
     this.loadSessions();
+    this.loadNotifications();
+  }
+
+  /** Email settings: each switch saves on change. */
+  async loadNotifications() {
+    const box = this.shadowRoot.querySelector("[data-notifications]");
+    try {
+      const { data } = await this.context.api.get("/me/notifications");
+      box.querySelector('[data-setting="email"]').toggleAttribute("checked", data.email === "unread");
+      box.querySelector('[data-setting="digest"]').toggleAttribute("checked", data.digest);
+      for (const s of box.querySelectorAll("lds-switch")) s.removeAttribute("disabled");
+    } catch (err) {
+      box.querySelector("lds-alert").textContent = errorMessage(err, this.context.i18n);
+    }
+  }
+
+  async saveNotifications() {
+    const { api, i18n } = this.context;
+    const box = this.shadowRoot.querySelector("[data-notifications]");
+    const on = (name) => box.querySelector(`[data-setting="${name}"]`).hasAttribute("checked");
+    box.querySelector("lds-alert").textContent = box.querySelector("[data-saved]").textContent = "";
+    try {
+      await api.put("/me/notifications", { body: { email: on("email") ? "unread" : "off", digest: on("digest") } });
+      box.querySelector("[data-saved]").textContent = i18n.t("account.notificationsSaved");
+    } catch (err) {
+      box.querySelector("lds-alert").textContent = errorMessage(err, i18n);
+    }
   }
 
   async saveProfile(form) {

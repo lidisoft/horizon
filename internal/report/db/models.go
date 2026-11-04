@@ -112,6 +112,22 @@ type Event struct {
 	ReportedAt       *time.Time
 }
 
+type InboxItem struct {
+	WorkspaceID    uuid.UUID
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	IssueID        uuid.UUID
+	Reason         string
+	EventID        uuid.UUID
+	FirstEventID   uuid.UUID
+	UnreadCount    int32
+	UpdatedAt      time.Time
+	ReadAt         *time.Time
+	SnoozedUntil   *time.Time
+	ArchivedAt     *time.Time
+	EmailedEventID uuid.NullUUID
+}
+
 type Invitation struct {
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID
@@ -253,6 +269,14 @@ type MilestoneIssue struct {
 	WorkspaceID uuid.UUID
 	MilestoneID uuid.UUID
 	IssueID     uuid.UUID
+}
+
+type NotificationSetting struct {
+	UserID       uuid.UUID
+	Email        string
+	Digest       bool
+	DigestSentAt *time.Time
+	UpdatedAt    time.Time
 }
 
 type PasswordReset struct {
@@ -411,6 +435,14 @@ type StatusCategory struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	Version     int32
+}
+
+type Subscription struct {
+	WorkspaceID uuid.UUID
+	IssueID     uuid.UUID
+	UserID      uuid.UUID
+	Reason      string
+	CreatedAt   time.Time
 }
 
 type Team struct {

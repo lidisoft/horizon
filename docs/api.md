@@ -45,7 +45,7 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
 /me                                        GET (user + CSRF token) | PATCH profile
 /me/password | /me/sessions | /me/sessions/{id} | /me/sessions/revoke-others
 /me/tokens | /me/tokens/{id}                GET, POST (secret shown once) | DELETE; session only
-/me/inbox
+/me/notifications                          GET | PUT {email: unread | off, digest}
 /invitations/lookup | /invitations/accept  token in the body, never the URL
 /w                                         workspaces of the current user (?all=true: every one, instance admins); POST creates (instance admins)
 /w/{ws}                                    GET (with the caller's workspace permissions in "can") | PATCH name, slug, time zone
@@ -89,12 +89,14 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
     /attachments                           GET | POST {filename, content_type, size} → presigned upload_url
     /attachments/{id}/complete  /download  POST after the PUT | GET redirects to a presigned URL; DELETE /attachments/{id}
     /activity                              GET the issue's events, newest first, in the domain event format
-    /subscription
+    /subscription                          GET | PUT subscribes the caller | DELETE
   /search                                  GET ?q=&limit=&archived=&project= — issues by key, words (prefixes) in titles,
                                            descriptions and comments, and near titles; snippets mark words with U+0002/U+0003
   /views
   /milestones  /milestones/{id}            GET (visible ones, with progress) | POST {project?, name, date, description} | PATCH | DELETE
     /issues                                GET linked keys | POST {add: [keys], remove: [keys]} (milestone.manage)
+  /inbox                                   GET ?state=unread|all|snoozed (one row per issue, newest first) | /count
+  /inbox/{id}                              PATCH {read, archived, snoozed_until}; /inbox/read-all  /inbox/archive-read  POST
   /reports/{report}                        report data (see reports.md)
   /projects/{key}/overview                 project overview blocks
   /webhooks  /webhooks/{id}/deliveries

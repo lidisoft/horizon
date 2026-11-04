@@ -252,8 +252,28 @@ settings are aggregates too: changing them emits events
 | `IterationCompleted` | Apply the completion policy | Storm policy 2, generalised |
 | `IssueDeleted` | Delete its links, comments, attachments; handle children as chosen | See [Deletion](#deletion) |
 | Git PR merged referencing an issue | Transition to the configured status, if allowed | Configurable per project |
-| `IssueAssigned`, `IssueCommented` with @mention, any change to a subscribed issue | Notify | See notifications in [architecture.md](architecture.md#workers) |
+| `IssueAssigned`, `IssueCommented` with @mention, any change to a subscribed issue | Notify | See [Notifications](#notifications) |
 | Any domain event | Fan out to WebSocket clients and matching webhooks | |
+
+### Notifications
+
+People follow issues through **subscriptions**, made when they create an
+issue, are assigned it, are @mentioned in its description or a comment, or
+comment on it, and by hand (the bell on the issue). Unsubscribing stops the
+updates until the next assignment or mention.
+
+Each issue event tells its followers, never its own actor, and only people
+who can still see the issue. Reordering and edits or deletions of comments
+tell no one. The **inbox** keeps one row per person and issue: a new event
+bumps the row (unread again, out of a snooze or the archive) and counts the
+events since it was last read; its reason is the strongest of them
+(assigned, then mentioned, then subscribed). Rows can be read, snoozed and
+archived.
+
+**Email** follows the inbox: what stays unread for 10 minutes is emailed,
+one email per person and run, so what is read in the app meanwhile costs no
+email. People can turn that off, and take a daily digest of their unread
+rows from 08:00 in their time zone. Emails are at least once.
 
 ### Iteration completion policy
 

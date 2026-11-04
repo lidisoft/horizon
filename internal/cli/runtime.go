@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	natsgo "github.com/nats-io/nats.go"
@@ -19,6 +20,7 @@ import (
 	"github.com/lidisoft/horizon/internal/issue"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/migrations"
+	"github.com/lidisoft/horizon/internal/notify"
 	"github.com/lidisoft/horizon/internal/planning"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
 	"github.com/lidisoft/horizon/internal/platform/metrics"
@@ -106,6 +108,7 @@ type domain struct {
 	projects   *project.Service
 	issues     *issue.Service
 	planning   *planning.Service
+	notify     *notify.Service
 }
 
 // domain builds the domain services: serve and worker share the same graph,
@@ -128,6 +131,16 @@ func (rt *runtime) domain() domain {
 	d.issues = issue.New(rt.pool, d.access, d.config, d.projects, nil)
 	d.issues.SetStorage(rt.s3)
 	d.planning = planning.New(rt.pool, d.access, d.config, d.projects, d.issues, nil)
+	prefix := eventlog.DefaultStream(rt.cfg.EventsRetention).Prefix
+	d.notify = notify.New(notify.Options{
+		Pool: rt.pool, Log: logging.WithSystem(rt.log, "notify"), Identity: d.identity, Access: d.access, Workspaces: d.workspaces, Issues: d.issues,
+		Mail: rt.mailer(), BaseURL: rt.cfg.BaseURL,
+		Publish: func(userID uuid.UUID, data []byte) {
+			if err := rt.nc.Publish(realtime.InboxSubject(prefix, userID), data); err != nil {
+				rt.log.Warn().Err(err).Msg("could not publish an inbox change")
+			}
+		},
+	})
 	return d
 }
 
@@ -144,6 +157,7 @@ func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
 	plans := planning.NewHTTP(d.planning)
 	searchHTTP := search.NewHTTP(search.New(rt.pool, d.access, d.projects, d.issues))
 	viewsHTTP := view.NewHTTP(view.New(rt.pool, d.access, d.projects))
+	notifyHTTP := notify.NewHTTP(d.notify)
 	reportsHTTP := report.NewHTTP(report.New(rt.pool, d.access, d.config, d.projects, d.issues, d.planning, nil))
 	hub := realtime.New(realtime.Options{
 		Log: logging.WithSystem(rt.log, "realtime"), Pool: rt.pool, NATS: rt.nc, Stream: eventlog.DefaultStream(rt.cfg.EventsRetention),
@@ -154,7 +168,8 @@ func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
 		api.Use(auth.Authenticate())
 		auth.Register(api)
 		hub.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register, func(ws *gin.RouterGroup) {
+		notifyHTTP.Register(api)
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register, notifyHTTP.RegisterWorkspace, func(ws *gin.RouterGroup) {
 			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject, reportsHTTP.RegisterProject)
 		})
 	}, hub

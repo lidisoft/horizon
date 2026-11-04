@@ -15,6 +15,7 @@ import "horizon/views/hzn-calendar.js";
 import "horizon/views/hzn-reports.js";
 import "horizon/views/hzn-forgot-password.js";
 import "horizon/views/hzn-home.js";
+import "horizon/views/hzn-inbox.js";
 import "horizon/views/hzn-invitation.js";
 import "horizon/views/hzn-issue-list.js";
 import "horizon/views/hzn-issue.js";

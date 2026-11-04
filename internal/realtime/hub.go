@@ -87,6 +87,11 @@ func (h *Hub) Run(ctx context.Context) error {
 			h.o.Log.Error().Err(err).Msg("could not subscribe to presence")
 		}
 	}()
+	go func() {
+		if err := h.runInbox(ctx); err != nil {
+			h.o.Log.Error().Err(err).Msg("could not subscribe to inbox changes")
+		}
+	}()
 	ch := make(chan *nats.Msg, 1024)
 	sub, err := h.o.NATS.ChanSubscribe(h.o.Stream.Prefix+".*.*.*.*", ch)
 	if err != nil {
@@ -261,6 +266,41 @@ func changesVisibility(typ string, payload map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// InboxSubject is where the notify worker tells of a change to a user's
+// inbox (NATS core, best effort).
+func InboxSubject(prefix string, userID uuid.UUID) string {
+	return prefix + ".inbox." + userID.String()
+}
+
+// runInbox forwards inbox changes ({"t": "inbox"} messages, already
+// encoded) to the user's sockets: their only content is the workspace.
+func (h *Hub) runInbox(ctx context.Context) error {
+	ch := make(chan *nats.Msg, 256)
+	sub, err := h.o.NATS.ChanSubscribe(h.o.Stream.Prefix+".inbox.*", ch)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = sub.Unsubscribe() }()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case m := <-ch:
+			id, err := uuid.Parse(m.Subject[len(h.o.Stream.Prefix+".inbox."):])
+			if err != nil {
+				continue
+			}
+			h.mu.RLock()
+			for c := range h.conns {
+				if c.principal.User.ID == id {
+					c.push(m.Data)
+				}
+			}
+			h.mu.RUnlock()
+		}
+	}
 }
 
 // RegisterMetrics exposes the number of open sockets.

@@ -169,8 +169,9 @@ longer than that.
 
 | Consumer | Does |
 |----------|------|
-| `notify` | Computes recipients (assignee, subscribers, mentions), writes inbox items, queues email |
-| `email` | Sends via SMTP, with digests and retries |
+| `notify` | Subscribes the people an issue event concerns (creator, assignee, mentions, commenters) and bumps the inbox rows of its followers ([domain.md](domain.md#notifications)); tells their pages over NATS core (`horizon.inbox.<user>`) |
+| `email` | Emails unread inbox rows after 10 quiet minutes, one email per person (a periodic job, every minute; rows claimed with `SKIP LOCKED`) |
+| `digest` | Sends the daily digests due from 08:00 local time (a periodic job, every 5 minutes) |
 | `webhook` | Matches subscriptions, POSTs signed payloads (HMAC-SHA256), retries with backoff, logs deliveries |
 | `vcs` | Processes forge webhooks: links branches/PRs/commits, applies merge transitions |
 | `policy` | Runs cross-aggregate policies as new commands: applies the completion policy of each `IterationCompleted` ([domain.md](domain.md#iteration-completion-policy)) |

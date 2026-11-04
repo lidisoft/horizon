@@ -1,6 +1,7 @@
 package document
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -131,11 +132,21 @@ func IsEmpty(n *Node) bool {
 
 // Attachments lists the attachment ids of the document's images.
 func Attachments(n *Node) []uuid.UUID {
+	return collect(n, "image", "attachment")
+}
+
+// Mentions lists the people a document mentions, once each, in order.
+func Mentions(n *Node) []uuid.UUID {
+	return collect(n, "mention", "user")
+}
+
+// collect lists the uuid attribute attr of the nodes of type name, once each.
+func collect(n *Node, name, attr string) []uuid.UUID {
 	var out []uuid.UUID
 	var walk func(*Node)
 	walk = func(n *Node) {
-		if n.Type.Name == "image" {
-			if id, err := uuid.Parse(attrString(n, "attachment")); err == nil {
+		if n.Type.Name == name {
+			if id, err := uuid.Parse(attrString(n, attr)); err == nil && !slices.Contains(out, id) {
 				out = append(out, id)
 			}
 		}
