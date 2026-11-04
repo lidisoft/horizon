@@ -17,11 +17,12 @@ PostgreSQL schema outline. Authoritative definitions live in
 | Table | Key columns |
 |-------|-------------|
 | `users` | email (unique, citext), name, password_hash (argon2id PHC string, nullable), locale, timezone (nullable = the browser's), is_instance_admin, deactivated_at |
-| `sessions` | user_id, token_hash (SHA-256), last_seen_at, expires_at (sliding), user_agent, ip |
+| `sessions` | user_id, token_hash (SHA-256), last_seen_at, expires_at (sliding), user_agent, ip, auth_method (password, magic_link, oidc) |
 | `password_resets` | user_id, token_hash, expires_at, used_at |
 | `auth_throttle` | key (`email:…` or `ip:…`), failures, window_start — sign-in throttling shared by replicas |
-| `magic_links` | user_id, token_hash, expires_at, used_at |
-| `oidc_providers` | workspace_id (nullable = instance-wide), issuer, client_id, client_secret (encrypted), domain allowlist |
+| `magic_links` | user_id, token_hash, nonce_hash (the requesting browser's cookie), expires_at, used_at |
+| `oidc_providers` | workspace_id (nullable = instance-wide), slug (in URLs), name, issuer, client_id, client_secret (sealed), email_domains (allowlist), provision_role_id (just-in-time accounts), enabled |
+| `user_identities` | provider_id, subject, user_id — an account's identity at a provider |
 | `user_identities` | user_id, provider_id, subject |
 | `api_tokens` | user_id, name, token_hash (SHA-256), hint, scope (`read` < `write` < `admin`), last_used_at, expires_at (nullable = never) |
 | `workspaces` | slug (unique; lower-case letters, digits, single hyphens), name, time_zone, settings JSONB |

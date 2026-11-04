@@ -107,6 +107,20 @@ func (s *Service) AddMember(ctx context.Context, workspaceID, userID uuid.UUID) 
 	})
 }
 
+// Provision makes an account a member with a role, as single sign-on does
+// for a provider that provisions accounts just in time.
+func (s *Service) Provision(ctx context.Context, workspaceID, userID, roleID uuid.UUID) error {
+	return postgres.InTx(ctx, s.pool, func(tx pgx.Tx) error {
+		if _, err := s.join(ctx, tx, workspaceID, userID, uuid.NullUUID{}, "sso"); err != nil {
+			return err
+		}
+		_, err := s.access.SetGrantInTx(ctx, tx, workspaceID, uuid.NullUUID{}, access.GrantInput{
+			RoleID: roleID, UserID: uuid.NullUUID{UUID: userID, Valid: true},
+		})
+		return err
+	})
+}
+
 // Members lists the workspace's members with their teams and workspace
 // role. Guests (no workspace-scope grant) can't see it.
 func (s *Service) Members(ctx context.Context, wc Context) ([]Member, error) {

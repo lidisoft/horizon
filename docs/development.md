@@ -51,7 +51,7 @@ workspace (or use `task admin -- create-workspace --slug acme --name Acme
 | Layer | What | How |
 |-------|------|-----|
 | Unit | Pure domain logic: invariants, workflow rules, configuration resolution, filter compiler, rank keys, document steps | Plain `go test`, no I/O |
-| Integration | Command handlers, queries, outbox relay, workers, permissions | Real PostgreSQL, NATS (JetStream) and RustFS started by **testcontainers-go** ([ADR-0022](adr/0022-integration-tests-real-dependencies.md)); a real Forgejo for the Git integration (on the host network on Linux, so its webhooks reach the test server) |
+| Integration | Command handlers, queries, outbox relay, workers, permissions | Real PostgreSQL, NATS (JetStream) and RustFS started by **testcontainers-go** ([ADR-0022](adr/0022-integration-tests-real-dependencies.md)); a real Forgejo for the Git integration (on the host network on Linux, so its webhooks reach the test server) and a real Dex for OpenID Connect (its client's redirect URIs point at an address testenv reserves for the app) |
 | Frontend units | `store`, `router`, `api`, `i18n`, `shortcuts`, later `rank`, editor steps and filter evaluation | In-browser runner (`web/test/`), run headless by `chromedp` in `web/browser_test.go` ([frontend.md](frontend.md#testing)) |
 | End to end | Key user flows through the SPA | `chromedp` against the real server engine and page (`TestAppShell`) |
 

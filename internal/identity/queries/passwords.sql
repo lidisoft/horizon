@@ -34,3 +34,17 @@ DELETE FROM auth_throttle WHERE key = $1;
 
 -- name: DeleteStaleThrottles :execrows
 DELETE FROM auth_throttle WHERE window_start <= $1;
+
+-- name: CreateMagicLink :exec
+INSERT INTO magic_links (id, user_id, token_hash, nonce_hash, created_at, expires_at)
+VALUES (sqlc.arg(id), sqlc.arg(user_id), sqlc.arg(token_hash), sqlc.arg(nonce_hash), sqlc.arg(created_at), sqlc.arg(expires_at));
+
+-- name: ClaimMagicLink :one
+-- Marks a valid link used and returns its user; no row when the token is
+-- unknown, used, expired, or from another browser (nonce).
+UPDATE magic_links SET used_at = sqlc.arg(now)::timestamptz
+WHERE token_hash = sqlc.arg(token_hash) AND nonce_hash = sqlc.arg(nonce_hash) AND used_at IS NULL AND expires_at > sqlc.arg(now)
+RETURNING user_id;
+
+-- name: DeleteStaleMagicLinks :execrows
+DELETE FROM magic_links WHERE expires_at <= $1;

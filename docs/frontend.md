@@ -172,6 +172,9 @@ semantic tokens only, `:host` display):
 | `hzn-inbox` (view) | `/w/{ws}/inbox?state=unread\|all\|snoozed`: one row per followed issue with its latest event, reason (assigned, mentioned) and the count of unread updates; opening a row reads it; mark read or unread, snooze (an hour, until tomorrow, until next week 08:00) and archive. The sidebar's Inbox item shows the unread count, refreshed by `inbox` socket messages; `G` then `I` goes there. The bell on an issue subscribes or unsubscribes; email settings are on the account page |
 | `hzn-settings-webhooks` (view) | `/w/{ws}/settings/webhooks[/{id}]` (Integrations): the webhooks; a dialog creates and edits them (name, URL, project, event types, active, new secret); the secret shows once; a webhook's page lists its deliveries (event, result, status, time, the body and response on demand) with a test ping and redelivery |
 | `hzn-settings-git` (view) | `/w/{ws}/settings/git` (Integrations): what a merged pull request does (workspace setting), the forge connections (forge, name, address, token; a new one shows the webhook URL, the secret and the forge's setup steps once). The issue page lists its branches, pull requests and commits under Development |
+| `hzn-sign-in` (view) | `/sign-in`: email and password, the instance's providers ("Continue with …"), an emailed link, or single sign-on found by the email's domain; `?sso_error=` shows why an SSO sign-in failed, and `sso_required` turns a password sign-in to SSO |
+| `hzn-magic-link` (view) | `/magic-link#token=…`: signs in with an emailed link, in the browser that asked for it |
+| `hzn-settings-sso` (view) | `/w/{ws}/settings/authentication`: the workspace's OIDC providers (redirect URI to register, issuer, client, email domains, account creation with a role) and requiring SSO |
 
 ## Shell readiness
 

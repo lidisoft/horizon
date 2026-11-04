@@ -41,6 +41,7 @@ rest.
 | `HTTP_ADDR`, `METRICS_ADDR` | Default `:8080`, `:9090` |
 | `WEBHOOK_ALLOW_PRIVATE` | `true` lets webhooks reach loopback, private and link-local addresses (receivers on the instance's own network); default `false` |
 | `FORGE_ALLOW_PRIVATE` | `true` lets Git forge API calls (pull request comments) reach loopback, private and link-local addresses: a self-hosted forge on the instance's network; default `false` |
+| `OIDC_ALLOW_PRIVATE` | `true` lets OpenID Connect providers be reached on loopback, private and link-local addresses (a provider on the instance's network); default `false` |
 | `TRUSTED_PROXIES` | Comma-separated IPs or CIDR prefixes of reverse proxies allowed to set `X-Forwarded-For`; default none, so the client IP is the connection's. Set it behind a proxy, or sign-in throttling counts every user as the proxy's address |
 
 ## Lifecycle

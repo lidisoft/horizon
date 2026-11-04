@@ -56,6 +56,19 @@ func (h *HTTP) setCookie(c *gin.Context, token string, maxAge int) {
 
 func (h *HTTP) clearCookie(c *gin.Context) { h.setCookie(c, "", -1) }
 
+// magicCookie holds the nonce of the browser that asked for a magic link.
+func (h *HTTP) magicCookie() string {
+	if h.secure {
+		return "__Host-horizon_magic"
+	}
+	return "horizon_magic"
+}
+
+func (h *HTTP) setMagicCookie(c *gin.Context, nonce string, maxAge int) {
+	http.SetCookie(c.Writer, &http.Cookie{Name: h.magicCookie(), Value: nonce, Path: "/", MaxAge: maxAge, Secure: h.secure,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode})
+}
+
 // SetSession sets the session cookie of a sign-in made outside this
 // package (accepting an invitation).
 func (h *HTTP) SetSession(c *gin.Context, in SignedIn) {
@@ -195,6 +208,8 @@ func (h *HTTP) Register(api *gin.RouterGroup) {
 	auth.POST("/logout", RequireUser(), RequireSession(), h.logout)
 	auth.POST("/password/forgot", h.forgotPassword)
 	auth.POST("/password/reset", h.resetPassword)
+	auth.POST("/magic-link", h.requestMagicLink)
+	auth.POST("/magic-link/verify", h.verifyMagicLink)
 
 	me := api.Group("/me", RequireUser())
 	me.GET("", h.me)
@@ -297,6 +312,70 @@ func (h *HTTP) forgotPassword(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusAccepted)
+}
+
+// MagicLinkRequest is the body of POST /auth/magic-link.
+type MagicLinkRequest struct {
+	Email string `json:"email" example:"ada@example.com"`
+}
+
+// requestMagicLink mails a sign-in link.
+//
+//	@Summary		Request a sign-in link
+//	@Description	Answers 202 whether or not the email belongs to an account (none is sent for SSO-only accounts). Sets a cookie binding the link to this browser. Throttled per email and IP.
+//	@Tags			auth
+//	@Accept			json
+//	@Param			body	body	MagicLinkRequest	true	"Account email"
+//	@Success		202
+//	@Failure		429	{object}	server.Problem	"too_many_attempts"
+//	@Router			/api/v1/auth/magic-link [post]
+func (h *HTTP) requestMagicLink(c *gin.Context) {
+	var req MagicLinkRequest
+	if err := server.BindJSON(c, &req); err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	nonce := NewNonce()
+	if err := h.svc.RequestMagicLink(c, req.Email, nonce, client(c)); err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	h.setMagicCookie(c, nonce, int(MagicLinkLifetime.Seconds()))
+	c.Status(http.StatusAccepted)
+}
+
+// MagicLinkVerifyRequest is the body of POST /auth/magic-link/verify.
+type MagicLinkVerifyRequest struct {
+	Token string `json:"token"`
+}
+
+// verifyMagicLink signs in with a link's token.
+//
+//	@Summary		Sign in with a sign-in link
+//	@Description	Only in the browser that asked for the link. Sets the session cookie.
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			body	body		MagicLinkVerifyRequest	true	"Token from the emailed link"
+//	@Success		200		{object}	MeResponse
+//	@Failure		422		{object}	server.Problem	"token invalid_or_expired"
+//	@Failure		403		{object}	server.Problem	"sso_required"
+//	@Router			/api/v1/auth/magic-link/verify [post]
+func (h *HTTP) verifyMagicLink(c *gin.Context) {
+	var req MagicLinkVerifyRequest
+	if err := server.BindJSON(c, &req); err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	nonce, _ := c.Cookie(h.magicCookie())
+	in, err := h.svc.SignInWithMagicLink(c, req.Token, nonce, client(c))
+	if err != nil {
+		server.WriteError(c, err)
+		return
+	}
+	h.setMagicCookie(c, "", -1)
+	h.setCookie(c, in.Token, int(SessionIdleTimeout.Seconds()))
+	c.JSON(http.StatusOK, MeResponse{User: in.User, CSRFToken: in.CSRF})
 }
 
 // ResetPasswordRequest is the body of POST /auth/password/reset.

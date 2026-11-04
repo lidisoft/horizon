@@ -103,7 +103,7 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 }
 
 const invitationByTokenHash = `-- name: InvitationByTokenHash :one
-SELECT i.workspace_id, i.id, i.email, i.token_hash, i.invited_by, i.team_ids, i.created_at, i.sent_at, i.expires_at, i.accepted_at, i.accepted_by, i.revoked_at, i.version, i.role_id, w.id, w.slug, w.name, w.time_zone, w.settings, w.created_at, w.updated_at, w.version, coalesce(u.name, '')::text AS inviter_name
+SELECT i.workspace_id, i.id, i.email, i.token_hash, i.invited_by, i.team_ids, i.created_at, i.sent_at, i.expires_at, i.accepted_at, i.accepted_by, i.revoked_at, i.version, i.role_id, w.id, w.slug, w.name, w.time_zone, w.settings, w.created_at, w.updated_at, w.version, w.sso_enforced, coalesce(u.name, '')::text AS inviter_name
 FROM invitations i
 JOIN workspaces w ON w.id = i.workspace_id
 LEFT JOIN users u ON u.id = i.invited_by
@@ -143,6 +143,7 @@ func (q *Queries) InvitationByTokenHash(ctx context.Context, tokenHash []byte) (
 		&i.Workspace.CreatedAt,
 		&i.Workspace.UpdatedAt,
 		&i.Workspace.Version,
+		&i.Workspace.SsoEnforced,
 		&i.InviterName,
 	)
 	return i, err

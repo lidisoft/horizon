@@ -35,6 +35,7 @@ import (
 	"github.com/lidisoft/horizon/internal/report"
 	"github.com/lidisoft/horizon/internal/search"
 	"github.com/lidisoft/horizon/internal/server"
+	"github.com/lidisoft/horizon/internal/sso"
 	"github.com/lidisoft/horizon/internal/vcs"
 	"github.com/lidisoft/horizon/internal/version"
 	"github.com/lidisoft/horizon/internal/view"
@@ -129,6 +130,7 @@ type domain struct {
 	notify     *notify.Service
 	webhooks   *webhook.Service
 	vcs        *vcs.Service
+	sso        *sso.Service
 }
 
 // domain builds the domain services: serve and worker share the same graph,
@@ -165,6 +167,10 @@ func (rt *runtime) domain() domain {
 		Issues: d.issues, Secrets: rt.secrets(), AllowPrivate: rt.cfg.WebhookAllowPrivate})
 	d.vcs = vcs.New(vcs.Options{Pool: rt.pool, Log: logging.WithSystem(rt.log, "vcs"), Access: d.access, Config: d.config, Issues: d.issues,
 		Secrets: rt.secrets(), BaseURL: rt.cfg.BaseURL, Client: egress.Client(15*time.Second, rt.cfg.ForgeAllowPrivate)})
+	d.sso = sso.New(sso.Options{Pool: rt.pool, Log: logging.WithSystem(rt.log, "sso"), Identity: d.identity, Workspaces: d.workspaces,
+		Access: d.access, Secrets: rt.secrets(), BaseURL: rt.cfg.BaseURL, StateSecret: rt.cfg.SessionSecret,
+		Client: egress.Client(15*time.Second, rt.cfg.OIDCAllowPrivate)})
+	d.identity.SetSignInPolicy(d.sso.Policy)
 	return d
 }
 
@@ -184,6 +190,7 @@ func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
 	notifyHTTP := notify.NewHTTP(d.notify)
 	webhooksHTTP := webhook.NewHTTP(d.webhooks)
 	vcsHTTP := vcs.NewHTTP(d.vcs)
+	ssoHTTP := sso.NewHTTP(d.sso, auth, rt.cfg.BaseURL.Scheme == "https")
 	reportsHTTP := report.NewHTTP(report.New(rt.pool, d.access, d.config, d.projects, d.issues, d.planning, nil))
 	hub := realtime.New(realtime.Options{
 		Log: logging.WithSystem(rt.log, "realtime"), Pool: rt.pool, NATS: rt.nc, Stream: eventlog.DefaultStream(rt.cfg.EventsRetention),
@@ -194,9 +201,10 @@ func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
 		vcsHTTP.RegisterHooks(api) // signed by the forge, not authenticated
 		api.Use(auth.Authenticate())
 		auth.Register(api)
+		ssoHTTP.Register(api)
 		hub.Register(api)
 		notifyHTTP.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register, notifyHTTP.RegisterWorkspace, webhooksHTTP.Register, vcsHTTP.Register, func(ws *gin.RouterGroup) {
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register, notifyHTTP.RegisterWorkspace, webhooksHTTP.Register, vcsHTTP.Register, ssoHTTP.RegisterWorkspace, func(ws *gin.RouterGroup) {
 			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject, reportsHTTP.RegisterProject)
 		})
 	}, hub

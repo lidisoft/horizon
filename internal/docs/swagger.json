@@ -73,6 +73,195 @@
                 }
             }
         },
+        "/api/v1/auth/magic-link": {
+            "post": {
+                "description": "Answers 202 whether or not the email belongs to an account (none is sent for SSO-only accounts). Sets a cookie binding the link to this browser. Throttled per email and IP.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Request a sign-in link",
+                "parameters": [
+                    {
+                        "description": "Account email",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/identity.MagicLinkRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted"
+                    },
+                    "429": {
+                        "description": "too_many_attempts",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/magic-link/verify": {
+            "post": {
+                "description": "Only in the browser that asked for the link. Sets the session cookie.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Sign in with a sign-in link",
+                "parameters": [
+                    {
+                        "description": "Token from the emailed link",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/identity.MagicLinkVerifyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/identity.MeResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "sso_required",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    },
+                    "422": {
+                        "description": "token invalid_or_expired",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/oidc/discover": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Find the SSO provider for an email",
+                "parameters": [
+                    {
+                        "description": "Email",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sso.DiscoverRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sso.SignInProvider"
+                        }
+                    },
+                    "404": {
+                        "description": "no_sso",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/oidc/providers": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "List the sign-in providers",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sso.SignInProviderList"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/oidc/{slug}/callback": {
+            "get": {
+                "description": "The provider's redirect. Success sets the session cookie and redirects to the page the sign-in started from; failure redirects to /sign-in?sso_error=\u003ccode\u003e.",
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Finish an SSO sign-in",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/oidc/{slug}/start": {
+            "get": {
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Start an SSO sign-in",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Provider",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Where to land afterwards (a path)",
+                        "name": "next",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Found"
+                    }
+                }
+            }
+        },
         "/api/v1/auth/password/forgot": {
             "post": {
                 "description": "Answers 202 whether or not the email belongs to an account.",
@@ -6461,6 +6650,221 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/sso": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sso"
+                ],
+                "summary": "Get the SSO requirement",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sso.Enforcement"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "workspace.manage. On, members sign in with an OIDC provider only (instance admins keep their password), and their password and magic-link sessions close; it needs an enabled provider (409 no_sso_provider).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sso"
+                ],
+                "summary": "Require SSO",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "enforced",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sso.Enforcement"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sso.Enforcement"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/sso/providers": {
+            "get": {
+                "description": "A workspace's (workspace.manage) at /w/{ws}/sso/providers; the instance's (instance admins) at /admin/oidc-providers.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sso"
+                ],
+                "summary": "List OIDC providers",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sso.ProviderList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Register redirect_uri at the provider. provision_role_id (workspace providers) creates accounts and memberships just in time.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sso"
+                ],
+                "summary": "Create an OIDC provider",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "slug, name, issuer, client_id and client_secret required",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sso.Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/sso.Provider"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/sso/providers/{id}": {
+            "delete": {
+                "tags": [
+                    "sso"
+                ],
+                "summary": "Delete an OIDC provider",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Provider id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "sso"
+                ],
+                "summary": "Update an OIDC provider",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Provider id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Provider version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/sso.Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/sso.Provider"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/teams": {
             "get": {
                 "produces": [
@@ -8752,6 +9156,23 @@
                     "example": "ada@example.com"
                 },
                 "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "identity.MagicLinkRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "ada@example.com"
+                }
+            }
+        },
+        "identity.MagicLinkVerifyRequest": {
+            "type": "object",
+            "properties": {
+                "token": {
                     "type": "string"
                 }
             }
@@ -11110,6 +11531,141 @@
                 "status": {
                     "type": "string",
                     "example": "ready"
+                }
+            }
+        },
+        "sso.DiscoverRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "ada@acme.example"
+                }
+            }
+        },
+        "sso.Enforcement": {
+            "type": "object",
+            "properties": {
+                "enforced": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "sso.Input": {
+            "type": "object",
+            "properties": {
+                "client_id": {
+                    "type": "string"
+                },
+                "client_secret": {
+                    "type": "string"
+                },
+                "email_domains": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "issuer": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "no_provision": {
+                    "description": "NoProvision clears ProvisionRoleID.",
+                    "type": "boolean"
+                },
+                "provision_role_id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "sso.Provider": {
+            "type": "object",
+            "properties": {
+                "client_id": {
+                    "description": "ClientID is the client registered at the provider; the secret is\nwrite-only.",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email_domains": {
+                    "description": "EmailDomains limits who may sign in (and are offered this provider by\nemail); empty: anyone the provider vouches for.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "issuer": {
+                    "type": "string",
+                    "example": "https://acme.okta.com"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Acme Okta"
+                },
+                "provision_role_id": {
+                    "description": "ProvisionRoleID, for a workspace's provider, creates accounts and\nmemberships just in time with this role; null: only existing members.",
+                    "type": "string"
+                },
+                "redirect_uri": {
+                    "description": "RedirectURI is the address to register at the provider.",
+                    "type": "string"
+                },
+                "slug": {
+                    "description": "Slug names it in URLs (/auth/oidc/{slug}/…).",
+                    "type": "string",
+                    "example": "acme-okta"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "sso.ProviderList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sso.Provider"
+                    }
+                }
+            }
+        },
+        "sso.SignInProvider": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "sso.SignInProviderList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/sso.SignInProvider"
+                    }
                 }
             }
         },

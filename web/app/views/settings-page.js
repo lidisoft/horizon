@@ -33,6 +33,7 @@ const GROUPS = [
       { name: "general", icon: "settings", label: "settings.general" },
       { name: "members", icon: "users", label: "settings.members" },
       { name: "roles", icon: "lock", label: "settings.roles" },
+      { name: "authentication", icon: "user", label: "settings.authentication" },
       { name: "projects", icon: "layers", label: "settings.projects" },
     ],
   },

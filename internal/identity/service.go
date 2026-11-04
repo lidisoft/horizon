@@ -36,6 +36,15 @@ const (
 	// sessionTouchEvery limits how often a busy session's expiry is written.
 	sessionTouchEvery  = 5 * time.Minute
 	ResetTokenLifetime = time.Hour
+	// MagicLinkLifetime is how long an emailed sign-in link works.
+	MagicLinkLifetime = 15 * time.Minute
+)
+
+// How a session was opened.
+const (
+	MethodPassword  = "password"
+	MethodMagicLink = "magic_link"
+	MethodOIDC      = "oidc"
 )
 
 // Sign-in throttling: failures allowed per key within ThrottleWindow.
@@ -104,7 +113,14 @@ type Options struct {
 	SessionSecret string
 	// Now is the clock; time.Now when nil.
 	Now func() time.Time
+	// SignInPolicy, when set, may refuse a sign-in by method (a workspace
+	// enforcing SSO refuses passwords and magic links); see SetSignInPolicy.
+	SignInPolicy SignInPolicy
 }
+
+// SignInPolicy may refuse a user's sign-in with a method: it returns the
+// error to answer, or nil.
+type SignInPolicy func(ctx context.Context, u User, method string) error
 
 // Service implements the identity commands and queries.
 type Service struct {
@@ -114,6 +130,7 @@ type Service struct {
 	baseURL       *url.URL
 	sessionSecret string
 	now           func() time.Time
+	policy        SignInPolicy
 }
 
 // New returns a Service.
@@ -129,7 +146,19 @@ func New(o Options) *Service {
 		baseURL:       o.BaseURL,
 		sessionSecret: o.SessionSecret,
 		now:           func() time.Time { return now().UTC().Truncate(time.Microsecond) },
+		policy:        o.SignInPolicy,
 	}
+}
+
+// SetSignInPolicy installs the policy once the services that decide it
+// exist (they depend on this one).
+func (s *Service) SetSignInPolicy(p SignInPolicy) { s.policy = p }
+
+func (s *Service) allowed(ctx context.Context, u db.User, method string) error {
+	if s.policy == nil {
+		return nil
+	}
+	return s.policy(ctx, userFrom(u), method)
 }
 
 // BaseURL is the instance's public URL, nil when not configured.
@@ -231,7 +260,31 @@ func (s *Service) OpenSessionInTx(ctx context.Context, tx pgx.Tx, userID uuid.UU
 	if u.DeactivatedAt != nil {
 		return SignedIn{}, apperr.Unauthorized("invalid_credentials")
 	}
-	return s.openSession(ctx, q, u, client)
+	return s.openSession(ctx, q, u, client, MethodPassword)
+}
+
+// OpenSession signs a user in after another service checked who they are
+// (an OpenID Connect provider), recording method. Deactivated accounts
+// can't; the sign-in policy applies.
+func (s *Service) OpenSession(ctx context.Context, userID uuid.UUID, client Client, method string) (SignedIn, error) {
+	q := db.New(s.pool)
+	u, err := q.GetUser(ctx, userID)
+	if err != nil {
+		return SignedIn{}, err
+	}
+	if u.DeactivatedAt != nil {
+		return SignedIn{}, apperr.Unauthorized("account_deactivated")
+	}
+	if err := s.allowed(ctx, u, method); err != nil {
+		return SignedIn{}, err
+	}
+	return s.openSession(ctx, q, u, client, method)
+}
+
+// RevokeSessionsExcept closes the user's sessions opened with another
+// method than keep (enforcing SSO); it returns how many.
+func (s *Service) RevokeSessionsExcept(ctx context.Context, userID uuid.UUID, keep string) (int64, error) {
+	return db.New(s.pool).RevokeSessionsExcept(ctx, db.RevokeSessionsExceptParams{UserID: userID, AuthMethod: keep})
 }
 
 // User returns an account by id.
@@ -454,10 +507,13 @@ func (s *Service) Login(ctx context.Context, email, password string, client Clie
 	if err := q.ClearThrottle(ctx, keys[0].key); err != nil {
 		return SignedIn{}, err
 	}
-	return s.openSession(ctx, q, u, client)
+	if err := s.allowed(ctx, u, MethodPassword); err != nil {
+		return SignedIn{}, err
+	}
+	return s.openSession(ctx, q, u, client, MethodPassword)
 }
 
-func (s *Service) openSession(ctx context.Context, q *db.Queries, u db.User, client Client) (SignedIn, error) {
+func (s *Service) openSession(ctx context.Context, q *db.Queries, u db.User, client Client, method string) (SignedIn, error) {
 	token, hash := newToken()
 	now := s.now()
 	var ip *netip.Addr
@@ -470,13 +526,14 @@ func (s *Service) openSession(ctx context.Context, q *db.Queries, u db.User, cli
 		ua = ua[:512]
 	}
 	sess := db.CreateSessionParams{
-		ID:        uuid.Must(uuid.NewV7()),
-		UserID:    u.ID,
-		TokenHash: hash,
-		CreatedAt: now,
-		ExpiresAt: now.Add(SessionIdleTimeout),
-		UserAgent: ua,
-		Ip:        ip,
+		ID:         uuid.Must(uuid.NewV7()),
+		UserID:     u.ID,
+		TokenHash:  hash,
+		CreatedAt:  now,
+		ExpiresAt:  now.Add(SessionIdleTimeout),
+		UserAgent:  ua,
+		Ip:         ip,
+		AuthMethod: method,
 	}
 	if err := q.CreateSession(ctx, sess); err != nil {
 		return SignedIn{}, err
@@ -734,6 +791,9 @@ func (s *Service) Cleanup(ctx context.Context) error {
 	}
 	throttles, err := q.DeleteStaleThrottles(ctx, now.Add(-ThrottleWindow))
 	if err != nil {
+		return err
+	}
+	if _, err := q.DeleteStaleMagicLinks(ctx, now); err != nil {
 		return err
 	}
 	s.log.Debug().Int64("sessions", sessions).Int64("password_resets", resets).Int64("throttles", throttles).Msg("identity cleanup")

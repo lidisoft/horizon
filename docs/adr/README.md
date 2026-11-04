@@ -35,3 +35,4 @@ number.
 | [0022](0022-integration-tests-real-dependencies.md) | Integration tests against real dependencies | Accepted |
 | [0023](0023-secrets-at-rest.md) | Secrets at rest sealed with SECRET_KEY | Accepted |
 | [0024](0024-git-forge-integration.md) | Git forge integration: webhooks in, one comment out | Accepted |
+| [0025](0025-openid-connect.md) | Single sign-on with OpenID Connect | Accepted |

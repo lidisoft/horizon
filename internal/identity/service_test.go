@@ -375,3 +375,67 @@ func TestUpdateProfile(t *testing.T) {
 		t.Errorf("no-op update = %+v, %v", same, err)
 	}
 }
+
+func TestMagicLink(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	u := f.user(t, "ada@example.com")
+	nonce := identity.NewNonce()
+
+	if err := f.svc.RequestMagicLink(ctx, "nobody@example.com", nonce, browser); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.RequestMagicLink(ctx, "ADA@example.com", nonce, browser); err != nil {
+		t.Fatal(err)
+	}
+	var sent []platformmail.Message
+	for deadline := time.Now().Add(5 * time.Second); len(sent) == 0 && time.Now().Before(deadline); {
+		time.Sleep(10 * time.Millisecond)
+		sent = f.mail.Sent()
+	}
+	if len(sent) != 1 || sent[0].To.Address != "ada@example.com" {
+		t.Fatalf("sent = %+v", sent)
+	}
+	_, token, ok := strings.Cut(sent[0].Body, "https://horizon.example.com/magic-link#token=")
+	if !ok {
+		t.Fatalf("no link in %q", sent[0].Body)
+	}
+	token = strings.Fields(token)[0]
+
+	// Another browser (nonce) can't use it; this one can, once.
+	_, err := f.svc.SignInWithMagicLink(ctx, token, identity.NewNonce(), browser)
+	wantField(t, err, "token", "invalid_or_expired")
+	in, err := f.svc.SignInWithMagicLink(ctx, token, nonce, browser)
+	if err != nil || in.User.ID != u.ID {
+		t.Fatalf("sign in = %+v, %v", in, err)
+	}
+	if ss, _ := f.svc.Sessions(ctx, identity.Principal{User: in.User, SessionID: in.Session.ID}); len(ss) != 1 {
+		t.Errorf("sessions = %+v", ss)
+	}
+	_, err = f.svc.SignInWithMagicLink(ctx, token, nonce, browser)
+	wantField(t, err, "token", "invalid_or_expired")
+
+	// A policy (enforced SSO) refuses both the request and the link.
+	f.svc.SetSignInPolicy(func(_ context.Context, _ identity.User, method string) error {
+		if method != identity.MethodOIDC {
+			return apperr.Forbidden("sso_required")
+		}
+		return nil
+	})
+	if err := f.svc.RequestMagicLink(ctx, "ada@example.com", nonce, browser); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if got := f.mail.Sent(); len(got) != 1 {
+		t.Errorf("mailed despite the policy: %d", len(got))
+	}
+	_, err = f.svc.Login(ctx, "ada@example.com", password, browser)
+	wantCode(t, err, "sso_required")
+
+	// Requests are throttled per email.
+	f.svc.SetSignInPolicy(nil)
+	for range 5 {
+		_ = f.svc.RequestMagicLink(ctx, "flood@example.com", nonce, browser)
+	}
+	wantCode(t, f.svc.RequestMagicLink(ctx, "flood@example.com", nonce, browser), "too_many_attempts")
+}

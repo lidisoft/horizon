@@ -14,18 +14,19 @@ import (
 )
 
 const createSession = `-- name: CreateSession :exec
-INSERT INTO sessions (id, user_id, token_hash, created_at, last_seen_at, expires_at, user_agent, ip)
-VALUES ($1, $2, $3, $4, $4, $5, $6, $7)
+INSERT INTO sessions (id, user_id, token_hash, created_at, last_seen_at, expires_at, user_agent, ip, auth_method)
+VALUES ($1, $2, $3, $4, $4, $5, $6, $7, $8)
 `
 
 type CreateSessionParams struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	TokenHash []byte
-	CreatedAt time.Time
-	ExpiresAt time.Time
-	UserAgent string
-	Ip        *netip.Addr
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	TokenHash  []byte
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	UserAgent  string
+	Ip         *netip.Addr
+	AuthMethod string
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
@@ -37,6 +38,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 		arg.ExpiresAt,
 		arg.UserAgent,
 		arg.Ip,
+		arg.AuthMethod,
 	)
 	return err
 }
@@ -89,7 +91,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, arg DeleteUserSessions
 }
 
 const listUserSessions = `-- name: ListUserSessions :many
-SELECT id, user_id, token_hash, created_at, last_seen_at, expires_at, user_agent, ip FROM sessions
+SELECT id, user_id, token_hash, created_at, last_seen_at, expires_at, user_agent, ip, auth_method FROM sessions
 WHERE user_id = $1 AND expires_at > $2
 ORDER BY last_seen_at DESC
 `
@@ -117,6 +119,7 @@ func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsPara
 			&i.ExpiresAt,
 			&i.UserAgent,
 			&i.Ip,
+			&i.AuthMethod,
 		); err != nil {
 			return nil, err
 		}
@@ -128,8 +131,27 @@ func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsPara
 	return items, nil
 }
 
+const revokeSessionsExcept = `-- name: RevokeSessionsExcept :execrows
+DELETE FROM sessions WHERE user_id = $1 AND auth_method <> $2
+`
+
+type RevokeSessionsExceptParams struct {
+	UserID     uuid.UUID
+	AuthMethod string
+}
+
+// Closes the user's sessions opened otherwise than with method (enforced
+// SSO).
+func (q *Queries) RevokeSessionsExcept(ctx context.Context, arg RevokeSessionsExceptParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeSessionsExcept, arg.UserID, arg.AuthMethod)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const sessionByTokenHash = `-- name: SessionByTokenHash :one
-SELECT sessions.id, sessions.user_id, sessions.token_hash, sessions.created_at, sessions.last_seen_at, sessions.expires_at, sessions.user_agent, sessions.ip, users.id, users.email, users.name, users.password_hash, users.locale, users.timezone, users.is_instance_admin, users.deactivated_at, users.created_at, users.updated_at, users.version
+SELECT sessions.id, sessions.user_id, sessions.token_hash, sessions.created_at, sessions.last_seen_at, sessions.expires_at, sessions.user_agent, sessions.ip, sessions.auth_method, users.id, users.email, users.name, users.password_hash, users.locale, users.timezone, users.is_instance_admin, users.deactivated_at, users.created_at, users.updated_at, users.version
 FROM sessions
 JOIN users ON users.id = sessions.user_id
 WHERE sessions.token_hash = $1
@@ -160,6 +182,7 @@ func (q *Queries) SessionByTokenHash(ctx context.Context, arg SessionByTokenHash
 		&i.Session.ExpiresAt,
 		&i.Session.UserAgent,
 		&i.Session.Ip,
+		&i.Session.AuthMethod,
 		&i.User.ID,
 		&i.User.Email,
 		&i.User.Name,

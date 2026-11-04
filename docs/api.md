@@ -41,7 +41,10 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
 
 ```
 /auth/login | /auth/logout | /auth/password/forgot | /auth/password/reset
-/auth/magic-link | /auth/oidc/{provider}/…
+/auth/magic-link  /auth/magic-link/verify  POST {email} (202, sets the browser nonce) | POST {token}
+/auth/oidc/providers  /auth/oidc/discover   the sign-in page's providers | POST {email} → the provider for its domain
+/auth/oidc/{slug}/start  /auth/oidc/{slug}/callback   browser redirects (errors: /sign-in?sso_error=)
+/admin/oidc-providers  /admin/oidc-providers/{id}   instance-wide providers (instance admins)
 /me                                        GET (user + CSRF token) | PATCH profile
 /me/password | /me/sessions | /me/sessions/{id} | /me/sessions/revoke-others
 /me/tokens | /me/tokens/{id}                GET, POST (secret shown once) | DELETE; session only
@@ -99,6 +102,8 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
     /issues                                GET linked keys | POST {add: [keys], remove: [keys]} (milestone.manage)
   /inbox                                   GET ?state=unread|all|snoozed (one row per issue, newest first) | /count
   /inbox/{id}                              PATCH {read, archived, snoozed_until}; /inbox/read-all  /inbox/archive-read  POST
+  /sso                                     GET | PUT {enforced} (workspace.manage)
+  /sso/providers  /sso/providers/{id}      the workspace's OIDC providers (workspace.manage)
   /reports/{report}                        report data (see reports.md)
   /projects/{key}/overview                 project overview blocks
   /webhooks  /webhooks/{id}/deliveries

@@ -13,7 +13,7 @@ import (
 )
 
 const allWorkspaces = `-- name: AllWorkspaces :many
-SELECT id, slug, name, time_zone, settings, created_at, updated_at, version FROM workspaces ORDER BY lower(name), slug
+SELECT id, slug, name, time_zone, settings, created_at, updated_at, version, sso_enforced FROM workspaces ORDER BY lower(name), slug
 `
 
 func (q *Queries) AllWorkspaces(ctx context.Context) ([]Workspace, error) {
@@ -34,6 +34,7 @@ func (q *Queries) AllWorkspaces(ctx context.Context) ([]Workspace, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+			&i.SsoEnforced,
 		); err != nil {
 			return nil, err
 		}
@@ -48,7 +49,7 @@ func (q *Queries) AllWorkspaces(ctx context.Context) ([]Workspace, error) {
 const createWorkspace = `-- name: CreateWorkspace :one
 INSERT INTO workspaces (id, slug, name, time_zone, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $5)
-RETURNING id, slug, name, time_zone, settings, created_at, updated_at, version
+RETURNING id, slug, name, time_zone, settings, created_at, updated_at, version, sso_enforced
 `
 
 type CreateWorkspaceParams struct {
@@ -77,12 +78,13 @@ func (q *Queries) CreateWorkspace(ctx context.Context, arg CreateWorkspaceParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.SsoEnforced,
 	)
 	return i, err
 }
 
 const lockWorkspace = `-- name: LockWorkspace :one
-SELECT id, slug, name, time_zone, settings, created_at, updated_at, version FROM workspaces WHERE id = $1 FOR UPDATE
+SELECT id, slug, name, time_zone, settings, created_at, updated_at, version, sso_enforced FROM workspaces WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockWorkspace(ctx context.Context, id uuid.UUID) (Workspace, error) {
@@ -97,6 +99,7 @@ func (q *Queries) LockWorkspace(ctx context.Context, id uuid.UUID) (Workspace, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.SsoEnforced,
 	)
 	return i, err
 }
@@ -105,7 +108,7 @@ const updateWorkspace = `-- name: UpdateWorkspace :one
 UPDATE workspaces
 SET name = $2, slug = $3, time_zone = $4, updated_at = $5, version = version + 1
 WHERE id = $1
-RETURNING id, slug, name, time_zone, settings, created_at, updated_at, version
+RETURNING id, slug, name, time_zone, settings, created_at, updated_at, version, sso_enforced
 `
 
 type UpdateWorkspaceParams struct {
@@ -134,12 +137,13 @@ func (q *Queries) UpdateWorkspace(ctx context.Context, arg UpdateWorkspaceParams
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.SsoEnforced,
 	)
 	return i, err
 }
 
 const userWorkspaces = `-- name: UserWorkspaces :many
-SELECT w.id, w.slug, w.name, w.time_zone, w.settings, w.created_at, w.updated_at, w.version
+SELECT w.id, w.slug, w.name, w.time_zone, w.settings, w.created_at, w.updated_at, w.version, w.sso_enforced
 FROM workspaces w
 JOIN workspace_members m ON m.workspace_id = w.id
 WHERE m.user_id = $1 AND m.status = 'active'
@@ -165,6 +169,7 @@ func (q *Queries) UserWorkspaces(ctx context.Context, userID uuid.UUID) ([]Works
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Version,
+			&i.SsoEnforced,
 		); err != nil {
 			return nil, err
 		}
@@ -177,7 +182,7 @@ func (q *Queries) UserWorkspaces(ctx context.Context, userID uuid.UUID) ([]Works
 }
 
 const workspaceBySlug = `-- name: WorkspaceBySlug :one
-SELECT id, slug, name, time_zone, settings, created_at, updated_at, version FROM workspaces WHERE slug = $1
+SELECT id, slug, name, time_zone, settings, created_at, updated_at, version, sso_enforced FROM workspaces WHERE slug = $1
 `
 
 func (q *Queries) WorkspaceBySlug(ctx context.Context, slug string) (Workspace, error) {
@@ -192,6 +197,7 @@ func (q *Queries) WorkspaceBySlug(ctx context.Context, slug string) (Workspace, 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.SsoEnforced,
 	)
 	return i, err
 }

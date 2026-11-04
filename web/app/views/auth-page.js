@@ -13,6 +13,9 @@ export const authStyles = sheet(`
   .links { margin: var(--lds-space-4) 0 0; text-align: center; font-size: var(--lds-font-size-sm); }
   a { color: var(--lds-color-fg-link); }
   lds-alert:empty { display: none; }
+  .providers { display: grid; gap: var(--lds-space-2); }
+  .or { margin: var(--lds-space-4) 0; text-align: center; color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
+  [data-sso-error] { margin-block-end: var(--lds-space-4); }
 `);
 
 /** The page markup: brand, then a card titled title holding body. */

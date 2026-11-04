@@ -79,6 +79,7 @@ type env struct {
 
 	browser *browserEnv
 	forge   *ForgeEnv
+	dex     *OIDCEnv
 }
 
 var current *env
@@ -166,6 +167,15 @@ func Main(m *testing.M, services Service) int {
 		containers = append(containers, cs...)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "testenv: forgejo:", err)
+			return 1
+		}
+	}
+
+	if services&Dex != 0 {
+		cs, err := e.startDex(ctx)
+		containers = append(containers, cs...)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "testenv: dex:", err)
 			return 1
 		}
 	}

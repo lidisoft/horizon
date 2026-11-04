@@ -12,6 +12,27 @@ import (
 	"github.com/google/uuid"
 )
 
+const claimMagicLink = `-- name: ClaimMagicLink :one
+UPDATE magic_links SET used_at = $1::timestamptz
+WHERE token_hash = $2 AND nonce_hash = $3 AND used_at IS NULL AND expires_at > $1
+RETURNING user_id
+`
+
+type ClaimMagicLinkParams struct {
+	Now       time.Time
+	TokenHash []byte
+	NonceHash []byte
+}
+
+// Marks a valid link used and returns its user; no row when the token is
+// unknown, used, expired, or from another browser (nonce).
+func (q *Queries) ClaimMagicLink(ctx context.Context, arg ClaimMagicLinkParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, claimMagicLink, arg.Now, arg.TokenHash, arg.NonceHash)
+	var user_id uuid.UUID
+	err := row.Scan(&user_id)
+	return user_id, err
+}
+
 const claimPasswordReset = `-- name: ClaimPasswordReset :one
 UPDATE password_resets
 SET used_at = $2::timestamptz
@@ -42,6 +63,32 @@ func (q *Queries) ClearThrottle(ctx context.Context, key string) error {
 	return err
 }
 
+const createMagicLink = `-- name: CreateMagicLink :exec
+INSERT INTO magic_links (id, user_id, token_hash, nonce_hash, created_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type CreateMagicLinkParams struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	TokenHash []byte
+	NonceHash []byte
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+func (q *Queries) CreateMagicLink(ctx context.Context, arg CreateMagicLinkParams) error {
+	_, err := q.db.Exec(ctx, createMagicLink,
+		arg.ID,
+		arg.UserID,
+		arg.TokenHash,
+		arg.NonceHash,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
 const createPasswordReset = `-- name: CreatePasswordReset :exec
 INSERT INTO password_resets (id, user_id, token_hash, created_at, expires_at)
 VALUES ($1, $2, $3, $4, $5)
@@ -64,6 +111,18 @@ func (q *Queries) CreatePasswordReset(ctx context.Context, arg CreatePasswordRes
 		arg.ExpiresAt,
 	)
 	return err
+}
+
+const deleteStaleMagicLinks = `-- name: DeleteStaleMagicLinks :execrows
+DELETE FROM magic_links WHERE expires_at <= $1
+`
+
+func (q *Queries) DeleteStaleMagicLinks(ctx context.Context, expiresAt time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteStaleMagicLinks, expiresAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const deleteStalePasswordResets = `-- name: DeleteStalePasswordResets :execrows

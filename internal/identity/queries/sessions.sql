@@ -1,6 +1,6 @@
 -- name: CreateSession :exec
-INSERT INTO sessions (id, user_id, token_hash, created_at, last_seen_at, expires_at, user_agent, ip)
-VALUES ($1, $2, $3, $4, $4, $5, $6, $7);
+INSERT INTO sessions (id, user_id, token_hash, created_at, last_seen_at, expires_at, user_agent, ip, auth_method)
+VALUES ($1, $2, $3, $4, $4, $5, $6, $7, sqlc.arg(auth_method));
 
 -- name: SessionByTokenHash :one
 -- A live session of an active user.
@@ -28,3 +28,8 @@ DELETE FROM sessions WHERE user_id = $1 AND id <> sqlc.arg(keep);
 
 -- name: DeleteExpiredSessions :execrows
 DELETE FROM sessions WHERE expires_at <= $1;
+
+-- name: RevokeSessionsExcept :execrows
+-- Closes the user's sessions opened otherwise than with method (enforced
+-- SSO).
+DELETE FROM sessions WHERE user_id = sqlc.arg(user_id) AND auth_method <> sqlc.arg(auth_method);

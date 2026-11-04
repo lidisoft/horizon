@@ -62,6 +62,12 @@ export function createSession({ api }) {
       return state;
     },
 
+    /** Adopts a sign-in made another way (a magic link): the server's MeResponse. */
+    adopt(data) {
+      signedIn(data);
+      return state;
+    },
+
     async logout() {
       try {
         await api().post("/auth/logout");

@@ -253,6 +253,16 @@ type Label struct {
 	Version     int32
 }
 
+type MagicLink struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	TokenHash []byte
+	NonceHash []byte
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+}
+
 type Milestone struct {
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID
@@ -277,6 +287,22 @@ type NotificationSetting struct {
 	Digest       bool
 	DigestSentAt *time.Time
 	UpdatedAt    time.Time
+}
+
+type OidcProvider struct {
+	ID              uuid.UUID
+	WorkspaceID     uuid.NullUUID
+	Slug            string
+	Name            string
+	Issuer          string
+	ClientID        string
+	ClientSecret    string
+	EmailDomains    []string
+	ProvisionRoleID uuid.NullUUID
+	Enabled         bool
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	Version         int32
 }
 
 type PasswordReset struct {
@@ -413,6 +439,7 @@ type Session struct {
 	ExpiresAt  time.Time
 	UserAgent  string
 	Ip         *netip.Addr
+	AuthMethod string
 }
 
 type Status struct {
@@ -483,6 +510,14 @@ type User struct {
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	Version         int32
+}
+
+type UserIdentity struct {
+	ProviderID  uuid.UUID
+	Subject     string
+	UserID      uuid.UUID
+	CreatedAt   time.Time
+	LastLoginAt time.Time
 }
 
 type VcsComment struct {
@@ -596,14 +631,15 @@ type Workflow struct {
 }
 
 type Workspace struct {
-	ID        uuid.UUID
-	Slug      string
-	Name      string
-	TimeZone  string
-	Settings  json.RawMessage
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Version   int32
+	ID          uuid.UUID
+	Slug        string
+	Name        string
+	TimeZone    string
+	Settings    json.RawMessage
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+	SsoEnforced bool
 }
 
 type WorkspaceMember struct {

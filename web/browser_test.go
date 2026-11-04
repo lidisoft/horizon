@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	goruntime "runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -52,6 +53,7 @@ import (
 	"github.com/lidisoft/horizon/internal/report"
 	"github.com/lidisoft/horizon/internal/search"
 	"github.com/lidisoft/horizon/internal/server"
+	"github.com/lidisoft/horizon/internal/sso"
 	"github.com/lidisoft/horizon/internal/testenv"
 	"github.com/lidisoft/horizon/internal/vcs"
 	views "github.com/lidisoft/horizon/internal/view"
@@ -67,7 +69,7 @@ func TestMain(m *testing.M) {
 	if *serveAddr != "" {
 		os.Exit(serveForHumans(*serveAddr))
 	}
-	os.Exit(testenv.Main(m, testenv.Postgres|testenv.NATS|testenv.Chrome))
+	os.Exit(testenv.Main(m, testenv.Postgres|testenv.NATS|testenv.Chrome|testenv.Dex))
 }
 
 // testFS holds web/test: the runner and the *.test.js files. It is read from
@@ -254,9 +256,14 @@ type app struct {
 	mail *platformmail.Memory
 	ids  *identity.Service
 	ws   *workspace.Service
+	sso  *sso.Service
 }
 
-func appServer(t *testing.T) app {
+// atDex serves the app where the test OpenID Connect provider sends people
+// back (testenv.OIDC), for single sign-on tests.
+type atDex bool
+
+func appServer(t *testing.T, opts ...atDex) app {
 	t.Helper()
 	w, err := server.NewWeb(web.FS())
 	if err != nil {
@@ -264,10 +271,17 @@ func appServer(t *testing.T) app {
 	}
 	pool := testenv.DB(t)
 	a := app{mail: &platformmail.Memory{}}
-	ln := testenv.Listen(t)
-	a.base = ln.URL
+	dex := len(opts) > 0 && bool(opts[0])
+	var ln *testenv.Listener
+	if dex {
+		a.base = testenv.OIDC(t).AppURL
+	} else {
+		ln = testenv.Listen(t)
+		a.base = ln.URL
+	}
 	baseURL, _ := url.Parse(a.base)
-	ids := identity.New(identity.Options{Pool: pool, Log: zerolog.Nop(), SessionSecret: "browser-test-session-secret-0123456789", BaseURL: baseURL})
+	ids := identity.New(identity.Options{Pool: pool, Log: zerolog.Nop(), SessionSecret: "browser-test-session-secret-0123456789", BaseURL: baseURL,
+		Mail: a.mail})
 	_, err = ids.CreateUser(context.Background(), uuid.NullUUID{}, identity.NewUser{Email: "ada@example.com", Name: "Ada Lovelace", Password: testPassword, InstanceAdmin: true})
 	if err != nil {
 		t.Fatal(err)
@@ -328,21 +342,31 @@ func appServer(t *testing.T) app {
 	}()
 	webhooksHTTP := webhook.NewHTTP(webhookSvc)
 	vcsHTTP := vcs.NewHTTP(vcs.New(vcs.Options{Pool: pool, Log: zerolog.Nop(), Access: acc, Config: config, Issues: issueSvc, Secrets: box, BaseURL: baseURL}))
+	a.sso = sso.New(sso.Options{Pool: pool, Log: zerolog.Nop(), Identity: ids, Workspaces: workspaceSvc, Access: acc, Secrets: box, BaseURL: baseURL,
+		StateSecret: "browser-test-session-secret-0123456789"})
+	ids.SetSignInPolicy(a.sso.Policy)
+	ssoHTTP := sso.NewHTTP(a.sso, auth, false)
 
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
-	ln.Serve(server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
+	engine := server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
 		vcsHTTP.RegisterHooks(api)
 		api.Use(auth.Authenticate())
 		auth.Register(api)
+		ssoHTTP.Register(api)
 		hub.Register(api)
 		notifyHTTP.Register(api)
 		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register,
-			notifyHTTP.RegisterWorkspace, webhooksHTTP.Register, vcsHTTP.Register,
+			notifyHTTP.RegisterWorkspace, webhooksHTTP.Register, vcsHTTP.Register, ssoHTTP.RegisterWorkspace,
 			func(ws *gin.RouterGroup) {
 				projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject, reportsHTTP.RegisterProject)
 			})
-	}}))
+	}})
+	if dex {
+		testenv.OIDC(t).Serve(t, engine)
+	} else {
+		ln.Serve(engine)
+	}
 	return a
 }
 
@@ -372,6 +396,23 @@ func (p *page) poll(expr string) string {
 		p.t.Fatalf("waiting for %s: %v\npage: %s", expr, err, state)
 	}
 	return v
+}
+
+// pollAcross is poll for a page that navigates to other origins meanwhile
+// (an identity provider): evaluation errors during navigation count as
+// not yet.
+func (p *page) pollAcross(expr string) {
+	p.t.Helper()
+	safe := `(() => { try { return !!(` + expr + `); } catch { return false; } })()`
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		if ok, err := chromedp.Run(p.ctx, chromedp.Evaluate[bool](safe)); err == nil && ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			href, _ := chromedp.Run(p.ctx, chromedp.Evaluate[string](`location.href`))
+			p.t.Fatalf("waiting for %s (at %s)", expr, href)
+		}
+	}
 }
 
 func (p *page) do(actions ...chromedp.Action[chromedp.Void]) {
@@ -2468,4 +2509,103 @@ func TestGit(t *testing.T) {
 	}
 	pg.poll(`[...` + detail + `.querySelectorAll(".event")].some((e) => e.textContent.includes("Horizon linked pull request #7")) && "activity"`)
 	pg.logs.failOnErrors(t)
+}
+
+// TestSingleSignOn signs in through the test OpenID Connect provider from
+// the sign-in page, then with an emailed link, and sees enforced SSO turn
+// a member's password away.
+func TestSingleSignOn(t *testing.T) {
+	if goruntime.GOOS != "linux" {
+		t.Skip("the provider and the app share the host network on Linux only")
+	}
+	a := appServer(t, true)
+	ctx := context.Background()
+	admin := newPage(t)
+	admin.do(chromedp.Navigate(a.base + "/"))
+	admin.signIn("ada@example.com", testPassword)
+	admin.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	admin.eval(view + `.querySelector("form").requestSubmit()`)
+	admin.poll(`location.pathname === "/w/acme" && "workspace"`)
+	ada, err := a.ids.UserByEmail(ctx, "ada@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dex := testenv.OIDC(t)
+	slug, name := "dex", "Dex"
+	if _, err := a.sso.Create(ctx, sso.Scope{Principal: identity.Principal{User: ada, Scope: identity.ScopeAdmin}}, sso.Input{
+		Slug: &slug, Name: &name, Issuer: &dex.Issuer, ClientID: &dex.ClientID, ClientSecret: &dex.ClientSecret}); err != nil {
+		t.Fatal(err)
+	}
+	grace := testenv.DexUsers[0]
+	g, err := a.ids.CreateUser(ctx, uuid.NullUUID{}, identity.NewUser{Email: grace.Email, Name: grace.Name, Password: testPassword})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ws := admin.api("GET", "/w/acme", "")
+	var w struct{ ID uuid.UUID }
+	_ = json.Unmarshal([]byte(ws), &w)
+	if err := a.ws.AddMember(ctx, w.ID, g.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Grace continues with Dex from the sign-in page and lands where she
+	// was going.
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/w/acme"))
+	signIn := appRoot + `.querySelector("hzn-sign-in").shadowRoot`
+	pg.click(signIn + `.querySelector('[data-provider="dex"]')`)
+	pg.pollAcross(`location.pathname.startsWith("/dex/") && document.querySelector('input[name="login"]')`)
+	pg.eval(`(() => { document.querySelector('input[name="login"]').value = ` + strconv.Quote(grace.Email) + `;
+		document.querySelector('input[name="password"]').value = ` + strconv.Quote(grace.Password) + `;
+		document.querySelector('input[name="login"]').form.submit(); })()`)
+	pg.pollAcross(`location.pathname === "/w/acme" && document.querySelector("hzn-app")?.context?.session.user?.email === ` + strconv.Quote(grace.Email))
+
+	// Ada requires SSO for Acme; Grace's password now turns her to SSO.
+	admin.do(chromedp.Navigate(a.base + "/w/acme/settings/authentication"))
+	enforce := view + `.querySelector("[data-enforce]")`
+	admin.poll(enforce + ` && "loaded"`)
+	admin.click(enforce)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		if _, body := admin.api("GET", "/w/acme/sso", ""); body == `{"enforced":true}` {
+			break
+		} else if time.Now().After(deadline) {
+			t.Fatalf("sso = %s", body)
+		}
+	}
+	other := newPage(t)
+	other.do(chromedp.Navigate(a.base + "/"))
+	other.signIn2(grace.Email, testPassword)
+	other.poll(signIn + `.querySelector('[data-form="sso"]') && ` + signIn + `.querySelector("[data-sso-error]")?.textContent.includes("requires single sign-on") && "sso"`)
+
+	// Ada (an instance admin, still allowed) asks for an emailed link and
+	// signs in with it in the same browser.
+	link := newPage(t)
+	link.do(chromedp.Navigate(a.base + "/sign-in"))
+	link.click(signIn + `.querySelector('[data-mode="magic"]')`)
+	link.typeInto(signIn+`.querySelector('[data-form="magic"] [name="email"]')`, "ada@example.com\r")
+	link.poll(signIn + `.querySelector("[data-sent]") && "sent"`)
+	var body string
+	for deadline := time.Now().Add(5 * time.Second); body == "" && time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		for _, m := range a.mail.Sent() {
+			if strings.Contains(m.Body, "/magic-link#token=") {
+				body = m.Body
+			}
+		}
+	}
+	_, token, ok := strings.Cut(body, "/magic-link#token=")
+	if !ok {
+		t.Fatalf("no link mailed: %q", body)
+	}
+	link.do(chromedp.Navigate(a.base + "/magic-link#token=" + strings.Fields(token)[0]))
+	link.poll(`location.pathname === "/" && document.querySelector("hzn-app")?.context?.session.user?.email === "ada@example.com" && "signed in"`)
+	pg.logs.failOnErrors(t)
+}
+
+// signIn2 submits the password form without waiting to leave the page
+// (the sign-in may be refused).
+func (p *page) signIn2(email, password string) {
+	p.t.Helper()
+	signIn := appRoot + `.querySelector("hzn-sign-in")?.shadowRoot`
+	p.typeInto(signIn+`?.querySelector('[name="email"]')`, email)
+	p.typeInto(signIn+`.querySelector('[name="password"]')`, password+"\r")
 }

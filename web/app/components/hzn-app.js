@@ -34,6 +34,7 @@ export const ROUTES = [
   { name: "settings-general", path: "/w/:ws/settings/general", view: "hzn-settings-general", layout: "settings" },
   { name: "settings-members", path: "/w/:ws/settings/members", view: "hzn-settings-members", layout: "settings" },
   { name: "settings-roles", path: "/w/:ws/settings/roles", view: "hzn-settings-roles", layout: "settings" },
+  { name: "settings-authentication", path: "/w/:ws/settings/authentication", view: "hzn-settings-sso", layout: "settings" },
   { name: "settings-projects", path: "/w/:ws/settings/projects", view: "hzn-settings-projects", layout: "settings" },
   { name: "settings-project", path: "/w/:ws/settings/projects/:key", view: "hzn-settings-project", layout: "settings" },
   { name: "project", path: "/w/:ws/p/:key", view: "hzn-project-home" },
@@ -64,6 +65,7 @@ export const ROUTES = [
   { name: "sign-in", path: "/sign-in", view: "hzn-sign-in", public: true },
   { name: "forgot-password", path: "/forgot-password", view: "hzn-forgot-password", public: true },
   { name: "reset-password", path: "/reset-password", view: "hzn-reset-password", public: true },
+  { name: "magic-link", path: "/magic-link", view: "hzn-magic-link", public: true },
 ];
 const NOT_FOUND_VIEW = "hzn-not-found";
 const OUTCOME_ICONS = { unstarted: "circle", started: "circle-dot", completed: "circle-check", abandoned: "circle-x" };
