@@ -48,6 +48,12 @@ const GROUPS = [
       { name: "calendar", icon: "calendar-days", label: "settings.calendar" },
     ],
   },
+  {
+    label: "settings.integrations",
+    pages: [
+      { name: "webhooks", icon: "external-link", label: "settings.webhooks" },
+    ],
+  },
 ];
 const PAGES = GROUPS.flatMap((g) => g.pages);
 

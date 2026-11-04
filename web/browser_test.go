@@ -11,12 +11,15 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/signal"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,6 +43,7 @@ import (
 	"github.com/lidisoft/horizon/internal/notify"
 	"github.com/lidisoft/horizon/internal/planning"
 	platformmail "github.com/lidisoft/horizon/internal/platform/mail"
+	"github.com/lidisoft/horizon/internal/platform/secrets"
 	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/realtime"
 	"github.com/lidisoft/horizon/internal/report"
@@ -47,6 +51,7 @@ import (
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/testenv"
 	views "github.com/lidisoft/horizon/internal/view"
+	"github.com/lidisoft/horizon/internal/webhook"
 	"github.com/lidisoft/horizon/internal/workspace"
 	"github.com/lidisoft/horizon/web"
 )
@@ -306,6 +311,18 @@ func appServer(t *testing.T) app {
 	go func() { _ = bus.Stream.Consume(ctx, bus.JetStream, notifySvc.Consumer(), zerolog.Nop()) }()
 	notifyHTTP := notify.NewHTTP(notifySvc)
 	a.ids, a.ws = ids, workspaceSvc
+	box, err := secrets.New(bytes.Repeat([]byte{7}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	webhookSvc := webhook.New(webhook.Options{Pool: pool, Log: zerolog.Nop(), Access: acc, Projects: projectSvc, Issues: issueSvc, Secrets: box, AllowPrivate: true})
+	go func() { _ = bus.Stream.Consume(ctx, bus.JetStream, webhookSvc.Consumer(), zerolog.Nop()) }()
+	go func() {
+		for tick := time.NewTicker(200 * time.Millisecond); ctx.Err() == nil; <-tick.C {
+			_ = webhookSvc.Send(ctx)
+		}
+	}()
+	webhooksHTTP := webhook.NewHTTP(webhookSvc)
 
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
@@ -315,7 +332,7 @@ func appServer(t *testing.T) app {
 		hub.Register(api)
 		notifyHTTP.Register(api)
 		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register,
-			notifyHTTP.RegisterWorkspace,
+			notifyHTTP.RegisterWorkspace, webhooksHTTP.Register,
 			func(ws *gin.RouterGroup) {
 				projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject, reportsHTTP.RegisterProject)
 			})
@@ -2286,4 +2303,84 @@ func TestInbox(t *testing.T) {
 		t.Errorf("settings = %s", body)
 	}
 	grace.logs.failOnErrors(t)
+}
+
+// TestWebhooks creates a webhook from the settings, keeps its secret, and
+// sees a test event and an issue's creation arrive, signed, and logged.
+func TestWebhooks(t *testing.T) {
+	a := appServer(t)
+	var mu sync.Mutex
+	var got []http.Header
+	var bodies [][]byte
+	rx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		got, bodies = append(got, r.Header.Clone()), append(bodies, b)
+		mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer rx.Close()
+
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`)
+
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/webhooks"))
+	pg.poll(view + `.querySelector("lds-empty-state") && "empty"`)
+	pg.click(view + `.querySelector('[data-action="new"]')`)
+	dialog := view + `.querySelector('[data-dialog="edit"]')`
+	pg.poll(dialog + `.hasAttribute("open") && "open"`)
+	pg.typeInto(dialog+`.querySelector('[name="name"]')`, "Chat bridge")
+	pg.typeInto(dialog+`.querySelector('[name="url"]')`, rx.URL+"/hook")
+	pg.click(dialog + `.querySelector('[data-action="save"]')`)
+
+	// The secret shows once, on the webhook's page.
+	pg.poll(`location.pathname.startsWith("/w/acme/settings/webhooks/") && "detail"`)
+	secret := pg.poll(view + `.querySelector('[data-dialog="secret"]')?.hasAttribute("open") && ` + view + `.querySelector("[data-secret]").textContent`)
+	if !strings.HasPrefix(secret, "whsec_") {
+		t.Fatalf("secret = %q", secret)
+	}
+	pg.click(view + `.querySelector('[data-dialog="secret"] [data-close]')`)
+
+	// A test event, then an issue: both arrive signed and show in the log.
+	pg.click(view + `.querySelector('[data-action="ping"]')`)
+	rows := `[...` + view + `.querySelectorAll("tr[data-delivery]")].map((r) => r.textContent.replace(/\s+/g, " ").trim())`
+	pg.poll(rows + `.some((r) => r.startsWith("ping") && r.includes("Delivered") && r.includes("204")) && "pinged"`)
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID string } `json:"issue_types"`
+	}
+	_ = json.Unmarshal([]byte(cfg), &resolved)
+	pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[0].ID+`","title":"Outbox relay"}`)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		mu.Lock()
+		created := slices.ContainsFunc(got, func(h http.Header) bool { return h.Get("Horizon-Event") == "issue.created" })
+		mu.Unlock()
+		if created || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	var events []string
+	for i, h := range got {
+		events = append(events, h.Get("Horizon-Event"))
+		if h.Get("Horizon-Signature") != webhook.Sign(secret, bodies[i]) {
+			t.Errorf("%s: bad signature", h.Get("Horizon-Event"))
+		}
+	}
+	if !slices.Contains(events, "ping") || !slices.Contains(events, "issue.created") {
+		t.Errorf("events = %v", events)
+	}
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/webhooks"))
+	if got := pg.poll(view + `.querySelector("tbody tr")?.textContent.replace(/\s+/g, " ").trim()`); !strings.Contains(got, "Chat bridge") || !strings.Contains(got, "Every event") {
+		t.Errorf("list row = %q", got)
+	}
+	pg.logs.failOnErrors(t)
 }

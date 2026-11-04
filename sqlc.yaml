@@ -153,3 +153,14 @@ sql:
         sql_package: pgx/v5
         emit_methods_with_db_argument: false
         emit_pointers_for_null_types: true
+
+  - engine: postgresql
+    schema: internal/migrations
+    queries: internal/webhook/queries
+    gen:
+      go:
+        package: db
+        out: internal/webhook/db
+        sql_package: pgx/v5
+        emit_methods_with_db_argument: false
+        emit_pointers_for_null_types: true

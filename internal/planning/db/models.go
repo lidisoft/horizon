@@ -499,6 +499,40 @@ type View struct {
 	Version     int32
 }
 
+type Webhook struct {
+	WorkspaceID uuid.UUID
+	ID          uuid.UUID
+	ProjectID   uuid.NullUUID
+	Name        string
+	Url         string
+	Secret      string
+	EventTypes  []string
+	Active      bool
+	CreatedBy   uuid.NullUUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int32
+}
+
+type WebhookDelivery struct {
+	WorkspaceID     uuid.UUID
+	ID              uuid.UUID
+	WebhookID       uuid.UUID
+	EventID         uuid.UUID
+	EventType       string
+	Body            json.RawMessage
+	RedeliveryOf    uuid.NullUUID
+	State           string
+	Attempts        int32
+	StatusCode      *int32
+	ResponseExcerpt string
+	Error           string
+	DurationMs      *int32
+	CreatedAt       time.Time
+	NextAttemptAt   *time.Time
+	DeliveredAt     *time.Time
+}
+
 type Workflow struct {
 	WorkspaceID    uuid.UUID
 	ID             uuid.UUID

@@ -99,6 +99,9 @@ type Config struct {
 	// TrustedProxies may set X-Forwarded-For; empty trusts none, so the
 	// client IP is the connection's.
 	TrustedProxies []netip.Prefix
+	// WebhookAllowPrivate lets webhooks reach loopback, private and
+	// link-local addresses.
+	WebhookAllowPrivate bool
 }
 
 // LookupFunc reads one environment variable; os.LookupEnv in production.
@@ -129,6 +132,7 @@ func Load(lookup LookupFunc, need Need) (Config, error) {
 	c.MetricsAddr = l.optional("METRICS_ADDR", DefaultMetricsAddr)
 	c.EventsRetention = l.duration("EVENTS_RETENTION", DefaultEventsRetention)
 	c.TrustedProxies = l.prefixes("TRUSTED_PROXIES")
+	c.WebhookAllowPrivate = l.oneOf("WEBHOOK_ALLOW_PRIVATE", "false", "true", "false") == "true"
 
 	c.DatabaseURL = l.urlString("DATABASE_URL", need&NeedDatabase != 0, "postgres", "postgresql")
 	c.NatsURL = l.urlString("NATS_URL", need&NeedNATS != 0, "nats", "tls")

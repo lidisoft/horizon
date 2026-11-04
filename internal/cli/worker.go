@@ -54,7 +54,7 @@ func runWorker(ctx context.Context, rt *runtime) error {
 		Stream:        eventlog.DefaultStream(rt.cfg.EventsRetention),
 		Metrics:       rt.metrics,
 		DeleteObjects: rt.s3.Delete,
-		Consumers:     []eventlog.Consumer{d.planning.PolicyConsumer(), reports.Consumer(), d.notify.Consumer()},
+		Consumers:     []eventlog.Consumer{d.planning.PolicyConsumer(), reports.Consumer(), d.notify.Consumer(), d.webhooks.Consumer()},
 		Jobs: []worker.Job{
 			{Name: "identity-cleanup", Every: time.Hour, Run: rt.identity().Cleanup},
 			// The consumer wakes the projector on each event; this catches
@@ -64,6 +64,8 @@ func runWorker(ctx context.Context, rt *runtime) error {
 				return err
 			}},
 			{Name: "email", Every: time.Minute, Run: d.notify.SendDue},
+			{Name: "webhooks", Every: 2 * time.Second, Run: d.webhooks.Send},
+			{Name: "webhook-log", Every: time.Hour, Run: d.webhooks.Purge},
 			{Name: "digest", Every: 5 * time.Minute, Run: d.notify.SendDigests},
 			{Name: "describe", Every: 10 * time.Second, Run: func(ctx context.Context) error {
 				_, err := d.issues.DescribeQuiet(ctx)

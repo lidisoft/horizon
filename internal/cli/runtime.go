@@ -27,6 +27,7 @@ import (
 	"github.com/lidisoft/horizon/internal/platform/nats"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
 	"github.com/lidisoft/horizon/internal/platform/s3"
+	"github.com/lidisoft/horizon/internal/platform/secrets"
 	"github.com/lidisoft/horizon/internal/project"
 	"github.com/lidisoft/horizon/internal/realtime"
 	"github.com/lidisoft/horizon/internal/report"
@@ -34,6 +35,7 @@ import (
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/version"
 	"github.com/lidisoft/horizon/internal/view"
+	"github.com/lidisoft/horizon/internal/webhook"
 	"github.com/lidisoft/horizon/internal/workspace"
 )
 
@@ -88,6 +90,19 @@ func (rt *runtime) mailer() platformmail.Sender {
 	return platformmail.NewSMTP(rt.cfg.SMTPURL, rt.cfg.SMTPFrom)
 }
 
+// secrets is the box sealing secrets at rest; nil without SECRET_KEY
+// (commands that don't read secrets).
+func (rt *runtime) secrets() *secrets.Box {
+	if rt.cfg.SecretKey == nil {
+		return nil
+	}
+	box, err := secrets.New(rt.cfg.SecretKey, rt.cfg.SecretKeysPrevious...)
+	if err != nil {
+		panic(err) // the configuration checked the key lengths
+	}
+	return box
+}
+
 // identity returns the identity service.
 func (rt *runtime) identity() *identity.Service {
 	return identity.New(identity.Options{
@@ -109,6 +124,7 @@ type domain struct {
 	issues     *issue.Service
 	planning   *planning.Service
 	notify     *notify.Service
+	webhooks   *webhook.Service
 }
 
 // domain builds the domain services: serve and worker share the same graph,
@@ -141,6 +157,8 @@ func (rt *runtime) domain() domain {
 			}
 		},
 	})
+	d.webhooks = webhook.New(webhook.Options{Pool: rt.pool, Log: logging.WithSystem(rt.log, "webhook"), Access: d.access, Projects: d.projects,
+		Issues: d.issues, Secrets: rt.secrets(), AllowPrivate: rt.cfg.WebhookAllowPrivate})
 	return d
 }
 
@@ -158,6 +176,7 @@ func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
 	searchHTTP := search.NewHTTP(search.New(rt.pool, d.access, d.projects, d.issues))
 	viewsHTTP := view.NewHTTP(view.New(rt.pool, d.access, d.projects))
 	notifyHTTP := notify.NewHTTP(d.notify)
+	webhooksHTTP := webhook.NewHTTP(d.webhooks)
 	reportsHTTP := report.NewHTTP(report.New(rt.pool, d.access, d.config, d.projects, d.issues, d.planning, nil))
 	hub := realtime.New(realtime.Options{
 		Log: logging.WithSystem(rt.log, "realtime"), Pool: rt.pool, NATS: rt.nc, Stream: eventlog.DefaultStream(rt.cfg.EventsRetention),
@@ -169,7 +188,7 @@ func (rt *runtime) api() (func(api *gin.RouterGroup), *realtime.Hub) {
 		auth.Register(api)
 		hub.Register(api)
 		notifyHTTP.Register(api)
-		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register, notifyHTTP.RegisterWorkspace, func(ws *gin.RouterGroup) {
+		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register, notifyHTTP.RegisterWorkspace, webhooksHTTP.Register, func(ws *gin.RouterGroup) {
 			projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject, reportsHTTP.RegisterProject)
 		})
 	}, hub

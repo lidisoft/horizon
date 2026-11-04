@@ -113,8 +113,8 @@ away. See [realtime.md](realtime.md).
 | `subscriptions` | workspace_id, issue_id, user_id, reason (creator, assignee, mention, commenter, manual) |
 | `inbox_items` | workspace_id, user_id, issue_id (one row each), reason (assigned, mentioned, subscribed), event_id (latest), first_event_id (oldest unread), unread_count, updated_at, read_at, snoozed_until, archived_at, emailed_event_id |
 | `notification_settings` | user_id, email (unread, off), digest, digest_sent_at — no row: the defaults |
-| `webhooks` | workspace_id, project_id (nullable), url, secret, event_types text[], active |
-| `webhook_deliveries` | webhook_id, event_id, attempt, status_code, response_excerpt, next_attempt_at |
+| `webhooks` | workspace_id, project_id (nullable = the workspace), name, url, secret (sealed), event_types text[] (empty = every event), active |
+| `webhook_deliveries` | webhook_id, event_id, event_type, body JSONB, redelivery_of, state (pending, succeeded, failed), attempts, status_code, response_excerpt, error, duration_ms, next_attempt_at, delivered_at — one per endpoint and event, kept 30 days |
 | `vcs_connections` | workspace_id, provider, installation details (encrypted) |
 | `vcs_links` | issue_id, kind (branch, pr, commit), url, title, state |
 | `views` | workspace_id, project_id (nullable), owner_id (nullable = shared), name, layout, query JSONB, display JSONB |

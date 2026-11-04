@@ -139,7 +139,11 @@ Workflow transitions can further restrict who may perform them
 ## Other measures
 
 - Secrets at rest (OIDC client secrets, VCS tokens, webhook secrets) are
-  encrypted with a key from `HORIZON_SECRET_KEY` (AES-GCM).
+  sealed with `SECRET_KEY` (AES-256-GCM, bound to their row), rotatable with
+  `SECRET_KEY_PREVIOUS` and `admin rekey` ([ADR-0023](adr/0023-secrets-at-rest.md)).
+- Webhook deliveries can't reach the instance's own networks: the address
+  actually dialled is checked (loopback, private, link-local refused) unless
+  `WEBHOOK_ALLOW_PRIVATE=true`; redirects aren't followed.
 - Inbound forge webhooks are verified with each provider's signature scheme.
 - Uploads: content type sniffed server-side, served with
   `Content-Disposition: attachment` except for safe image types; SVG is

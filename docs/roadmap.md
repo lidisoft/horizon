@@ -81,7 +81,7 @@ usable exists early.
 ## Phase 8 — Notifications and integrations
 
 - [x] Subscriptions, inbox, email notifications and digests
-- [ ] Outbound webhooks with signing, retries, delivery log
+- [x] Outbound webhooks with signing, retries, delivery log
 - [ ] Git integration: GitHub, GitLab, Forgejo
 - [ ] Magic link login, OIDC / SSO, enforced SSO
 - [ ] Operator contract complete: graceful shutdown, `admin reconcile`,

@@ -172,7 +172,7 @@ longer than that.
 | `notify` | Subscribes the people an issue event concerns (creator, assignee, mentions, commenters) and bumps the inbox rows of its followers ([domain.md](domain.md#notifications)); tells their pages over NATS core (`horizon.inbox.<user>`) |
 | `email` | Emails unread inbox rows after 10 quiet minutes, one email per person (a periodic job, every minute; rows claimed with `SKIP LOCKED`) |
 | `digest` | Sends the daily digests due from 08:00 local time (a periodic job, every 5 minutes) |
-| `webhook` | Matches subscriptions, POSTs signed payloads (HMAC-SHA256), retries with backoff, logs deliveries |
+| `webhook` | Queues one delivery per matching endpoint and event; the `webhooks` job (every 2 s) leases due deliveries, POSTs them signed (HMAC-SHA256), and records the outcome and the next retry ([api.md](api.md#webhooks)) |
 | `vcs` | Processes forge webhooks: links branches/PRs/commits, applies merge transitions |
 | `policy` | Runs cross-aggregate policies as new commands: applies the completion policy of each `IterationCompleted` ([domain.md](domain.md#iteration-completion-policy)) |
 | `purge` | Scrubs JetStream subjects and S3 objects after hard deletes (a periodic job over the `purges` queue; it keeps tombstones) |

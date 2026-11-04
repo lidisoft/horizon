@@ -33,3 +33,4 @@ number.
 | [0020](0020-postgresql-search.md) | Search with PostgreSQL full-text search and pg_trgm | Accepted |
 | [0021](0021-report-projections.md) | Report projections fed by domain events | Accepted |
 | [0022](0022-integration-tests-real-dependencies.md) | Integration tests against real dependencies | Accepted |
+| [0023](0023-secrets-at-rest.md) | Secrets at rest sealed with SECRET_KEY | Accepted |
