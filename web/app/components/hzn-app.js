@@ -101,9 +101,6 @@ const styles = sheet(`
   .switcher lds-button { max-width: 100%; }
   .switcher [data-ws-name] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   lds-nav { flex: none; }
-  /* LDS v0.0.5 clips label descenders (g, p, y): overflow hidden with
-     line-height 1. Remove once LDS fixes lds-nav-item. */
-  lds-nav-item::part(label) { line-height: 1.25; }
   /* Project keys sit at the end of their row. */
   lds-nav-item[data-project]::part(label) { flex: 1; }
   lds-badge[hidden] { display: none; } /* lds-badge sets its own display */

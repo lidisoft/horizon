@@ -114,7 +114,7 @@ back to `error.field.<code>`.
 
 ## Components
 
-Generic UI comes from **LDS** (pinned at `v0.0.5`). The generic pieces Horizon
+Generic UI comes from **LDS** (pinned at `v0.0.6`). The generic pieces Horizon
 asked LDS for have all shipped:
 
 | Element | Horizon use |
@@ -129,10 +129,11 @@ asked LDS for have all shipped:
 | `lds-popover` | Display options, filter builder, picker anchors. Non-modal; `placement`, `trigger` slot |
 | `lds-tooltip` | Every icon-only button (still give the button a `label`); `placement="right"` on the collapsed sidebar |
 | `lds-drawer non-modal` | Issue peek panel: no backdrop, list stays interactive; set `--lds-drawer-inset-top` to the header height |
+| Swatch tokens | `--lds-color-swatch-{blue,green,purple,pink,coral,yellow,grey}`: the stored colour of a project, issue type, label, category or select option. Small fills (dots, squares) beside the name only, never text colour |
 | Chart tokens | `--lds-color-chart-completed` / `started` / `unstarted` / `abandoned` (fixed stacking order), `-reference`, `-marker`, `-annotation`, `--lds-chart-bar-radius`, `--lds-chart-segment-gap` — see [reports.md](reports.md#charts) |
 | `lds-icon` | 68 Lucide icons, including status (`circle-dashed`, `circle`, `circle-dot`, `circle-check`, `circle-x`), priority (`signal-*`, `octagon-alert`), layouts and git |
 
-`lds-popover` in v0.0.5 decides a press is outside its panel from the
+`lds-popover` (since v0.0.5) decides a press is outside its panel from the
 event target at the document, which shadow roots retarget to their host, so
 inside a view every press closed it: `keepOpenOnInsidePress` (core/dom.js)
 cancels those closes from the press's composed path.

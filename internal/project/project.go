@@ -31,7 +31,7 @@ const (
 )
 
 // Colours a project can take; the UI maps them to design tokens.
-var Colours = []string{"blue", "green", "teal", "purple", "pink", "coral", "orange", "yellow", "grey"}
+var Colours = []string{"blue", "green", "purple", "pink", "coral", "yellow", "grey"}
 
 // keyRe: 2–10 upper-case letters or digits, starting with a letter.
 var keyRe = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)

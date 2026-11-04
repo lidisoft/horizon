@@ -43,7 +43,7 @@ var defaultTypes = []defaultType{
 	{"Story", "bookmark", "green", ParentAny, nil},
 	{"Task", "check", "blue", ParentAny, nil},
 	{"Bug", "alert-circle", "coral", ParentAny, nil},
-	{"Sub-task", "corner-down-right", "teal", ParentRequired, []string{"Story", "Task", "Bug"}},
+	{"Sub-task", "corner-down-right", "green", ParentRequired, []string{"Story", "Task", "Bug"}},
 }
 
 // SeedDefaults creates the default categories, workflow and issue types of

@@ -3,7 +3,7 @@
 
 import { requestContext } from "horizon/core/context.js";
 import { html } from "horizon/core/dom.js";
-import { busy, errorMessage, formValues, setAutocomplete, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { busy, errorMessage, formValues, showFieldErrors } from "horizon/core/forms.js";
 import { authPage, authStyles } from "horizon/views/auth-page.js";
 
 class HznForgotPassword extends HTMLElement {
@@ -18,7 +18,7 @@ class HznForgotPassword extends HTMLElement {
       <form novalidate>
         <lds-alert intent="danger" role="alert"></lds-alert>
         <lds-field label="${t("field.email")}" required>
-          <lds-input name="email" type="email" required></lds-input>
+          <lds-input name="email" type="email" autocomplete="username" required></lds-input>
         </lds-field>
         <lds-button type="submit" variant="primary" full-width>${t("forgot.submit")}</lds-button>
       </form>
@@ -26,8 +26,6 @@ class HznForgotPassword extends HTMLElement {
     `));
 
     const form = root.querySelector("form");
-    setAutocomplete(root.querySelector('[name="email"]'), "username");
-    submitOnEnter(form);
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       this.submit(form);

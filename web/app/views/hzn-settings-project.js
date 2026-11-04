@@ -5,7 +5,7 @@
 import { COLOURS, paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
-import { busy, clearFieldErrors, errorMessage, formValues, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { busy, clearFieldErrors, errorMessage, formValues, showFieldErrors } from "horizon/core/forms.js";
 import { settingsPage, settingsStyles } from "horizon/views/settings-page.js";
 
 const styles = sheet(`
@@ -128,7 +128,6 @@ class HznSettingsProject extends HTMLElement {
     if (!canEdit) return;
 
     const form = this.shadowRoot.querySelector("form");
-    submitOnEnter(form);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       this.save(form);

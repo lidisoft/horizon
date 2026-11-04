@@ -1,5 +1,5 @@
 import { ApiError, NetworkError } from "horizon/core/api.js";
-import { clearFieldErrors, errorMessage, formValues, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { clearFieldErrors, errorMessage, formValues, showFieldErrors } from "horizon/core/forms.js";
 import { createI18n } from "horizon/core/i18n.js";
 import { assert, describe, flush, test } from "horizon-test/runner.js";
 
@@ -61,7 +61,8 @@ describe("forms", () => {
     }
   });
 
-  test("submitOnEnter submits from an lds-input", async () => {
+  // Views rely on LDS (v0.0.6) for these; Horizon used to patch them in.
+  test("lds-input submits its form on Enter and mirrors autocomplete", async () => {
     const { host, form } = await fixture();
     try {
       let submitted = 0;
@@ -69,10 +70,13 @@ describe("forms", () => {
         e.preventDefault();
         submitted++;
       });
-      submitOnEnter(form);
-      const input = form.querySelector('[name="name"]');
-      input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }));
-      form.querySelector("lds-button").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      const input = form.querySelector('[name="email"]');
+      input.setAttribute("autocomplete", "username");
+      await flush();
+      const inner = input.shadowRoot.querySelector("input");
+      assert.equal(inner.autocomplete, "username");
+      inner.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }));
+      inner.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true, composed: true }));
       assert.equal(submitted, 1);
     } finally {
       host.remove();

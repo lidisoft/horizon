@@ -24,7 +24,7 @@ import { daysLeft, fetchIssues, loadIterations, planningStyles, stateBadge, view
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
-import { errorMessage, submitOnEnter } from "horizon/core/forms.js";
+import { errorMessage } from "horizon/core/forms.js";
 
 const LANES = ["none", "assignee", "parent", "priority"];
 const ALL = "all";
@@ -284,7 +284,6 @@ class HznBoard extends HTMLElement {
       </lds-drawer>
       <hzn-issue-create></hzn-issue-create>`);
     const wipForm = this.shadowRoot.querySelector("[data-wip] form");
-    submitOnEnter(wipForm);
     wipForm.addEventListener("submit", (e) => {
       e.preventDefault();
       this.saveWip();

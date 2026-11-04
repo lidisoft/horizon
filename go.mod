@@ -15,7 +15,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.12.0
-	github.com/lidisoft/design-system v0.0.5
+	github.com/lidisoft/design-system v0.0.6
 	github.com/minio/minio-go/v7 v7.4.1
 	github.com/moby/moby/api v1.56.1
 	github.com/nats-io/nats.go v1.55.0

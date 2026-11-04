@@ -80,7 +80,7 @@ type ProjectRequest struct {
 	Key         *string    `json:"key,omitempty" example:"HZN"`
 	Name        *string    `json:"name,omitempty" example:"Horizon"`
 	Description *string    `json:"description,omitempty"`
-	Colour      *string    `json:"colour,omitempty" enums:"blue,green,teal,purple,pink,coral,orange,yellow,grey"`
+	Colour      *string    `json:"colour,omitempty" enums:"blue,green,purple,pink,coral,yellow,grey"`
 	LeadID      *uuid.UUID `json:"lead_id,omitempty"`
 	Visibility  *string    `json:"visibility,omitempty" enums:"workspace,private"`
 }

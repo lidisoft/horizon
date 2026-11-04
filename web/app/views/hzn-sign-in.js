@@ -6,7 +6,7 @@
 
 import { requestContext } from "horizon/core/context.js";
 import { html } from "horizon/core/dom.js";
-import { busy, errorMessage, formValues, setAutocomplete, submitOnEnter } from "horizon/core/forms.js";
+import { busy, errorMessage, formValues } from "horizon/core/forms.js";
 import { authPage, authStyles } from "horizon/views/auth-page.js";
 
 const MODES = ["password", "magic", "sso"];
@@ -71,7 +71,7 @@ class HznSignIn extends HTMLElement {
           <p class="lead">${t("signIn.magicLead")}</p>
           <form novalidate data-form="magic">
             <lds-alert intent="danger" role="alert"></lds-alert>
-            <lds-field label="${t("field.email")}" required><lds-input name="email" type="email" required></lds-input></lds-field>
+            <lds-field label="${t("field.email")}" required><lds-input name="email" type="email" autocomplete="username" required></lds-input></lds-field>
             <lds-button type="submit" variant="primary" full-width>${t("signIn.sendLink")}</lds-button>
           </form>`;
         break;
@@ -80,7 +80,7 @@ class HznSignIn extends HTMLElement {
           <p class="lead">${t("signIn.ssoLead")}</p>
           <form novalidate data-form="sso">
             <lds-alert intent="danger" role="alert"></lds-alert>
-            <lds-field label="${t("field.email")}" required><lds-input name="email" type="email" required></lds-input></lds-field>
+            <lds-field label="${t("field.email")}" required><lds-input name="email" type="email" autocomplete="username" required></lds-input></lds-field>
             <lds-button type="submit" variant="primary" full-width>${t("signIn.ssoContinue")}</lds-button>
           </form>`;
         break;
@@ -89,10 +89,10 @@ class HznSignIn extends HTMLElement {
           <form novalidate data-form="password">
             <lds-alert intent="danger" role="alert"></lds-alert>
             <lds-field label="${t("field.email")}" required>
-              <lds-input name="email" type="email" required></lds-input>
+              <lds-input name="email" type="email" autocomplete="username" required></lds-input>
             </lds-field>
             <lds-field label="${t("field.password")}" required>
-              <lds-input name="password" type="password" required></lds-input>
+              <lds-input name="password" type="password" autocomplete="current-password" required></lds-input>
             </lds-field>
             <lds-button type="submit" variant="primary" full-width>${t("signIn.submit")}</lds-button>
           </form>
@@ -106,10 +106,6 @@ class HznSignIn extends HTMLElement {
     this.renderProviders();
     const form = root.querySelector("form");
     const email = form.querySelector('[name="email"]');
-    setAutocomplete(email, "username");
-    const pw = form.querySelector('[name="password"]');
-    if (pw) setAutocomplete(pw, "current-password");
-    submitOnEnter(form);
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       this.submit(form);

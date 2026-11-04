@@ -50,7 +50,7 @@ const (
 )
 
 // Colours definitions can take; the UI maps them to swatch tokens.
-var Colours = []string{"blue", "green", "teal", "purple", "pink", "coral", "orange", "yellow", "grey"}
+var Colours = []string{"blue", "green", "purple", "pink", "coral", "yellow", "grey"}
 
 // Icons issue types can take, from the LDS sprite.
 var Icons = []string{

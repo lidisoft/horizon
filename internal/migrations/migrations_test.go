@@ -130,3 +130,50 @@ func TestConfigurationBackfill(t *testing.T) {
 			cats, statuses, transitions, types, initials, subParents)
 	}
 }
+
+// Teal and orange, which LDS dropped, move to green and coral wherever a
+// colour is stored, and projects can no longer take them.
+func TestSwatchRemap(t *testing.T) {
+	ctx := context.Background()
+	pool := testenv.DB(t)
+	db := stdlib.OpenDBFromPool(pool)
+	defer db.Close()
+	p, err := migrations.Provider(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.DownTo(ctx, 25); err != nil {
+		t.Fatal(err)
+	}
+	_, err = pool.Exec(ctx, `
+		INSERT INTO workspaces (id, slug, name, created_at, updated_at)
+			VALUES ('01900000-0000-7000-8000-0000000000cc', 'old', 'Old', now(), now());
+		INSERT INTO projects (workspace_id, id, key, name, colour, created_at, updated_at)
+			VALUES ('01900000-0000-7000-8000-0000000000cc', gen_random_uuid(), 'OLD', 'Old', 'teal', now(), now());
+		INSERT INTO labels (workspace_id, id, name, colour, created_at, updated_at)
+			VALUES ('01900000-0000-7000-8000-0000000000cc', gen_random_uuid(), 'hot', 'orange', now(), now());
+		INSERT INTO custom_fields (workspace_id, id, name, type, options, position, created_at, updated_at)
+			VALUES ('01900000-0000-7000-8000-0000000000cc', gen_random_uuid(), 'Size', 'select',
+				'{"options": [{"id": "a", "name": "S", "colour": "teal"}, {"id": "b", "name": "M", "colour": "blue"},
+				  {"id": "c", "name": "L", "colour": "orange"}]}', 0, now(), now());`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Up(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var project, label, options string
+	err = pool.QueryRow(ctx, `
+		SELECT (SELECT colour FROM projects), (SELECT colour FROM labels),
+		       (SELECT string_agg(o->>'colour', ',' ORDER BY o->>'id') FROM custom_fields, jsonb_array_elements(options->'options') o)`).
+		Scan(&project, &label, &options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if project != "green" || label != "coral" || options != "green,blue,coral" {
+		t.Errorf("project %s, label %s, options %s", project, label, options)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE projects SET colour = 'orange'`); err == nil {
+		t.Error("a project took orange")
+	}
+}
