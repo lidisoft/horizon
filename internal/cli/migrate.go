@@ -14,6 +14,7 @@ import (
 	"github.com/lidisoft/horizon/internal/config"
 	"github.com/lidisoft/horizon/internal/logging"
 	"github.com/lidisoft/horizon/internal/migrations"
+	"github.com/lidisoft/horizon/internal/version"
 )
 
 func migrateCommand() *cli.Command {
@@ -60,7 +61,16 @@ func migrate(fn migrateFunc) cli.ActionFunc {
 	}
 }
 
-func migrateUp(ctx context.Context, p *goose.Provider, _ *sql.DB) error {
+// migrateUp applies pending migrations once the upgrade path is allowed,
+// and records this release as the last to migrate the database.
+func migrateUp(ctx context.Context, p *goose.Provider, db *sql.DB) error {
+	last, err := migrations.LastRelease(ctx, db)
+	if err != nil {
+		return err
+	}
+	if err := migrations.CheckUpgrade(last, version.Version, version.MinUpgradeFrom); err != nil {
+		return err
+	}
 	results, err := p.Up(ctx)
 	for _, r := range results {
 		fmt.Printf("applied %s (%s)\n", r.Source.Path, r.Duration.Round(1e6))
@@ -70,6 +80,11 @@ func migrateUp(ctx context.Context, p *goose.Provider, _ *sql.DB) error {
 	}
 	if len(results) == 0 {
 		fmt.Println("schema is up to date")
+	}
+	if last != version.Version {
+		if err := migrations.RecordRelease(ctx, db, version.Version, version.Commit); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -109,6 +124,13 @@ func migrateVersion(ctx context.Context, _ *goose.Provider, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("applied %d, expected %d\n", got, want)
+	last, err := migrations.LastRelease(ctx, db)
+	if err != nil {
+		return err
+	}
+	if last == "" {
+		last = "none recorded"
+	}
+	fmt.Printf("applied %d, expected %d; last migrated by %s; this binary %s\n", got, want, last, version.String())
 	return nil
 }

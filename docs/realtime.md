@@ -67,7 +67,8 @@ update. Events of a personal view go to its owner only. Pushed issue events name
 like the activity feed, but leave other issues as ids, as recipients differ.
 
 Sockets close after an hour (`1001 reconnect`); the client reconnects, which
-authenticates again. A socket too slow to take its events is closed the same
+authenticates again. A replica shutting down closes its sockets with `1012
+restart`, and the client reconnects to another one. A socket too slow to take its events is closed the same
 way. The client pings every 25 s; 75 s of silence closes the socket.
 
 ### Fan-out

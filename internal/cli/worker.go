@@ -31,6 +31,9 @@ func workerAction(ctx context.Context, _ *cli.Command) error {
 		return err
 	}
 	defer rt.close()
+	if err := rt.checkRelease(ctx); err != nil {
+		return err
+	}
 
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error {

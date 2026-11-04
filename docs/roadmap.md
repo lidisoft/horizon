@@ -84,7 +84,7 @@ usable exists early.
 - [x] Outbound webhooks with signing, retries, delivery log
 - [x] Git integration: GitHub, GitLab, Forgejo
 - [x] Magic link login, OIDC / SSO, enforced SSO
-- [ ] Operator contract complete: graceful shutdown, `admin reconcile`,
+- [x] Operator contract complete: graceful shutdown, `admin reconcile`,
       `admin rekey`, upgrade checks ([operations.md](operations.md))
 
 ## After v1

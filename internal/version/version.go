@@ -12,3 +12,8 @@ var (
 
 // String returns "version (commit)".
 func String() string { return Version + " (" + Commit + ")" }
+
+// MinUpgradeFrom is the oldest release this one migrates from; a database
+// on an older release must go through it first. Raised by a release that
+// needs it (its notes say so); empty: any.
+var MinUpgradeFrom = ""

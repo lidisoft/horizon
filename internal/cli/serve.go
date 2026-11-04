@@ -32,6 +32,9 @@ func serveAction(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	defer rt.close()
+	if err := rt.checkRelease(ctx); err != nil {
+		return err
+	}
 
 	webApp, err := server.NewWeb(web.FS(), rt.s3.PublicOrigin)
 	if err != nil {

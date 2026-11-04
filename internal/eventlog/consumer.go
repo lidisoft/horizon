@@ -33,6 +33,9 @@ const (
 	ackWait     = time.Minute
 	fetchWait   = 5 * time.Second
 	maxInFlight = 1 // in order: one event at a time
+	// drainTimeout bounds an event's handling once the worker is stopping:
+	// it finishes and is acknowledged rather than redelivered.
+	drainTimeout = 25 * time.Second
 )
 
 // backoff is the redelivery delay after each failed attempt (the last one
@@ -92,6 +95,9 @@ func (s Stream) Consume(ctx context.Context, js jetstream.JetStream, c Consumer,
 	return nil
 }
 
+// handle runs the handler for one event. A stopping worker lets the event
+// finish (within drainTimeout) and acknowledges it, or naks it at once so
+// another worker takes it; it fetches nothing more.
 func (s Stream) handle(ctx context.Context, c Consumer, msg jetstream.Msg, log zerolog.Logger) {
 	e, err := Decode(msg.Data())
 	if err != nil {
@@ -99,9 +105,20 @@ func (s Stream) handle(ctx context.Context, c Consumer, msg jetstream.Msg, log z
 		_ = msg.Term()
 		return
 	}
-	if err := c.Handle(ctx, e); err != nil {
+	hctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancel()
+	stop := context.AfterFunc(ctx, func() {
+		select {
+		case <-time.After(drainTimeout):
+			cancel()
+		case <-hctx.Done(): // finished
+		}
+	})
+	defer stop()
+	if err := c.Handle(hctx, e); err != nil {
 		if ctx.Err() != nil {
-			return // redelivered after the restart
+			_ = msg.Nak() // stopping: another worker takes it now
+			return
 		}
 		attempt := uint64(1)
 		if md, mdErr := msg.Metadata(); mdErr == nil {
@@ -115,7 +132,7 @@ func (s Stream) handle(ctx context.Context, c Consumer, msg jetstream.Msg, log z
 		_ = msg.NakWithDelay(backoff[min(int(attempt), len(backoff))-1])
 		return
 	}
-	if err := msg.Ack(); err != nil && ctx.Err() == nil {
+	if err := msg.Ack(); err != nil {
 		log.Warn().Err(err).Stringer("event", e.ID).Msg("ack failed")
 	}
 }

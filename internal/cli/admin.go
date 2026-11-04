@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,15 +19,21 @@ import (
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/config"
 	"github.com/lidisoft/horizon/internal/configdef"
+	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/identity"
 	"github.com/lidisoft/horizon/internal/logging"
+	"github.com/lidisoft/horizon/internal/ops"
+	"github.com/lidisoft/horizon/internal/platform/nats"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
+	"github.com/lidisoft/horizon/internal/platform/secrets"
 	"github.com/lidisoft/horizon/internal/report"
+	"github.com/lidisoft/horizon/internal/sso"
+	"github.com/lidisoft/horizon/internal/vcs"
+	"github.com/lidisoft/horizon/internal/webhook"
 	"github.com/lidisoft/horizon/internal/workspace"
 )
 
 // adminCommand groups instance administration (docs/operations.md#admin-cli).
-// Reconcile, rekey and rebuild-reports arrive later.
 func adminCommand() *cli.Command {
 	email := &cli.StringFlag{Name: "email", Usage: "the account's email", Required: true}
 	return &cli.Command{
@@ -71,6 +78,19 @@ func adminCommand() *cli.Command {
 				Name:   "rebuild-reports",
 				Usage:  "Empty the report projections and replay every event into them",
 				Action: admin(rebuildReports),
+			},
+			{
+				Name:  "reconcile",
+				Usage: "After a restore: delete objects no attachment references, report missing ones, and restart the event stream from the outbox",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "dry-run", Usage: "report what would change without changing it"},
+				},
+				Action: reconcileAction,
+			},
+			{
+				Name:   "rekey",
+				Usage:  "Reseal every stored secret with the current SECRET_KEY (after moving the old key to SECRET_KEY_PREVIOUS)",
+				Action: rekeyAction,
 			},
 			{
 				Name:   "reactivate-user",
@@ -239,5 +259,72 @@ func rebuildReports(ctx context.Context, cmd *cli.Command, svc adminServices) er
 		return err
 	}
 	fmt.Fprintf(cmd.Writer, "replayed %d events into the report projections\n", n)
+	return nil
+}
+
+// reconcileAction needs PostgreSQL, NATS and object storage. Run it after a
+// restore, before starting serve and worker.
+func reconcileAction(ctx context.Context, cmd *cli.Command) error {
+	rt, err := open(ctx, config.NeedDatabase|config.NeedNATS|config.NeedS3, "admin")
+	if err != nil {
+		return err
+	}
+	defer rt.close()
+	js, err := nats.JetStream(rt.nc)
+	if err != nil {
+		return err
+	}
+	dry := cmd.Bool("dry-run")
+	r, err := ops.Reconcile(ctx, rt.pool, rt.s3, js, eventlog.DefaultStream(rt.cfg.EventsRetention), dry, time.Now())
+	if err != nil {
+		return err
+	}
+	verb := "deleted"
+	if dry {
+		verb = "would delete"
+	}
+	fmt.Printf("objects: %s %d no attachment references\n", verb, len(r.Orphans))
+	for _, k := range r.Missing {
+		fmt.Printf("missing: %s (an attachment whose file is gone)\n", k)
+	}
+	if dry {
+		fmt.Println("events: would empty the stream and delete its consumers")
+	} else {
+		fmt.Printf("events: dropped %d stream messages, deleted consumers %v; workers resume from the outbox\n", r.Purged, r.Consumers)
+	}
+	return nil
+}
+
+// rekeyAction needs PostgreSQL and the keys.
+func rekeyAction(ctx context.Context, _ *cli.Command) error {
+	cfg, err := config.FromEnv(config.NeedDatabase | config.NeedSecrets)
+	if err != nil {
+		return err
+	}
+	log := logging.New(cfg.LogLevel, cfg.LogFormat, "admin")
+	pool, err := postgres.Connect(ctx, cfg.DatabaseURL, logging.WithSystem(log, "postgres"))
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	box, err := secrets.New(cfg.SecretKey, cfg.SecretKeysPrevious...)
+	if err != nil {
+		return err
+	}
+	counts, err := ops.Rekey(ctx, []ops.Rekeyer{
+		{Name: "webhook secrets", Rekey: webhook.New(webhook.Options{Pool: pool, Log: log, Secrets: box}).Rekey},
+		{Name: "Git connections", Rekey: vcs.New(vcs.Options{Pool: pool, Log: log, Secrets: box}).Rekey},
+		{Name: "OIDC providers", Rekey: sso.New(sso.Options{Pool: pool, Log: log, Secrets: box}).Rekey},
+	})
+	for _, name := range []string{"webhook secrets", "Git connections", "OIDC providers"} {
+		fmt.Printf("%s: %d resealed\n", name, counts[name])
+	}
+	if err != nil {
+		if errors.Is(err, secrets.ErrUnknownKey) {
+			return fmt.Errorf("%w: add the key that sealed them to SECRET_KEY_PREVIOUS", err)
+		}
+		return err
+	}
+	fmt.Println("every secret is sealed with the current SECRET_KEY; SECRET_KEY_PREVIOUS can go")
 	return nil
 }

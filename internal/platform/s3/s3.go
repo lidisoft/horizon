@@ -155,3 +155,23 @@ func (c *Client) Delete(ctx context.Context, keys []string) error {
 	}
 	return nil
 }
+
+// Object is a stored object, as listed.
+type Object struct {
+	Key      string
+	Size     int64
+	Modified time.Time
+}
+
+// List calls fn for every object of the bucket.
+func (c *Client) List(ctx context.Context, fn func(Object) error) error {
+	for o := range c.ListObjects(ctx, c.Bucket, minio.ListObjectsOptions{Recursive: true}) {
+		if o.Err != nil {
+			return fmt.Errorf("s3: list: %w", o.Err)
+		}
+		if err := fn(Object{Key: o.Key, Size: o.Size, Modified: o.LastModified}); err != nil {
+			return err
+		}
+	}
+	return nil
+}

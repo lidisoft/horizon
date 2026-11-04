@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -72,6 +74,9 @@ type conn struct {
 	principal identity.Principal
 	send      chan []byte
 	cancel    context.CancelFunc
+	// restart is set when the replica shuts down: the socket closes with
+	// 1012 (service restart) so the client reconnects elsewhere.
+	restart atomic.Bool
 
 	mu      sync.Mutex
 	topics  map[string]topic
@@ -108,6 +113,11 @@ func (h *Hub) serve(c *gin.Context) {
 		server.WriteError(c, apperr.Unauthorized("unauthenticated"))
 		return
 	}
+	if h.closing.Load() {
+		c.Header("Retry-After", "1")
+		server.WriteError(c, &apperr.Error{Status: http.StatusServiceUnavailable, Code: "shutting_down"})
+		return
+	}
 	ws, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{OriginPatterns: h.o.Origins})
 	if err != nil {
 		return // Accept answered
@@ -123,6 +133,8 @@ func (h *Hub) serve(c *gin.Context) {
 	err = cn.readLoop(ctx)
 	cancel()
 	switch {
+	case cn.restart.Load():
+		// closed by the hub's shutdown (1012)
 	case errors.Is(err, context.DeadlineExceeded):
 		_ = ws.Close(websocket.StatusGoingAway, "reconnect")
 	case websocket.CloseStatus(err) != -1:

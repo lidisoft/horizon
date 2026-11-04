@@ -225,6 +225,18 @@ func (rt *runtime) checks() []server.Check {
 	}
 }
 
+// checkRelease refuses to run on a database a much newer release migrated
+// (docs/operations.md#upgrades).
+func (rt *runtime) checkRelease(ctx context.Context) error {
+	db := stdlib.OpenDBFromPool(rt.pool)
+	defer db.Close()
+	last, err := migrations.LastRelease(ctx, db)
+	if err != nil {
+		return err
+	}
+	return migrations.CheckRunnable(last, version.Version)
+}
+
 // checkSchema fails when the database is older than this binary expects, not
 // when it is newer (expand/contract upgrades run migrations first).
 func (rt *runtime) checkSchema(ctx context.Context) error {

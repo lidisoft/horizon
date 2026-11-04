@@ -46,6 +46,7 @@ type env struct {
 	relay    *eventlog.Relay
 	srv      *httptest.Server
 	owner    identity.Principal
+	stopHub  context.CancelFunc
 }
 
 func setup(t *testing.T) *env {
@@ -70,6 +71,7 @@ func setup(t *testing.T) *env {
 		Workspaces: e.ws, Projects: e.projects, Issues: e.issues})
 	runCtx, cancel := context.WithCancel(ctx)
 	t.Cleanup(cancel)
+	e.stopHub = cancel
 	go func() { _ = hub.Run(runCtx) }()
 
 	auth := identity.NewHTTP(e.ids, false)
@@ -351,4 +353,26 @@ func oldV7() uuid.UUID {
 		u[i] = byte(ms >> (40 - 8*i))
 	}
 	return u
+}
+
+// TestShutdown: when the replica stops, open sockets close with 1012
+// (service restart) and new ones are refused, so clients go elsewhere.
+func TestShutdown(t *testing.T) {
+	e := setup(t)
+	s := e.dial("owner@example.com")
+	e.stopHub()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, _, err := s.ws.Read(ctx)
+	if got := websocket.CloseStatus(err); got != websocket.StatusServiceRestart {
+		t.Fatalf("close status = %v (%v)", got, err)
+	}
+	jar, _ := cookiejar.New(nil)
+	_, res, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(e.srv.URL, "http")+"/api/v1/ws", &websocket.DialOptions{HTTPClient: &http.Client{Jar: jar}}) //nolint:bodyclose // closed by Dial
+	if err == nil || res == nil {
+		t.Fatalf("dialled during shutdown: %v", err)
+	}
+	if res.StatusCode != http.StatusUnauthorized && res.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("status = %d", res.StatusCode)
+	}
 }

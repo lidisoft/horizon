@@ -150,3 +150,31 @@ func Decode(data []byte) (Event, error) {
 	}
 	return m.Event(), nil
 }
+
+// Reset empties the stream and deletes its consumers (admin reconcile after
+// a restore): the relay publishes from the outbox's position again, and the
+// consumers, recreated when workers start, take only what comes next. It
+// returns how many messages it dropped and the consumers it deleted.
+func (s Stream) Reset(ctx context.Context, js jetstream.JetStream) (uint64, []string, error) {
+	st, err := s.Ensure(ctx, js)
+	if err != nil {
+		return 0, nil, err
+	}
+	info, err := st.Info(ctx)
+	if err != nil {
+		return 0, nil, err
+	}
+	var names []string
+	for name := range st.ConsumerNames(ctx).Name() {
+		names = append(names, name)
+	}
+	for _, name := range names {
+		if err := st.DeleteConsumer(ctx, name); err != nil {
+			return 0, nil, fmt.Errorf("eventlog: delete consumer %s: %w", name, err)
+		}
+	}
+	if err := st.Purge(ctx); err != nil {
+		return 0, nil, fmt.Errorf("eventlog: purge %s: %w", s.Name, err)
+	}
+	return info.State.Msgs, names, nil
+}

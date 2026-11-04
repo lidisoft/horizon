@@ -64,16 +64,33 @@ horizon serve --with-worker
 
 ### Shutdown
 
-On `SIGTERM`, `serve` stops accepting connections, closes WebSockets with code
-`1012` (service restart) so clients reconnect elsewhere, and finishes
-in-flight requests within 30 s. `worker` stops pulling and acknowledges or
-naks in-flight messages.
+On `SIGTERM` (or `SIGINT`):
+
+- `serve` stops accepting connections and finishes in-flight requests within
+  30 s. WebSockets close with code `1012` (service restart), so clients
+  reconnect to another replica; new ones are refused (`503 shutting_down`).
+- `worker` fetches no more events. The event in hand finishes and is
+  acknowledged, within 25 s; one that fails or runs out of time is nak'ed at
+  once, so another worker takes it. Periodic jobs stop; a webhook delivery
+  or pull request comment cut short is retried when its lease ends.
+
+Give processes at least 35 s between `SIGTERM` and `SIGKILL`.
 
 ## Upgrades
 
 - Releases follow semantic versioning. The release notes state the minimum
   version an instance must be on before upgrading (no skipping across a
-  minor version that contains a required data migration).
+  minor version that contains a required data migration); the binary knows it
+  too (`version.MinUpgradeFrom`).
+- **Checked, not just documented.** `horizon_releases` records each release
+  that ran `migrate up`. `migrate up` refuses to migrate a database last
+  migrated by a release older than the minimum (upgrade through it first), or
+  by a newer one (a downgrade). `serve` and `worker` refuse to start on a
+  database migrated by a release more than one minor version ahead (the
+  previous release keeps running during a rolling upgrade; older ones don't).
+  `horizon migrate version` prints the applied and expected schema versions
+  and the release that last migrated. Development builds (`dev`) skip the
+  checks.
 - **Migrations are expand/contract**: a release's migrations are compatible
   with the previous release's code. A rolling upgrade is therefore:
   1. `horizon migrate up` (with the new image), while old processes run;
@@ -95,10 +112,28 @@ What to back up:
 | NATS | Not needed | JetStream is a transport; the outbox republishes anything unpublished |
 | Configuration | Environment / secret store | `SECRET_KEY` is required to read encrypted secrets — losing it means re-entering OIDC, VCS and webhook secrets |
 
-Restore order: object storage, then PostgreSQL, then start Horizon. After a
-restore, `horizon admin reconcile` removes object-storage files no database
-row references, and resets JetStream consumers to the restored outbox
-position.
+Restore order: object storage, then PostgreSQL, then `horizon admin
+reconcile` (`--dry-run` first to see what it would do), then start `serve`
+and `worker`. Reconcile:
+
+- deletes objects no attachment references (older than an hour, so uploads
+  in flight are spared), and lists attachments whose object is missing;
+- empties the JetStream stream and deletes its consumers: the events after
+  the restored point never happened for the database, so they must not reach
+  webhooks, notifications or forges. Workers recreate their consumers and
+  take what comes next; events the restored database hadn't published yet
+  are published by the outbox relay. Report projections catch up from the
+  database itself.
+
+### Rotating SECRET_KEY
+
+1. Set a new `SECRET_KEY` and move the old one to `SECRET_KEY_PREVIOUS`;
+   roll `serve` and `worker` (old values still open, new ones use the new
+   key).
+2. Run `horizon admin rekey`: it reseals webhook secrets, Git connection
+   tokens and secrets, and OIDC client secrets with the new key, and says
+   how many.
+3. Remove the old key from `SECRET_KEY_PREVIOUS`.
 
 ## Admin CLI
 
@@ -108,8 +143,8 @@ position.
 | `horizon admin reset-password` | Print a single-use reset link for a user, valid one hour |
 | `horizon admin deactivate-user`, `reactivate-user` | Block or restore an account's sign-in instance-wide; deactivation revokes every session |
 | `horizon admin create-workspace` | Create a workspace (`--slug`, `--name`, `--owner` email, `--time-zone`) with that account as first member |
-| `horizon admin reconcile` | Post-restore consistency (see above) |
-| `horizon admin rekey` | Re-encrypt secrets with the current `SECRET_KEY` |
+| `horizon admin reconcile` | Post-restore consistency (see above); `--dry-run` reports only. Needs PostgreSQL, NATS and object storage |
+| `horizon admin rekey` | Reseal stored secrets with the current `SECRET_KEY` (see [Rotating SECRET_KEY](#rotating-secret_key)); needs `SECRET_KEY`, `SECRET_KEY_PREVIOUS` and `SESSION_SECRET` |
 | `horizon admin rebuild-reports` | Replay `events` into the report projections |
 
 ## Guarantees and limits

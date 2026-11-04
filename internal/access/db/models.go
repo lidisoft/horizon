@@ -112,6 +112,13 @@ type Event struct {
 	ReportedAt       *time.Time
 }
 
+type HorizonRelease struct {
+	ID         int64
+	Version    string
+	Commit     string
+	MigratedAt time.Time
+}
+
 type InboxItem struct {
 	WorkspaceID    uuid.UUID
 	ID             uuid.UUID

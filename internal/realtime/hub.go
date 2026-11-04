@@ -8,8 +8,10 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nats-io/nats.go"
@@ -47,8 +49,9 @@ type Options struct {
 type Hub struct {
 	o Options
 
-	mu    sync.RWMutex
-	conns map[*conn]struct{}
+	mu      sync.RWMutex
+	conns   map[*conn]struct{}
+	closing atomic.Bool // shutting down: no new sockets
 
 	slugMu sync.Mutex
 	slugs  map[uuid.UUID]string
@@ -75,8 +78,10 @@ func New(o Options) *Hub {
 	return h
 }
 
-// Run receives the published events until ctx ends.
+// Run receives the published events until ctx ends, then closes every
+// socket with 1012 (service restart): clients reconnect to another replica.
 func (h *Hub) Run(ctx context.Context) error {
+	defer h.closeAll()
 	go func() {
 		if err := h.runDocs(ctx); err != nil {
 			h.o.Log.Error().Err(err).Msg("could not subscribe to document steps")
@@ -245,6 +250,23 @@ func (h *Hub) remove(c *conn) {
 	h.mu.Lock()
 	delete(h.conns, c)
 	h.mu.Unlock()
+}
+
+// closeAll refuses new sockets and closes the open ones for a restart,
+// returning once they are closed (each close waits a few seconds at most
+// for the client's answer).
+func (h *Hub) closeAll() {
+	h.closing.Store(true)
+	var wg sync.WaitGroup
+	h.mu.RLock()
+	for c := range h.conns {
+		// Cancelling the socket's context would drop the connection
+		// without a close frame: close it, which its read loop then sees.
+		c.restart.Store(true)
+		wg.Go(func() { _ = c.ws.Close(websocket.StatusServiceRestart, "restart") })
+	}
+	h.mu.RUnlock()
+	wg.Wait()
 }
 
 // Count is the number of open sockets.

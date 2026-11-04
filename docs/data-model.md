@@ -120,6 +120,7 @@ away. See [realtime.md](realtime.md).
 | `vcs_links` | issue_id, connection_id, kind (branch, pull_request, commit), repository, external_id (branch, number, hash), url, title, state, author |
 | `vcs_comments` | connection_id, repository, number, forge_id, body, dirty, attempts, next_attempt_at — the comment Horizon keeps on each pull request |
 | `views` | workspace_id, project_id (nullable), owner_id (nullable = shared), name, layout, query JSONB, display JSONB |
+| `horizon_releases` | version, commit, migrated_at — each release that ran `migrate up` ([operations.md](operations.md#upgrades)) |
 
 Indexes on `events`: `(workspace_id, aggregate_type, aggregate_id, aggregate_version)`
 for history; partial index on `(id) WHERE published_at IS NULL` for the relay.
