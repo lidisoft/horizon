@@ -230,9 +230,12 @@ func (s *Service) link(path string) string {
 // Summary tells an event in a line, as "Ada moved it from Todo to Done",
 // to the user me.
 func Summary(e issue.PublicEvent, me uuid.UUID, reason string) string {
-	who := "Someone"
-	if e.Actor != nil && e.Actor.Name != "" {
+	who := "Horizon" // the system: an automation
+	if e.Actor != nil {
 		who = e.Actor.Name
+		if who == "" {
+			who = "Someone"
+		}
 	}
 	p := e.Payload
 	var what string
@@ -276,6 +279,10 @@ func Summary(e issue.PublicEvent, me uuid.UUID, reason string) string {
 		what = "linked it to " + nameOf(p["issue_id"])
 	case "issue.attachment_added":
 		what = "attached a file"
+	case "issue.git_linked":
+		what = fmt.Sprintf("linked pull request %v#%v %v", p["repository"], p["ref"], p["title"])
+	case "issue.git_updated":
+		what = fmt.Sprintf("saw pull request %v#%v %v", p["repository"], p["ref"], p["state"])
 	default:
 		what = strings.ReplaceAll(strings.TrimPrefix(e.Type, "issue."), "_", " ")
 	}

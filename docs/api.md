@@ -63,6 +63,7 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   /config/labels  /config/labels/{id}       /merge {into}; projects: /move-to-workspace
   /config/settings/estimation              GET | PUT {scale}; at project scope {scale: null} follows the workspace
   /config/settings/iterations              GET | PUT {completion_policy, max_active_iterations, iteration_length_weeks}: absent keys unchanged, null removes the value
+  /config/settings/git                     GET | PUT {merge_status: "@off" | "@completed" | status name}
   /config/settings/calendar                GET | PUT {time_zone (projects), working_days ([1–7], Monday 1), holidays ([{date, name}]), holidays_mode (projects: add | replace)}: same rules
   /projects                                 GET (visible ones) | POST (project.create)
   /projects/{key}                          GET (current or former key; "can" lists the caller's permissions) | PATCH | /archive | /unarchive
@@ -90,6 +91,7 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
     /attachments/{id}/complete  /download  POST after the PUT | GET redirects to a presigned URL; DELETE /attachments/{id}
     /activity                              GET the issue's events, newest first, in the domain event format
     /subscription                          GET | PUT subscribes the caller | DELETE
+    /git                                   GET its branches, pull requests and commits
   /search                                  GET ?q=&limit=&archived=&project= — issues by key, words (prefixes) in titles,
                                            descriptions and comments, and near titles; snippets mark words with U+0002/U+0003
   /views
@@ -100,9 +102,9 @@ traffic uses the WebSocket described in [realtime.md](realtime.md).
   /reports/{report}                        report data (see reports.md)
   /projects/{key}/overview                 project overview blocks
   /webhooks  /webhooks/{id}/deliveries
-  /integrations/vcs
+  /integrations/vcs  /integrations/vcs/{id}  GET | POST {provider, name, base_url, token?} (secret shown once) | PATCH (rotate_secret) | DELETE
 /ws                                        WebSocket (realtime.md)
-/hooks/vcs/{provider}                      inbound forge webhooks
+/hooks/vcs/{connection}                    inbound forge webhooks, signed by the forge (integrations.md)
 ```
 
 ## Deleting issues

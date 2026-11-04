@@ -251,7 +251,7 @@ settings are aggregates too: changing them emits events
 | `IssueDeleted` | Remove the issue from its iteration's scope (`IterationLoaded`) | Storm policy 1. Applied in the deleting transaction: the tombstone keeps no iteration id to act on later. Moves and workflow post-actions that clear the iteration do the same |
 | `IterationCompleted` | Apply the completion policy | Storm policy 2, generalised |
 | `IssueDeleted` | Delete its links, comments, attachments; handle children as chosen | See [Deletion](#deletion) |
-| Git PR merged referencing an issue | Transition to the configured status, if allowed | Configurable per project |
+| Git PR merged referencing an issue | Move to the configured status along the workflow's transitions | Off by default, per workspace and project ([integrations.md](integrations.md#merged-pull-requests)) |
 | `IssueAssigned`, `IssueCommented` with @mention, any change to a subscribed issue | Notify | See [Notifications](#notifications) |
 | Any domain event | Fan out to WebSocket clients and matching webhooks | |
 

@@ -50,6 +50,9 @@ func (s *Service) Handle(ctx context.Context, e eventlog.Event) error {
 	}
 	var payload map[string]any
 	_ = json.Unmarshal(e.Payload, &payload)
+	if (e.Type == "IssueGitLinked" || e.Type == "IssueGitUpdated") && payload["kind"] != "pull_request" {
+		return nil // branches and commits come with their pull request
+	}
 	actor := e.ActorID.UUID // uuid.Nil for the system
 
 	// Who the event concerns directly, and why.

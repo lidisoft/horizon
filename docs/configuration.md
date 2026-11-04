@@ -40,7 +40,7 @@ events, so clients invalidate their resolved view.
 | Default iteration length | Setting | 2 weeks (1–8) |
 | Time zone | Setting | `UTC` until set at workspace creation |
 | Working calendar | Setting | Monday–Friday, no holidays |
-| Git merge transition | Setting | Off |
+| Git merge transition (`git_merge_status`) | Setting | `@off`; `@completed` (nearest completed status) or a status name ([integrations.md](integrations.md#merged-pull-requests)) |
 | Roles | Definitions (workspace only) | Admin, Facilitator, Contributor, Viewer, Guest |
 
 ## Issue types

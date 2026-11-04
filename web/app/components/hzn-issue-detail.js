@@ -20,6 +20,7 @@ import { html, sheet } from "horizon/core/dom.js";
 import { busy, errorMessage } from "horizon/core/forms.js";
 
 const LINK_TYPES = ["relates_to", "blocks", "blocked_by", "duplicates", "duplicated_by", "precedes", "follows"];
+const GIT_INTENTS = { open: "info", merged: "success", closed: "neutral", deleted: "neutral" };
 
 const styles = sheet(`
   :host { display: block; }
@@ -209,13 +210,15 @@ class HznIssueDetail extends HTMLElement {
     const projectKey = issue.key.slice(0, issue.key.lastIndexOf("-"));
     try {
       const plans = `/w/${enc}/projects/${encodeURIComponent(projectKey)}`;
-      const [data, children, links, comments, attachments, activity, transitions, iterations, releases, subscription] = await Promise.all([
+      const [data, children, links, comments, attachments, activity, transitions, iterations, releases, subscription, git] = await Promise.all([
         projectData(this.context, this.ws, projectKey),
         api.get(`${base}/children`), api.get(`${base}/links`), api.get(`${base}/comments`),
         api.get(`${base}/attachments`), api.get(`${base}/activity`), api.get(`${base}/transitions`),
         api.get(`${plans}/iterations`), api.get(`${plans}/releases`), api.get(`${base}/subscription`),
+        api.get(`${base}/git`),
       ]);
       this.subscription = subscription.data;
+      this.git = git.data.items;
       this.iterations = iterations.data.items;
       this.releases = releases.data.items;
       this.data = data;
@@ -275,6 +278,7 @@ class HznIssueDetail extends HTMLElement {
       ${this.descriptionBlock()}
       ${this.childrenBlock()}
       ${this.linksBlock()}
+      ${this.gitBlock()}
       ${this.attachmentsBlock()}
       ${this.activityBlock()}`;
     if (this.mode === "peek") {
@@ -491,6 +495,23 @@ class HznIssueDetail extends HTMLElement {
         </div>` : ""}`;
   }
 
+  /** Branches, pull requests and commits that name the issue. */
+  gitBlock() {
+    const { i18n } = this.context;
+    const { t } = i18n;
+    if (!this.git?.length) return "";
+    const icon = (l) => (l.kind === "pull_request" ? (l.state === "merged" ? "git-merge" : "git-pull-request") : l.kind === "branch" ? "git-branch" : "git-commit-horizontal");
+    const ref = (l) => (l.kind === "pull_request" ? `#${l.ref}` : l.kind === "commit" ? l.ref.slice(0, 7) : "");
+    return html`
+      <h2>${t("git.title")}</h2>
+      <div class="list" data-git>${this.git.map((l) => html`
+        <div class="item"><lds-icon name="${icon(l)}" size="sm" label="${t(`git.kind.${l.kind}`)}"></lds-icon>
+          <span class="key">${ref(l)}</span>
+          <a href="${l.url}" target="_blank" rel="noopener noreferrer">${l.title || l.ref}</a>
+          <span class="muted">${l.repository}${l.state ? html` <lds-badge size="sm" intent="${GIT_INTENTS[l.state] ?? "neutral"}">${t(`git.state.${l.state}`)}</lds-badge>` : ""}</span>
+        </div>`)}</div>`;
+  }
+
   attachmentsBlock() {
     const { i18n } = this.context;
     const { t } = i18n;
@@ -534,7 +555,7 @@ class HznIssueDetail extends HTMLElement {
             <div class="body">${renderDoc(x.comment.body_doc, this.docContext())}</div>
           </div>
         </div>` : html`
-        <div class="event"><span><strong>${x.event.actor?.name ?? t("issue.someone")}</strong> ${this.describe(x.event)}</span>
+        <div class="event"><span><strong>${x.event.actor ? x.event.actor.name || t("issue.someone") : t("issue.system")}</strong> ${this.describe(x.event)}</span>
           <span>· ${i18n.relative(x.event.occurred_at)}</span></div>`))}</div>
       ${canComment ? html`
         <div class="composer" data-composer>

@@ -7,6 +7,9 @@ package web_test
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -50,6 +53,7 @@ import (
 	"github.com/lidisoft/horizon/internal/search"
 	"github.com/lidisoft/horizon/internal/server"
 	"github.com/lidisoft/horizon/internal/testenv"
+	"github.com/lidisoft/horizon/internal/vcs"
 	views "github.com/lidisoft/horizon/internal/view"
 	"github.com/lidisoft/horizon/internal/webhook"
 	"github.com/lidisoft/horizon/internal/workspace"
@@ -323,16 +327,18 @@ func appServer(t *testing.T) app {
 		}
 	}()
 	webhooksHTTP := webhook.NewHTTP(webhookSvc)
+	vcsHTTP := vcs.NewHTTP(vcs.New(vcs.Options{Pool: pool, Log: zerolog.Nop(), Access: acc, Config: config, Issues: issueSvc, Secrets: box, BaseURL: baseURL}))
 
 	ok := func(context.Context) error { return nil }
 	checks := []server.Check{{Name: "postgres", Check: ok}, {Name: "nats", Check: ok}, {Name: "s3", Check: ok}, {Name: "schema", Check: ok}}
 	ln.Serve(server.NewEngine(server.Deps{Log: zerolog.Nop(), Web: w, Checks: checks, API: func(api *gin.RouterGroup) {
+		vcsHTTP.RegisterHooks(api)
 		api.Use(auth.Authenticate())
 		auth.Register(api)
 		hub.Register(api)
 		notifyHTTP.Register(api)
 		workspaces.Register(api, roles.Register, configHTTP.RegisterWorkspace, issues.RegisterWorkspace, searchHTTP.Register, plans.RegisterWorkspace, viewsHTTP.Register, reportsHTTP.Register,
-			notifyHTTP.RegisterWorkspace, webhooksHTTP.Register,
+			notifyHTTP.RegisterWorkspace, webhooksHTTP.Register, vcsHTTP.Register,
 			func(ws *gin.RouterGroup) {
 				projects.Register(ws, configHTTP.RegisterProject, issues.RegisterProject, plans.RegisterProject, reportsHTTP.RegisterProject)
 			})
@@ -2382,5 +2388,84 @@ func TestWebhooks(t *testing.T) {
 	if got := pg.poll(view + `.querySelector("tbody tr")?.textContent.replace(/\s+/g, " ").trim()`); !strings.Contains(got, "Chat bridge") || !strings.Contains(got, "Every event") {
 		t.Errorf("list row = %q", got)
 	}
+	pg.logs.failOnErrors(t)
+}
+
+// TestGit connects GitHub from the settings, takes the webhook secret, and
+// sees a pull request that names an issue show on the issue.
+func TestGit(t *testing.T) {
+	a := appServer(t)
+	pg := newPage(t)
+	pg.do(chromedp.Navigate(a.base + "/"))
+	pg.signIn("ada@example.com", testPassword)
+	pg.typeInto(view+`.querySelector('[name="name"]')`, "Acme")
+	pg.eval(view + `.querySelector("form").requestSubmit()`)
+	pg.poll(`location.pathname === "/w/acme" && "workspace"`)
+	pg.api("POST", "/w/acme/projects", `{"key":"HZN","name":"Horizon"}`)
+	_, cfg := pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
+	var resolved struct {
+		IssueTypes []struct{ ID string } `json:"issue_types"`
+	}
+	_ = json.Unmarshal([]byte(cfg), &resolved)
+	pg.api("POST", "/w/acme/issues", `{"project":"HZN","type_id":"`+resolved.IssueTypes[0].ID+`","title":"Outbox relay"}`)
+
+	pg.do(chromedp.Navigate(a.base + "/w/acme/settings/git"))
+	pg.poll(view + `.querySelector("lds-empty-state") && "empty"`)
+	pg.click(view + `.querySelector('[data-action="new"]')`)
+	dialog := view + `.querySelector('[data-dialog="edit"]')`
+	pg.poll(dialog + `.hasAttribute("open") && "open"`)
+	pg.typeInto(dialog+`.querySelector('[name="name"]')`, "Acme on GitHub")
+	pg.click(dialog + `.querySelector('[data-action="save"]')`)
+	setup := view + `.querySelector('[data-dialog="setup"]')`
+	secret := pg.poll(setup + `?.hasAttribute("open") && ` + setup + `.querySelector("[data-secret]").textContent`)
+	hook := pg.poll(setup + `.querySelector("[data-url]").textContent`)
+	if !strings.HasPrefix(hook, a.base+"/api/v1/hooks/vcs/") || secret == "" {
+		t.Fatalf("hook %q, secret %q", hook, secret)
+	}
+	pg.click(setup + `.querySelector("[data-close]")`)
+
+	// The merge behaviour saves on change (its toast covers the header for
+	// a while: nothing to click there after it).
+	pg.eval(`(() => { const s = ` + view + `.querySelector("[data-merge]"); s.setAttribute("value", "@off");
+		s.dispatchEvent(new CustomEvent("lds-change", { detail: { value: "@off" }, bubbles: true, composed: true })); })()`)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		_, body := pg.api("GET", "/w/acme/config/settings/git", "")
+		if strings.Contains(body, `"workspace":"@off"`) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("settings = %s", body)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// GitHub tells of a pull request naming HZN-1.
+	body := []byte(`{"action":"opened","number":7,"repository":{"full_name":"acme/relay","html_url":"https://github.com/acme/relay"},
+		"pull_request":{"number":7,"title":"HZN-1 outbox relay","body":"","html_url":"https://github.com/acme/relay/pull/7","state":"open",
+		"merged":false,"user":{"login":"ada"},"head":{"ref":"relay"}}}`)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodPost, hook, bytes.NewReader(body))
+	req.Header.Set("X-GitHub-Event", "pull_request")
+	req.Header.Set("X-Hub-Signature-256", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delivery = %d", resp.StatusCode)
+	}
+
+	pg.do(chromedp.Navigate(a.base + "/w/acme/issues/HZN-1"))
+	detail := view + `.querySelector("hzn-issue-detail").shadowRoot`
+	got := pg.poll(detail + `.querySelector("[data-git] .item")?.textContent.replace(/\s+/g, " ").trim()`)
+	for _, want := range []string{"#7", "HZN-1 outbox relay", "acme/relay", "Open"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("git item %q lacks %q", got, want)
+		}
+	}
+	pg.poll(`[...` + detail + `.querySelectorAll(".event")].some((e) => e.textContent.includes("Horizon linked pull request #7")) && "activity"`)
 	pg.logs.failOnErrors(t)
 }

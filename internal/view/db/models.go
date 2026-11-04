@@ -485,6 +485,52 @@ type User struct {
 	Version         int32
 }
 
+type VcsComment struct {
+	WorkspaceID   uuid.UUID
+	ConnectionID  uuid.UUID
+	Repository    string
+	Number        string
+	ForgeID       *string
+	ProjectRef    string
+	Body          string
+	Dirty         bool
+	Attempts      int32
+	NextAttemptAt time.Time
+	LastError     string
+	UpdatedAt     time.Time
+}
+
+type VcsConnection struct {
+	WorkspaceID   uuid.UUID
+	ID            uuid.UUID
+	Provider      string
+	Name          string
+	BaseUrl       string
+	WebhookSecret string
+	Token         *string
+	CreatedBy     uuid.NullUUID
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	LastEventAt   *time.Time
+	Version       int32
+}
+
+type VcsLink struct {
+	WorkspaceID  uuid.UUID
+	ID           uuid.UUID
+	IssueID      uuid.UUID
+	ConnectionID uuid.UUID
+	Kind         string
+	Repository   string
+	ExternalID   string
+	Url          string
+	Title        string
+	State        string
+	Author       string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type View struct {
 	WorkspaceID uuid.UUID
 	ID          uuid.UUID

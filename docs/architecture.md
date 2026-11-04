@@ -173,7 +173,7 @@ longer than that.
 | `email` | Emails unread inbox rows after 10 quiet minutes, one email per person (a periodic job, every minute; rows claimed with `SKIP LOCKED`) |
 | `digest` | Sends the daily digests due from 08:00 local time (a periodic job, every 5 minutes) |
 | `webhook` | Queues one delivery per matching endpoint and event; the `webhooks` job (every 2 s) leases due deliveries, POSTs them signed (HMAC-SHA256), and records the outcome and the next retry ([api.md](api.md#webhooks)) |
-| `vcs` | Processes forge webhooks: links branches/PRs/commits, applies merge transitions |
+| `vcs` | Marks the pull request comments of issues whose status, title or key changed; the `vcs-comments` job (every 5 s) writes them through the forges' APIs. Inbound forge webhooks are handled by `serve` itself ([integrations.md](integrations.md#git-forges)) |
 | `policy` | Runs cross-aggregate policies as new commands: applies the completion policy of each `IterationCompleted` ([domain.md](domain.md#iteration-completion-policy)) |
 | `purge` | Scrubs JetStream subjects and S3 objects after hard deletes (a periodic job over the `purges` queue; it keeps tombstones) |
 | `describe` | Ends idle description editing sessions with one `IssueDescribed` event (a periodic job, every 10 s; [realtime.md](realtime.md#domain-events-for-documents)) |

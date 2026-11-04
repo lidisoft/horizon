@@ -115,8 +115,9 @@ away. See [realtime.md](realtime.md).
 | `notification_settings` | user_id, email (unread, off), digest, digest_sent_at — no row: the defaults |
 | `webhooks` | workspace_id, project_id (nullable = the workspace), name, url, secret (sealed), event_types text[] (empty = every event), active |
 | `webhook_deliveries` | webhook_id, event_id, event_type, body JSONB, redelivery_of, state (pending, succeeded, failed), attempts, status_code, response_excerpt, error, duration_ms, next_attempt_at, delivered_at — one per endpoint and event, kept 30 days |
-| `vcs_connections` | workspace_id, provider, installation details (encrypted) |
-| `vcs_links` | issue_id, kind (branch, pr, commit), url, title, state |
+| `vcs_connections` | workspace_id, provider (github, gitlab, forgejo), name, base_url, webhook_secret (sealed), token (sealed, nullable), last_event_at |
+| `vcs_links` | issue_id, connection_id, kind (branch, pull_request, commit), repository, external_id (branch, number, hash), url, title, state, author |
+| `vcs_comments` | connection_id, repository, number, forge_id, body, dirty, attempts, next_attempt_at — the comment Horizon keeps on each pull request |
 | `views` | workspace_id, project_id (nullable), owner_id (nullable = shared), name, layout, query JSONB, display JSONB |
 
 Indexes on `events`: `(workspace_id, aggregate_type, aggregate_id, aggregate_version)`

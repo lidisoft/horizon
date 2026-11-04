@@ -141,6 +141,38 @@
                 }
             }
         },
+        "/api/v1/hooks/vcs/{id}": {
+            "post": {
+                "description": "GitHub, GitLab and Forgejo deliveries for a connection, checked against its secret (X-Hub-Signature-256, X-Forgejo-Signature or X-Gitlab-Token). Push, branch and pull request events link the issues they name; others are accepted and ignored.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Receive a forge webhook",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Connection id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/server.Problem"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/invitations/accept": {
             "post": {
                 "description": "Signed in, the account's email must be the invited one. Signed out, name and password create the account and sign it in; an existing account must sign in first.",
@@ -1646,6 +1678,74 @@
                 }
             }
         },
+        "/api/v1/w/{ws}/config/settings/git": {
+            "get": {
+                "description": "What a merged pull request does to the issues it names, with the workspace's value and whether the project overrides it.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Get the Git settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.GitSettingsResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "merge_status: \"@off\" (the default), \"@completed\" (the nearest completed status), or a status name. Null removes the value.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "configuration"
+                ],
+                "summary": "Set the Git settings",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Settings to change",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/configdef.GitSettingsInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/configdef.GitSettings"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/w/{ws}/config/settings/iterations": {
             "get": {
                 "description": "Completion policy, maximum active iterations and default iteration length, each with the workspace's value and whether the project overrides it.",
@@ -2287,6 +2387,186 @@
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/integrations/vcs": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "List Git connections",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vcs.ConnectionList"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "workspace.integrations.manage. The answer carries the webhook URL and secret to set on the forge, the secret shown this once.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Create a Git connection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Provider, name and base_url required",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/vcs.Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/vcs.Connection"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/integrations/vcs/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Get a Git connection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Connection id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vcs.Connection"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Delete a Git connection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Connection id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "integrations"
+                ],
+                "summary": "Update a Git connection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Connection id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Connection version",
+                        "name": "If-Match",
+                        "in": "header"
+                    },
+                    {
+                        "description": "Changes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/vcs.Input"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vcs.Connection"
+                        }
                     }
                 }
             }
@@ -3300,6 +3580,42 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/issue.Issue"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/w/{ws}/issues/{issue}/git": {
+            "get": {
+                "description": "Pull requests first, then branches, then commits; newest first.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "issues"
+                ],
+                "summary": "List an issue's branches, pull requests and commits",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace slug",
+                        "name": "ws",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Issue key",
+                        "name": "issue",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/vcs.LinkList"
                         }
                     }
                 }
@@ -7564,6 +7880,44 @@
                 }
             }
         },
+        "configdef.GitSettings": {
+            "type": "object",
+            "properties": {
+                "merge_status": {
+                    "description": "MergeStatus is where a merged pull request moves the issues it names:\n\"@off\" (the default), \"@completed\" (the nearest completed status), or\na status name (where the issue's workflow has it).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/configdef.TextSetting"
+                        }
+                    ]
+                }
+            }
+        },
+        "configdef.GitSettingsInput": {
+            "type": "object",
+            "properties": {
+                "merge_status": {
+                    "type": "string",
+                    "example": "@completed"
+                }
+            }
+        },
+        "configdef.GitSettingsResponse": {
+            "type": "object",
+            "properties": {
+                "can_manage": {
+                    "type": "boolean"
+                },
+                "merge_status": {
+                    "description": "MergeStatus is where a merged pull request moves the issues it names:\n\"@off\" (the default), \"@completed\" (the nearest completed status), or\na status name (where the issue's workflow has it).",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/configdef.TextSetting"
+                        }
+                    ]
+                }
+            }
+        },
         "configdef.HolidaysSetting": {
             "type": "object",
             "properties": {
@@ -8084,6 +8438,21 @@
                     "type": "boolean"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "configdef.TextSetting": {
+            "type": "object",
+            "properties": {
+                "overridden": {
+                    "description": "Overridden is true when the project sets its own value.",
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "string"
+                },
+                "workspace": {
                     "type": "string"
                 }
             }
@@ -10741,6 +11110,153 @@
                 "status": {
                     "type": "string",
                     "example": "ready"
+                }
+            }
+        },
+        "vcs.Connection": {
+            "type": "object",
+            "properties": {
+                "base_url": {
+                    "description": "BaseURL is the forge's web address (https://github.com, a GitLab or\nForgejo instance).",
+                    "type": "string",
+                    "example": "https://github.com"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "has_token": {
+                    "description": "HasToken tells whether Horizon may comment on pull requests.",
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_event_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Acme on GitHub"
+                },
+                "provider": {
+                    "type": "string",
+                    "enum": [
+                        "github",
+                        "gitlab",
+                        "forgejo"
+                    ]
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "webhook_secret": {
+                    "description": "WebhookSecret is answered once, at creation and rotation.",
+                    "type": "string"
+                },
+                "webhook_url": {
+                    "description": "WebhookURL is where the forge sends its webhooks.",
+                    "type": "string"
+                }
+            }
+        },
+        "vcs.ConnectionList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/vcs.Connection"
+                    }
+                }
+            }
+        },
+        "vcs.Input": {
+            "type": "object",
+            "properties": {
+                "base_url": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string",
+                    "enum": [
+                        "github",
+                        "gitlab",
+                        "forgejo"
+                    ]
+                },
+                "rotate_secret": {
+                    "description": "RotateSecret replaces the webhook secret; the answer carries it.",
+                    "type": "boolean"
+                },
+                "token": {
+                    "description": "Token is an access token able to comment on pull requests; \"\" removes it.",
+                    "type": "string"
+                }
+            }
+        },
+        "vcs.Link": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": [
+                        "branch",
+                        "pull_request",
+                        "commit"
+                    ]
+                },
+                "provider": {
+                    "type": "string",
+                    "enum": [
+                        "github",
+                        "gitlab",
+                        "forgejo"
+                    ]
+                },
+                "ref": {
+                    "description": "Ref is the branch name, the pull request number or the commit hash.",
+                    "type": "string"
+                },
+                "repository": {
+                    "type": "string",
+                    "example": "acme/horizon"
+                },
+                "state": {
+                    "type": "string",
+                    "enum": [
+                        "open",
+                        "merged",
+                        "closed",
+                        "deleted",
+                        ""
+                    ]
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt is when the forge last told of it.",
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "vcs.LinkList": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/vcs.Link"
+                    }
                 }
             }
         },

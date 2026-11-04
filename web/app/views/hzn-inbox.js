@@ -144,7 +144,7 @@ class HznInbox extends HTMLElement {
     const { i18n } = this.context;
     const { t } = i18n;
     const e = it.event;
-    const what = e ? `${e.actor?.name ?? t("issue.someone")} ${e.type === "issue.commented" ? t("inbox.commented") : describeEvent(i18n, e)}` : "";
+    const what = e ? `${e.actor ? e.actor.name || t("issue.someone") : t("issue.system")} ${e.type === "issue.commented" ? t("inbox.commented") : describeEvent(i18n, e)}` : "";
     return html`
       <div class="row" role="listitem" data-id="${it.id}" ${it.read ? "" : html`data-unread`}>
         <span class="dot" aria-label="${it.read ? "" : t("inbox.unread")}"></span>

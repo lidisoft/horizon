@@ -10,12 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -45,38 +43,6 @@ const (
 
 // retries are the delays after each failed attempt (the last one repeats).
 var retries = []time.Duration{time.Minute, 5 * time.Minute, 30 * time.Minute, 2 * time.Hour, 6 * time.Hour}
-
-// errPrivate refuses connections to the instance's own networks.
-var errPrivate = errors.New("address not allowed: private, loopback or link-local")
-
-// newClient sends deliveries: no redirects (a 3xx is an answer), a bounded
-// time, and, unless allowed, no private destinations, checked on the
-// address actually dialled, so DNS can't point elsewhere after the check.
-func newClient(allowPrivate bool) *http.Client {
-	dialer := &net.Dialer{Timeout: Timeout}
-	if !allowPrivate {
-		dialer.Control = func(_, address string, _ syscall.RawConn) error {
-			host, _, err := net.SplitHostPort(address)
-			if err != nil {
-				return err
-			}
-			ip := net.ParseIP(host)
-			if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-				ip.IsUnspecified() || ip.IsMulticast() {
-				return errPrivate
-			}
-			return nil
-		}
-	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.DialContext = dialer.DialContext
-	transport.Proxy = nil
-	return &http.Client{
-		Timeout:       Timeout,
-		Transport:     transport,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // Consumer is the durable webhook consumer: every event of a workspace.
 func (s *Service) Consumer() eventlog.Consumer {

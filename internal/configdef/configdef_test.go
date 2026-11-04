@@ -708,3 +708,25 @@ func TestCalendar(t *testing.T) {
 		t.Errorf("cleared = %+v, %v", p, err)
 	}
 }
+
+func TestGitSettings(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	g, err := f.cfg.GitSettings(ctx, f.db, f.proj())
+	if err != nil || g.MergeStatus.Value != configdef.MergeOff || g.MergeStatus.Overridden {
+		t.Fatalf("default = %+v, %v", g, err)
+	}
+	if _, err := f.cfg.SetGitSettings(ctx, f.ws_(), configdef.GitSettingsInput{MergeStatus: json.RawMessage(`"@completed"`)}); err != nil {
+		t.Fatal(err)
+	}
+	g, err = f.cfg.SetGitSettings(ctx, f.proj(), configdef.GitSettingsInput{MergeStatus: json.RawMessage(`"In review"`)})
+	if err != nil || g.MergeStatus.Value != "In review" || g.MergeStatus.Workspace != configdef.MergeCompleted || !g.MergeStatus.Overridden {
+		t.Fatalf("override = %+v, %v", g, err)
+	}
+	_, err = f.cfg.SetGitSettings(ctx, f.proj(), configdef.GitSettingsInput{MergeStatus: json.RawMessage(`"  "`)})
+	wantField(t, err, "merge_status", "invalid")
+	if g, err := f.cfg.SetGitSettings(ctx, f.proj(), configdef.GitSettingsInput{MergeStatus: json.RawMessage(`null`)}); err != nil ||
+		g.MergeStatus.Value != configdef.MergeCompleted || g.MergeStatus.Overridden {
+		t.Errorf("cleared = %+v, %v", g, err)
+	}
+}

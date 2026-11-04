@@ -59,6 +59,7 @@ export const ROUTES = [
   { name: "settings-calendar", path: "/w/:ws/settings/calendar", view: "hzn-settings-calendar", layout: "settings" },
   { name: "settings-webhooks", path: "/w/:ws/settings/webhooks", view: "hzn-settings-webhooks", layout: "settings" },
   { name: "settings-webhook", path: "/w/:ws/settings/webhooks/:id", view: "hzn-settings-webhooks", layout: "settings" },
+  { name: "settings-git", path: "/w/:ws/settings/git", view: "hzn-settings-git", layout: "settings" },
   { name: "invitation", path: "/invitation", view: "hzn-invitation", public: true },
   { name: "sign-in", path: "/sign-in", view: "hzn-sign-in", public: true },
   { name: "forgot-password", path: "/forgot-password", view: "hzn-forgot-password", public: true },

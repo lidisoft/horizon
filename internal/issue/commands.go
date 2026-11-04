@@ -3,9 +3,12 @@ package issue
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
+	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/lidisoft/horizon/internal/access"
 	"github.com/lidisoft/horizon/internal/apperr"
@@ -297,7 +300,6 @@ func (s *Service) Transitions(ctx context.Context, ic Context) ([]AvailableTrans
 // validators and running its post-actions.
 func (s *Service) Transition(ctx context.Context, ic Context, version int32, toStatus uuid.UUID) (Issue, error) {
 	return s.mutate(ctx, ic, version, access.IssueTransition, false, func(e *edit) ([]change, error) {
-		i := e.next
 		var tr *configdef.Transition
 		for _, c := range candidates(e.r, e.cur) {
 			if c.To == toStatus {
@@ -315,60 +317,190 @@ func (s *Service) Transition(ctx context.Context, ic Context, version int32, toS
 		if !ok {
 			return nil, &apperr.Error{Status: 403, Code: "transition_forbidden", Detail: "the transition " + tr.Name + " is limited to some roles"}
 		}
-		if tr.Rules.ChildrenFinal {
-			var open int
-			err := e.tx.QueryRow(ctx, `
-				SELECT count(*) FROM issues c
-				JOIN statuses s ON s.id = c.status_id
-				JOIN status_categories sc ON sc.id = s.category_id
-				WHERE c.parent_id = $1 AND sc.outcome IN ('unstarted', 'started')`, i.ID).Scan(&open)
-			if err != nil {
+		return s.applyTransition(ctx, e, ic, *tr)
+	})
+}
+
+// Status targets of SystemTransition.
+const (
+	// ToCompleted is the nearest completed status.
+	ToCompleted = configdef.MergeCompleted
+	// maxSteps bounds the transitions an automation chains.
+	maxSteps = 6
+)
+
+// SystemTransition moves the issue, for an automation (a merged pull
+// request), to the status of its workflow named to (or the nearest
+// completed one for ToCompleted), through the fewest allowed transitions:
+// the workflow decides the way, each step's validators, children rule
+// and post-actions apply, and one IssueStatusUpdated records the move
+// (with the transitions taken, and why). It has no actor and needs no
+// permission or role. moved is false when no way leads there, the issue
+// is there already or archived, or a rule refuses.
+func (s *Service) SystemTransition(ctx context.Context, workspaceID, issueID uuid.UUID, to string, why map[string]any) (moved bool, err error) {
+	var ic Context
+	ic.Workspace.ID = workspaceID
+	err = s.pool.QueryRow(ctx, `SELECT p.id, p.key FROM issues i JOIN projects p ON p.id = i.project_id
+		WHERE i.workspace_id = $1 AND i.id = $2`, workspaceID, issueID).Scan(&ic.Project.ID, &ic.Project.Key)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	ic.Issue.ID, ic.Issue.WorkspaceID, ic.Issue.ProjectID = issueID, workspaceID, ic.Project.ID
+	_, err = s.mutate(ctx, ic, 0, "", false, func(e *edit) ([]change, error) {
+		target := func(id uuid.UUID) bool {
+			st, _, ok := e.r.Status(id)
+			if !ok {
+				return false
+			}
+			if to == ToCompleted {
+				return e.r.Categories[st.CategoryID].Outcome == configdef.OutcomeCompleted
+			}
+			return strings.EqualFold(st.Name, to)
+		}
+		if target(e.cur.StatusID) {
+			return nil, nil
+		}
+		path := shortestPath(e.r, e.cur, target)
+		if path == nil {
+			return nil, nil
+		}
+		from := e.cur.StatusID
+		var changes []change
+		ids := make([]uuid.UUID, len(path))
+		for i, tr := range path {
+			if err := s.checkTransition(ctx, e, tr); err != nil {
 				return nil, err
 			}
-			if open > 0 {
-				return nil, apperr.Conflict("children_open")
-			}
+			e.next.StatusID = tr.To
+			changes = append(changes, s.postActions(e, ic, tr)...)
+			ids[i] = tr.ID
 		}
-		var missing apperr.Fields
-		for _, f := range tr.Rules.Validators {
-			if !isSet(e, f) {
-				missing.Add(f, "required")
-			}
-		}
-		if len(missing) > 0 {
-			return nil, &apperr.Error{Status: 422, Code: "transition_requires_fields", Fields: missing}
-		}
-		from := i.StatusID
-		i.StatusID = tr.To
+		last := path[len(path)-1]
 		s.trackOutcome(e, from)
-		changes := []change{{"IssueStatusUpdated", statusFacts(e.r, tr.To, map[string]any{"from": from, "to": tr.To, "transition_id": tr.ID})}}
-		for _, pa := range tr.Rules.PostActions {
-			before, iteration, release := i.AssigneeID, i.IterationID, i.ReleaseID
-			switch pa.Op {
-			case "set_actor":
-				i.AssigneeID = uuid.NullUUID{UUID: ic.Principal.User.ID, Valid: true}
-			default:
-				clearField(e, pa.Field)
-			}
-			switch pa.Field {
-			case "assignee":
-				if before != i.AssigneeID {
-					changes = append(changes, change{"IssueAssigned", map[string]any{"from": before, "to": i.AssigneeID, "by": "workflow"}})
-				}
-			case "iteration":
-				if iteration.Valid {
-					changes = append(changes, change{"IssueIterationChanged", map[string]any{"from": iteration, "to": nil, "by": "workflow"}})
-				}
-			case "release":
-				if release.Valid {
-					changes = append(changes, change{"IssueReleaseChanged", map[string]any{"from": release, "to": nil, "by": "workflow"}})
-				}
-			default:
-				changes = append(changes, change{"IssueUpdated", map[string]any{"fields": []string{pa.Field}, "by": "workflow"}})
-			}
+		payload := map[string]any{"from": from, "to": last.To, "transition_id": last.ID}
+		if len(ids) > 1 {
+			payload["transition_ids"] = ids
 		}
-		return changes, nil
+		for k, v := range why {
+			payload[k] = v
+		}
+		moved = true
+		return append([]change{{"IssueStatusUpdated", statusFacts(e.r, last.To, payload)}}, changes...), nil
 	})
+	if apperr.Is(err, "children_open") || apperr.Is(err, "transition_requires_fields") || apperr.Is(err, "issue_archived") {
+		return false, nil
+	}
+	return moved && err == nil, err
+}
+
+// shortestPath finds the fewest transitions of the issue's workflow from
+// its status to one target accepts (breadth first, in the workflow's
+// order), or nil.
+func shortestPath(r *configdef.Resolved, i db.Issue, target func(uuid.UUID) bool) []configdef.Transition {
+	type node struct {
+		status uuid.UUID
+		path   []configdef.Transition
+	}
+	seen := map[uuid.UUID]bool{i.StatusID: true}
+	queue := []node{{status: i.StatusID}}
+	for len(queue) > 0 {
+		n := queue[0]
+		queue = queue[1:]
+		if len(n.path) == maxSteps {
+			continue
+		}
+		at := i
+		at.StatusID = n.status
+		for _, tr := range candidates(r, at) {
+			if seen[tr.To] {
+				continue
+			}
+			seen[tr.To] = true
+			path := append(slices.Clone(n.path), tr)
+			if target(tr.To) {
+				return path
+			}
+			queue = append(queue, node{status: tr.To, path: path})
+		}
+	}
+	return nil
+}
+
+// applyTransition checks a transition's rules and moves the issue.
+func (s *Service) applyTransition(ctx context.Context, e *edit, ic Context, tr configdef.Transition) ([]change, error) {
+	if err := s.checkTransition(ctx, e, tr); err != nil {
+		return nil, err
+	}
+	from := e.next.StatusID
+	e.next.StatusID = tr.To
+	s.trackOutcome(e, from)
+	changes := []change{{"IssueStatusUpdated", statusFacts(e.r, tr.To, map[string]any{"from": from, "to": tr.To, "transition_id": tr.ID})}}
+	return append(changes, s.postActions(e, ic, tr)...), nil
+}
+
+// checkTransition applies a transition's children rule and validators.
+func (s *Service) checkTransition(ctx context.Context, e *edit, tr configdef.Transition) error {
+	if tr.Rules.ChildrenFinal {
+		var open int
+		err := e.tx.QueryRow(ctx, `
+			SELECT count(*) FROM issues c
+			JOIN statuses s ON s.id = c.status_id
+			JOIN status_categories sc ON sc.id = s.category_id
+			WHERE c.parent_id = $1 AND sc.outcome IN ('unstarted', 'started')`, e.next.ID).Scan(&open)
+		if err != nil {
+			return err
+		}
+		if open > 0 {
+			return apperr.Conflict("children_open")
+		}
+	}
+	var missing apperr.Fields
+	for _, f := range tr.Rules.Validators {
+		if !isSet(e, f) {
+			missing.Add(f, "required")
+		}
+	}
+	if len(missing) > 0 {
+		return &apperr.Error{Status: 422, Code: "transition_requires_fields", Fields: missing}
+	}
+	return nil
+}
+
+// postActions runs a transition's post-actions and tells what they changed.
+func (s *Service) postActions(e *edit, ic Context, tr configdef.Transition) []change {
+	i := e.next
+	var changes []change
+	for _, pa := range tr.Rules.PostActions {
+		before, iteration, release := i.AssigneeID, i.IterationID, i.ReleaseID
+		switch pa.Op {
+		case "set_actor":
+			if ic.Principal.User.ID != uuid.Nil { // an automation has no actor to assign
+				i.AssigneeID = uuid.NullUUID{UUID: ic.Principal.User.ID, Valid: true}
+			}
+		default:
+			clearField(e, pa.Field)
+		}
+		switch pa.Field {
+		case "assignee":
+			if before != i.AssigneeID {
+				changes = append(changes, change{"IssueAssigned", map[string]any{"from": before, "to": i.AssigneeID, "by": "workflow"}})
+			}
+		case "iteration":
+			if iteration.Valid {
+				changes = append(changes, change{"IssueIterationChanged", map[string]any{"from": iteration, "to": nil, "by": "workflow"}})
+			}
+		case "release":
+			if release.Valid {
+				changes = append(changes, change{"IssueReleaseChanged", map[string]any{"from": release, "to": nil, "by": "workflow"}})
+			}
+		default:
+			changes = append(changes, change{"IssueUpdated", map[string]any{"fields": []string{pa.Field}, "by": "workflow"}})
+		}
+	}
+	return changes
 }
 
 // Assign sets or clears (uuid.Nil) the assignee (issue.assign).

@@ -153,7 +153,7 @@ class HznProjectHome extends HTMLElement {
         <lds-card data-block="activity">
           <h2>${t("overview.activity")}</h2>
           <ul>${o.activity.length ? o.activity.map((e) => html`<li><a class="key" href="${issueHref(this.ws, e.aggregate.key)}">${e.aggregate.key}</a>
-            <span class="title"><strong>${e.actor?.name ?? t("issue.someone")}</strong> ${describeEvent(i18n, e)}</span>
+            <span class="title"><strong>${e.actor ? e.actor.name || t("issue.someone") : t("issue.system")}</strong> ${describeEvent(i18n, e)}</span>
             <span class="when">${i18n.relative(e.occurred_at)}</span></li>`) : html`<li class="muted">${t("overview.noActivity")}</li>`}</ul>
         </lds-card>
       </div>`);

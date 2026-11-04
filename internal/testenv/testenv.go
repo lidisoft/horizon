@@ -54,6 +54,10 @@ const (
 	// Chrome is headless Chrome for browser tests (Browser, Serve). Set
 	// HORIZON_TEST_CHROME to a local binary to skip the container.
 	Chrome
+	// Forgejo is a Git forge (Forgejo), with an admin and a token (Forge).
+	Forgejo
+	// Dex is an OpenID Connect provider (OIDC).
+	Dex
 )
 
 // Images match docker-compose.yml.
@@ -74,6 +78,7 @@ type env struct {
 	s3Endpoint *url.URL
 
 	browser *browserEnv
+	forge   *ForgeEnv
 }
 
 var current *env
@@ -152,6 +157,15 @@ func Main(m *testing.M, services Service) int {
 		containers = append(containers, cs...)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "testenv: chrome:", err)
+			return 1
+		}
+	}
+
+	if services&Forgejo != 0 {
+		cs, err := e.startForgejo(ctx)
+		containers = append(containers, cs...)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "testenv: forgejo:", err)
 			return 1
 		}
 	}

@@ -387,8 +387,10 @@ type edit struct {
 // events — all in one transaction.
 func (s *Service) mutate(ctx context.Context, ic Context, version int32, perm access.Permission, allowArchived bool,
 	fn func(e *edit) ([]change, error)) (Issue, error) {
-	if err := s.require(ctx, ic.Context, perm); err != nil {
-		return Issue{}, err
+	if perm != "" { // "": an automation, checked by its caller
+		if err := s.require(ctx, ic.Context, perm); err != nil {
+			return Issue{}, err
+		}
 	}
 	var saved db.Issue
 	var labels []uuid.UUID

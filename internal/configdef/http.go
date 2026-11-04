@@ -91,6 +91,49 @@ func (h *HTTP) register(g *gin.RouterGroup) {
 	g.PUT("/settings/iterations", h.setIterationSettings)
 	g.GET("/settings/calendar", h.calendarSettings)
 	g.PUT("/settings/calendar", h.setCalendar)
+	g.GET("/settings/git", h.gitSettings)
+	g.PUT("/settings/git", h.setGitSettings)
+}
+
+// GitSettingsResponse is the Git settings in effect and whether the caller
+// may change them.
+type GitSettingsResponse struct {
+	GitSettings
+	CanManage bool `json:"can_manage"`
+}
+
+// gitSettings returns the Git settings in effect.
+//
+//	@Summary		Get the Git settings
+//	@Description	What a merged pull request does to the issues it names, with the workspace's value and whether the project overrides it.
+//	@Tags			configuration
+//	@Produce		json
+//	@Param			ws	path		string	true	"Workspace slug"
+//	@Success		200	{object}	GitSettingsResponse
+//	@Router			/api/v1/w/{ws}/config/settings/git [get]
+func (h *HTTP) gitSettings(c *gin.Context) {
+	t := targetOf(c)
+	v, err := h.svc.GitSettings(c, h.svc.pool, t)
+	reply(c, http.StatusOK, GitSettingsResponse{GitSettings: v, CanManage: h.svc.CanManage(c, t)}, err)
+}
+
+// setGitSettings changes the Git settings.
+//
+//	@Summary		Set the Git settings
+//	@Description	merge_status: "@off" (the default), "@completed" (the nearest completed status), or a status name. Null removes the value.
+//	@Tags			configuration
+//	@Accept			json
+//	@Produce		json
+//	@Param			ws		path		string				true	"Workspace slug"
+//	@Param			body	body		GitSettingsInput	true	"Settings to change"
+//	@Success		200		{object}	GitSettings
+//	@Router			/api/v1/w/{ws}/config/settings/git [put]
+func (h *HTTP) setGitSettings(c *gin.Context) {
+	var req GitSettingsInput
+	if bind(c, &req) {
+		v, err := h.svc.SetGitSettings(c, targetOf(c), req)
+		reply(c, http.StatusOK, v, err)
+	}
 }
 
 // CategoryList is the body of GET …/config/categories.

@@ -82,7 +82,7 @@ usable exists early.
 
 - [x] Subscriptions, inbox, email notifications and digests
 - [x] Outbound webhooks with signing, retries, delivery log
-- [ ] Git integration: GitHub, GitLab, Forgejo
+- [x] Git integration: GitHub, GitLab, Forgejo
 - [ ] Magic link login, OIDC / SSO, enforced SSO
 - [ ] Operator contract complete: graceful shutdown, `admin reconcile`,
       `admin rekey`, upgrade checks ([operations.md](operations.md))

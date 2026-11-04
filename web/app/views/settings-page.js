@@ -51,6 +51,7 @@ const GROUPS = [
   {
     label: "settings.integrations",
     pages: [
+      { name: "git", icon: "git-pull-request", label: "settings.git" },
       { name: "webhooks", icon: "external-link", label: "settings.webhooks" },
     ],
   },

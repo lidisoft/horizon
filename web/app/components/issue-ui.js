@@ -152,6 +152,8 @@ export function describeEvent(i18n, e) {
   const key = `activity.${kind}`;
   return i18n.has(key)
     ? t(key, { from: name(p.from), to: name(p.to), issue: name(p.issue_id), type: p.type ? t(`link.${p.type}`) : "",
-      fields: (p.fields ?? []).join(", "), fromKey: p.from_key ?? "", toKey: p.to_key ?? "" })
+      fields: (p.fields ?? []).join(", "), fromKey: p.from_key ?? "", toKey: p.to_key ?? "",
+      git: p.kind ? `${t(`git.kind.${p.kind}`)} ${p.kind === "commit" ? String(p.ref).slice(0, 7) : p.kind === "pull_request" ? `#${p.ref}` : p.ref}` : "",
+      title: p.title ?? "", state: p.state ? t(`git.state.${p.state}`).toLowerCase() : "" })
     : kind.replaceAll("_", " ");
 }

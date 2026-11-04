@@ -29,6 +29,7 @@ import (
 	"github.com/lidisoft/horizon/internal/apperr"
 	"github.com/lidisoft/horizon/internal/eventlog"
 	"github.com/lidisoft/horizon/internal/issue"
+	"github.com/lidisoft/horizon/internal/platform/egress"
 	"github.com/lidisoft/horizon/internal/platform/postgres"
 	"github.com/lidisoft/horizon/internal/platform/secrets"
 	"github.com/lidisoft/horizon/internal/project"
@@ -66,7 +67,7 @@ func New(o Options) *Service {
 		o.Now = time.Now
 	}
 	if o.Client == nil {
-		o.Client = newClient(o.AllowPrivate)
+		o.Client = egress.Client(Timeout, o.AllowPrivate)
 	}
 	return &Service{o: o}
 }

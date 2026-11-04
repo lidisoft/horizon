@@ -102,6 +102,9 @@ type Config struct {
 	// WebhookAllowPrivate lets webhooks reach loopback, private and
 	// link-local addresses.
 	WebhookAllowPrivate bool
+	// ForgeAllowPrivate lets Git forge API calls (pull request comments)
+	// reach loopback, private and link-local addresses.
+	ForgeAllowPrivate bool
 }
 
 // LookupFunc reads one environment variable; os.LookupEnv in production.
@@ -133,6 +136,7 @@ func Load(lookup LookupFunc, need Need) (Config, error) {
 	c.EventsRetention = l.duration("EVENTS_RETENTION", DefaultEventsRetention)
 	c.TrustedProxies = l.prefixes("TRUSTED_PROXIES")
 	c.WebhookAllowPrivate = l.oneOf("WEBHOOK_ALLOW_PRIVATE", "false", "true", "false") == "true"
+	c.ForgeAllowPrivate = l.oneOf("FORGE_ALLOW_PRIVATE", "false", "true", "false") == "true"
 
 	c.DatabaseURL = l.urlString("DATABASE_URL", need&NeedDatabase != 0, "postgres", "postgresql")
 	c.NatsURL = l.urlString("NATS_URL", need&NeedNATS != 0, "nats", "tls")
