@@ -4,7 +4,7 @@
 
 import { requestContext } from "horizon/core/context.js";
 import { html } from "horizon/core/dom.js";
-import { busy, errorMessage, formValues, setAutocomplete, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { busy, errorMessage, formValues, showFieldErrors } from "horizon/core/forms.js";
 import { authPage, authStyles } from "horizon/views/auth-page.js";
 
 const MIN_LENGTH = 12; // identity.MinPasswordLength
@@ -31,19 +31,16 @@ class HznResetPassword extends HTMLElement {
       <form novalidate>
         <lds-alert intent="danger" role="alert"></lds-alert>
         <lds-field label="${t("field.newPassword")}" required>
-          <lds-input name="password" type="password" required></lds-input>
+          <lds-input name="password" type="password" autocomplete="new-password" required></lds-input>
         </lds-field>
         <lds-field label="${t("field.confirmPassword")}" required>
-          <lds-input name="confirm" type="password" required></lds-input>
+          <lds-input name="confirm" type="password" autocomplete="new-password" required></lds-input>
         </lds-field>
         <lds-button type="submit" variant="primary" full-width>${t("reset.submit")}</lds-button>
       </form>
     `));
 
     const form = root.querySelector("form");
-    setAutocomplete(root.querySelector('[name="password"]'), "new-password");
-    setAutocomplete(root.querySelector('[name="confirm"]'), "new-password");
-    submitOnEnter(form);
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       this.submit(form);

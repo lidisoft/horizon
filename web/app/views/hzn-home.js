@@ -5,7 +5,7 @@
 import { rememberedWorkspace } from "horizon/components/hzn-app.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
-import { busy, errorMessage, formValues, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { busy, errorMessage, formValues, showFieldErrors } from "horizon/core/forms.js";
 
 const styles = sheet(`
   :host { display: block; padding: var(--lds-space-12) var(--lds-space-6); }
@@ -80,7 +80,6 @@ class HznHome extends HTMLElement {
       name.addEventListener("lds-input", (e) => {
         if (!slugEdited) slug.setAttribute("value", slugify(e.detail.value));
       });
-      submitOnEnter(form);
       form.addEventListener("submit", (e) => {
         e.preventDefault();
         this.create(form);

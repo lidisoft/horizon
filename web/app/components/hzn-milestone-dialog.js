@@ -7,7 +7,7 @@
 import { ISSUE_KEY } from "horizon/components/issue-ui.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
-import { busy, clearFieldErrors, errorMessage, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { busy, clearFieldErrors, errorMessage, showFieldErrors } from "horizon/core/forms.js";
 
 const styles = sheet(`
   form { display: grid; gap: var(--lds-space-4); }
@@ -38,7 +38,6 @@ class HznMilestoneDialog extends HTMLElement {
       </lds-modal>`);
     this.modal = root.querySelector("lds-modal");
     this.form = root.querySelector("form");
-    submitOnEnter(this.form);
     this.form.addEventListener("submit", (e) => {
       e.preventDefault();
       this.submit();

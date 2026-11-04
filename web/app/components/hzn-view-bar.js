@@ -19,7 +19,7 @@ import { PRIORITIES } from "horizon/components/issue-ui.js";
 import { loadIterations } from "horizon/components/planning-ui.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, keepOpenOnInsidePress, sheet } from "horizon/core/dom.js";
-import { busy, clearFieldErrors, errorMessage, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { busy, clearFieldErrors, errorMessage, showFieldErrors } from "horizon/core/forms.js";
 
 /** Where each layout lives under /w/:ws/p/:key/. */
 export const LAYOUT_ROUTES = { list: "issues", board: "board", table: "table", timeline: "timeline", calendar: "calendar" };
@@ -211,7 +211,6 @@ class HznViewBar extends HTMLElement {
         </div>
       </lds-modal>`);
     const form = this.shadowRoot.querySelector("[data-save] form");
-    submitOnEnter(form);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       this.saveAs();

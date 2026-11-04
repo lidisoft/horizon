@@ -3,7 +3,7 @@
 
 import { requestContext } from "horizon/core/context.js";
 import { html, ldsLightSheet, sheet } from "horizon/core/dom.js";
-import { busy, clearFieldErrors, errorMessage, formValues, setAutocomplete, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { busy, clearFieldErrors, errorMessage, formValues, showFieldErrors } from "horizon/core/forms.js";
 
 const styles = sheet(`
   :host { display: block; padding: var(--lds-space-8) var(--lds-space-6); }
@@ -72,10 +72,10 @@ class HznAccount extends HTMLElement {
           <form id="password" novalidate>
             <lds-alert intent="danger" role="alert"></lds-alert>
             <lds-field label="${t("field.currentPassword")}" required>
-              <lds-input name="current_password" type="password" required></lds-input>
+              <lds-input name="current_password" type="password" autocomplete="current-password" required></lds-input>
             </lds-field>
             <lds-field label="${t("field.newPassword")}" required>
-              <lds-input name="new_password" type="password" required></lds-input>
+              <lds-input name="new_password" type="password" autocomplete="new-password" required></lds-input>
             </lds-field>
             <div class="actions">
               <lds-button type="submit" variant="secondary">${t("account.changePassword")}</lds-button>
@@ -104,10 +104,7 @@ class HznAccount extends HTMLElement {
 
     const profile = root.getElementById("profile");
     const password = root.getElementById("password");
-    setAutocomplete(password.querySelector('[name="current_password"]'), "current-password");
-    setAutocomplete(password.querySelector('[name="new_password"]'), "new-password");
     for (const [form, fn] of [[profile, () => this.saveProfile(profile)], [password, () => this.changePassword(password)]]) {
-      submitOnEnter(form);
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         fn();

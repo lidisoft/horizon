@@ -3,7 +3,7 @@
 
 import { requestContext } from "horizon/core/context.js";
 import { html, ldsLightSheet, sheet } from "horizon/core/dom.js";
-import { busy, clearFieldErrors, errorMessage, formValues, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { busy, clearFieldErrors, errorMessage, formValues, showFieldErrors } from "horizon/core/forms.js";
 
 const styles = sheet(`
   :host { display: grid; gap: var(--lds-space-5); }
@@ -63,7 +63,6 @@ class HznApiTokens extends HTMLElement {
     `);
 
     const form = root.querySelector("form");
-    submitOnEnter(form);
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       this.create(form);

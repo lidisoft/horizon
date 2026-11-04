@@ -13,10 +13,6 @@ export const settingsStyles = sheet(`
   nav.settings h2 { font-size: var(--lds-font-size-2xs); letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--lds-color-fg-muted); margin: var(--lds-space-5) 0 var(--lds-space-2) var(--lds-space-2); }
   nav.settings h2:first-of-type { margin-top: 0; }
-  lds-nav-item::part(label) { line-height: 1.25; }
-  /* LDS v0.0.5 clips label descenders (g, p, y): overflow hidden with
-     line-height 1. Remove once LDS fixes lds-nav-item. */
-  lds-nav-item::part(label) { line-height: 1.25; }
   .page { flex: 1; min-width: 0; }
   header.bar { display: flex; align-items: center; gap: var(--lds-space-3); padding: var(--lds-space-4) var(--lds-space-6);
     border-bottom: 1px solid var(--lds-color-border-subtle); }

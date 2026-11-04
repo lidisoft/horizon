@@ -10942,11 +10942,9 @@ const docTemplate = `{
                     "enum": [
                         "blue",
                         "green",
-                        "teal",
                         "purple",
                         "pink",
                         "coral",
-                        "orange",
                         "yellow",
                         "grey"
                     ]

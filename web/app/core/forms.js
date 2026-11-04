@@ -1,38 +1,12 @@
-// Form helpers for views built from LDS controls: reading values, showing
-// API validation errors in lds-field error slots, and two stopgaps for
-// lds-input (LDS v0.0.5) that the design system is asked to absorb:
-//
-// - its native <input> lives in a shadow root, so Enter doesn't submit the
-//   surrounding form (implicit submission): submitOnEnter restores it;
-// - it doesn't forward autocomplete, which password managers rely on:
-//   setAutocomplete sets it on the inner input.
+// Form helpers for views built from LDS controls: reading values and
+// showing API validation errors in lds-field error slots. lds-input submits
+// its form on Enter and mirrors autocomplete onto its native input.
 
 import { html } from "horizon/core/dom.js";
 
 /** The form's values as a plain object (lds-* controls are form-associated). */
 export function formValues(form) {
   return Object.fromEntries(new FormData(form));
-}
-
-/** Submits form when Enter is pressed in one of its lds-input controls. */
-export function submitOnEnter(form) {
-  form.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" || event.isComposing || event.defaultPrevented) return;
-    if (event.target?.localName !== "lds-input") return;
-    event.preventDefault();
-    form.requestSubmit();
-  });
-}
-
-/** Sets autocomplete on an lds-input's native input once it is upgraded. */
-export function setAutocomplete(input, value) {
-  input.setAttribute("autocomplete", value);
-  customElements.whenDefined(input.localName).then(() => {
-    requestAnimationFrame(() => {
-      const inner = input.shadowRoot?.querySelector("input");
-      if (inner) inner.autocomplete = value;
-    });
-  });
 }
 
 /** Removes the error messages added by showFieldErrors. */

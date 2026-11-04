@@ -6,7 +6,7 @@
 
 import { requestContext } from "horizon/core/context.js";
 import { html } from "horizon/core/dom.js";
-import { busy, errorMessage, formValues, setAutocomplete, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { busy, errorMessage, formValues, showFieldErrors } from "horizon/core/forms.js";
 import { authPage, authStyles } from "horizon/views/auth-page.js";
 
 const TOKEN_KEY = "horizon.invitation";
@@ -99,18 +99,15 @@ class HznInvitation extends HTMLElement {
       this.show(title, html`${lead}
         <form novalidate>
           <lds-alert intent="danger" role="alert"></lds-alert>
-          <lds-field label="${t("field.name")}" required><lds-input name="name" required maxlength="200"></lds-input></lds-field>
+          <lds-field label="${t("field.name")}" required><lds-input name="name" autocomplete="name" required maxlength="200"></lds-input></lds-field>
           <lds-field label="${t("field.password")}" required>
-            <lds-input name="password" type="password" required></lds-input>
+            <lds-input name="password" type="password" autocomplete="new-password" required></lds-input>
             <span slot="help">${t("reset.lead", { min: MIN_LENGTH })}</span>
           </lds-field>
           <lds-button type="submit" full-width>${t("invitation.create")}</lds-button>
         </form>`);
-      setAutocomplete(this.shadowRoot.querySelector('[name="name"]'), "name");
-      setAutocomplete(this.shadowRoot.querySelector('[name="password"]'), "new-password");
     }
     const form = this.shadowRoot.querySelector("form");
-    submitOnEnter(form);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       this.accept(form);

@@ -167,15 +167,7 @@ func watchConsole(ctx context.Context) *console {
 }
 
 // knownIssues are browser messages accepted until an upstream fix lands.
-var knownIssues = []struct{ text, why string }{
-	{
-		// LDS v0.0.5 icons.svg has style="display:none" on its root, set
-		// through innerHTML; the runtime hides the sprite through the CSSOM
-		// anyway. Reported to the design system; remove when fixed.
-		text: "Applying inline style violates the following Content Security Policy",
-		why:  "LDS icon sprite (v0.0.5)",
-	},
-}
+var knownIssues = []struct{ text, why string }{}
 
 // expectedStatus matches the browser's own log line for a 4xx answer, such
 // as the 401 of GET /me while signed out: the API reports expected failures

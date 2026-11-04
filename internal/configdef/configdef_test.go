@@ -252,7 +252,7 @@ func TestPermissions(t *testing.T) {
 func TestCategories(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	qa, err := f.cfg.CreateCategory(ctx, f.ws_(), configdef.CategoryInput{Name: s("Verification"), Outcome: s("started"), Colour: s("teal")})
+	qa, err := f.cfg.CreateCategory(ctx, f.ws_(), configdef.CategoryInput{Name: s("Verification"), Outcome: s("started"), Colour: s("green")})
 	if err != nil || qa.Position != 5 {
 		t.Fatalf("created %+v, %v", qa, err)
 	}

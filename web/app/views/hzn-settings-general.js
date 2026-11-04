@@ -3,7 +3,7 @@
 
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
-import { busy, clearFieldErrors, errorMessage, formValues, showFieldErrors, submitOnEnter } from "horizon/core/forms.js";
+import { busy, clearFieldErrors, errorMessage, formValues, showFieldErrors } from "horizon/core/forms.js";
 import { settingsPage, settingsStyles } from "horizon/views/settings-page.js";
 
 const styles = sheet(`
@@ -65,7 +65,6 @@ class HznSettingsGeneral extends HTMLElement {
 
     const form = this.shadowRoot.querySelector("form");
     if (!canEdit) return;
-    submitOnEnter(form);
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       this.save(form);

@@ -377,7 +377,7 @@ func TestCustomFields(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	severity, err := f.cfg.CreateField(ctx, f.ws_(), configdef.FieldInput{Name: s("Severity"), Type: s("select"),
-		Options: &[]configdef.Option{{Name: "S1", Colour: "coral"}, {Name: "S2", Colour: "orange"}}})
+		Options: &[]configdef.Option{{Name: "S1", Colour: "coral"}, {Name: "S2", Colour: "yellow"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +572,7 @@ func TestLabels(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	be, _ := f.cfg.CreateLabel(ctx, f.ws_(), configdef.LabelInput{Name: s("backend"), Colour: s("blue")})
-	api, _ := f.cfg.CreateLabel(ctx, f.ws_(), configdef.LabelInput{Name: s("api"), Colour: s("teal")})
+	api, _ := f.cfg.CreateLabel(ctx, f.ws_(), configdef.LabelInput{Name: s("api"), Colour: s("green")})
 	a, err := f.svc.Create(ctx, f.pc(f.owner, "HZN"), issue.NewIssue{TypeID: f.typeID("Task"), Title: "A", Labels: []uuid.UUID{be.ID, api.ID}})
 	if err != nil {
 		t.Fatal(err)
