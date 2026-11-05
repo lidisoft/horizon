@@ -5,24 +5,31 @@
 import { html, sheet } from "horizon/core/dom.js";
 
 export const planningStyles = sheet(`
-  nav.views { display: flex; gap: var(--lds-space-1); }
-  nav.views a { padding: var(--lds-space-1) var(--lds-space-3); border-radius: var(--lds-radius-sm); color: var(--lds-color-fg-muted);
-    text-decoration: none; font-size: var(--lds-font-size-sm); }
-  nav.views a:hover { background: var(--lds-color-bg-subtle); color: var(--lds-color-fg-default); }
-  nav.views a[aria-current="page"] { background: var(--lds-color-bg-subtle); color: var(--lds-color-fg-default);
-    font-weight: var(--lds-font-weight-medium); }
+  nav.views { display: inline-flex; flex: none; gap: 2px; padding: 2px; border-radius: var(--lds-radius-md);
+    background: var(--lds-segmented-bg, var(--lds-color-bg-subtle)); }
+  nav.views a { display: inline-flex; align-items: center; gap: var(--lds-space-2); block-size: 1.75rem; padding: 0 var(--lds-space-3);
+    border-radius: var(--lds-radius-sm); color: var(--lds-color-fg-muted); text-decoration: none; font-size: var(--lds-font-size-sm);
+    white-space: nowrap; }
+  nav.views a:hover { color: var(--lds-color-fg-default); }
+  nav.views a:focus-visible { outline: 2px solid var(--lds-color-accent-default); outline-offset: -2px; }
+  nav.views a[aria-current="page"] { background: var(--lds-color-bg-canvas); color: var(--lds-color-fg-default);
+    font-weight: var(--lds-font-weight-medium); box-shadow: var(--lds-shadow-xs, 0 1px 2px rgb(0 0 0 / 0.08)); }
+  @media (max-width: 72rem) { nav.views a span { display: none; } }
   .progress { display: inline-flex; align-items: center; gap: var(--lds-space-2); white-space: nowrap; }
   .progress lds-progress { inline-size: 6rem; }
 `);
 
-/** The layouts of a project's issues, in the switcher's order. */
-export const LAYOUTS = ["issues", "board", "table", "timeline", "calendar", "backlog", "releases", "reports"];
+/** The layouts of a project's issues, in the switcher's order, with their icons. */
+export const LAYOUTS = [
+  ["issues", "list"], ["board", "kanban"], ["backlog", "layers"], ["table", "table"], ["timeline", "chart-gantt"], ["calendar", "calendar-days"],
+];
 
-/** The layout switcher (wireframes: ViewSwitch). */
+/** The layout switcher (wireframes: ViewSwitch): links styled as a segmented control. */
 export function viewSwitch(t, ws, key, active) {
   return html`
     <nav class="views" aria-label="${t("planning.layout")}">
-      ${LAYOUTS.map((l) => html`<a href="/w/${encodeURIComponent(ws)}/p/${encodeURIComponent(key)}/${l}" ${l === active ? html`aria-current="page"` : ""}>${t(`planning.layouts.${l}`)}</a>`)}
+      ${LAYOUTS.map(([l, icon]) => html`<a href="/w/${encodeURIComponent(ws)}/p/${encodeURIComponent(key)}/${l}" ${l === active ? html`aria-current="page"` : ""}
+        title="${t(`planning.layouts.${l}`)}"><lds-icon name="${icon}" size="sm"></lds-icon><span>${t(`planning.layouts.${l}`)}</span></a>`)}
     </nav>`;
 }
 

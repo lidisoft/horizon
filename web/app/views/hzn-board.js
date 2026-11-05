@@ -39,9 +39,9 @@ const styles = sheet(`
   .crumb lds-icon { color: var(--lds-color-fg-subtle); }
   .swatch { display: inline-block; inline-size: 0.625rem; block-size: 0.625rem; border-radius: var(--lds-radius-xs); }
   .toolbar { display: flex; align-items: center; gap: var(--lds-space-3); padding: var(--lds-space-2) var(--lds-space-5);
-    border-block-end: 1px solid var(--lds-color-border-subtle); flex-wrap: wrap; }
+    border-block-end: 1px solid var(--lds-color-border-subtle); box-sizing: border-box; min-block-size: 3rem; }
   .toolbar .grow { flex: 1; }
-  .toolbar lds-select { min-inline-size: 11rem; }
+  .controls lds-select { min-inline-size: 10rem; }
   .board { flex: 1; overflow: auto; padding: var(--lds-space-4) var(--lds-space-5); }
   .grid { display: grid; grid-template-columns: repeat(var(--columns), minmax(15rem, 1fr)); gap: var(--lds-space-3); min-inline-size: min-content; }
   .colhead { display: flex; align-items: center; gap: var(--lds-space-2); padding: var(--lds-space-1) var(--lds-space-2);
@@ -50,7 +50,8 @@ const styles = sheet(`
   .colhead.over { background: var(--lds-color-danger-subtle); border-radius: var(--lds-radius-sm); }
   .colhead.over .count { color: var(--lds-color-danger-fg); font-weight: var(--lds-font-weight-semibold); }
   .colhead .wip { margin-inline-start: auto; }
-  .controls { display: flex; align-items: center; gap: var(--lds-space-3); }
+  .controls { display: flex; align-items: center; gap: var(--lds-space-2); }
+  header.bar .grow { flex: 1; }
   form { display: grid; gap: var(--lds-space-4); }
   .actions { display: flex; justify-content: flex-end; gap: var(--lds-space-3); }
   .lane { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--lds-space-2); padding: var(--lds-space-2) var(--lds-space-1) 0;
@@ -263,10 +264,11 @@ class HznBoard extends HTMLElement {
     this.shadowRoot.innerHTML = String(html`
       <header class="bar">
         <div class="crumb" data-crumb></div>
+        <span class="grow"></span><span class="controls" data-controls></span>
         ${p.can.includes("issue.create") && !p.archived_at ? html`<lds-button variant="primary" size="sm" data-action="create"><lds-icon slot="start" name="plus" size="sm"></lds-icon>${t("issues.new")}</lds-button>` : ""}
       </header>
       ${p.archived_at ? html`<lds-alert intent="warning">${t("projects.isArchived")}</lds-alert>` : ""}
-      <div class="toolbar">${viewSwitch(t, this.ws, p.key, "board")}<hzn-view-bar></hzn-view-bar><span class="controls" data-controls></span></div>
+      <div class="toolbar">${viewSwitch(t, this.ws, p.key, "board")}<hzn-view-bar></hzn-view-bar></div>
       <div class="board" data-board><lds-skeleton></lds-skeleton></div>
       <lds-modal size="sm" data-wip>
         <span slot="header" data-wip-title></span>

@@ -50,7 +50,7 @@ const styles = sheet(`
   .crumb lds-icon { color: var(--lds-color-fg-subtle); }
   .swatch { display: inline-block; inline-size: 0.625rem; block-size: 0.625rem; border-radius: var(--lds-radius-xs); }
   .toolbar { display: flex; align-items: center; gap: var(--lds-space-2); padding: var(--lds-space-2) var(--lds-space-5);
-    border-block-end: 1px solid var(--lds-color-border-subtle); flex-wrap: wrap; }
+    border-block-end: 1px solid var(--lds-color-border-subtle); box-sizing: border-box; min-block-size: 3rem; }
   .columns { display: grid; gap: var(--lds-space-2); padding: var(--lds-space-3); max-block-size: 24rem; overflow: auto; }
   .bulk { display: flex; align-items: center; gap: var(--lds-space-3); padding: var(--lds-space-2) var(--lds-space-5);
     background: var(--lds-color-accent-subtle); border-block-end: 1px solid var(--lds-color-border-subtle); }

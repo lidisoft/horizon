@@ -33,8 +33,9 @@ const styles = sheet(`
   .crumb strong { font-weight: var(--lds-font-weight-semibold); }
   .crumb lds-icon { color: var(--lds-color-fg-subtle); }
   .swatch { display: inline-block; inline-size: 0.625rem; block-size: 0.625rem; border-radius: var(--lds-radius-xs); }
+  header.bar .controls { display: flex; align-items: center; gap: var(--lds-space-2); }
   .toolbar { display: flex; align-items: center; gap: var(--lds-space-2); padding: var(--lds-space-2) var(--lds-space-5);
-    border-block-end: 1px solid var(--lds-color-border-subtle); flex-wrap: wrap; }
+    border-block-end: 1px solid var(--lds-color-border-subtle); box-sizing: border-box; min-block-size: 3rem; }
   .gantt { flex: 1; display: grid; grid-template-columns: minmax(14rem, 22rem) minmax(0, 1fr); overflow: auto; position: relative; }
   .names { position: sticky; inset-inline-start: 0; z-index: 3; background: var(--lds-color-bg-canvas);
     border-inline-end: 1px solid var(--lds-color-border-default); }
@@ -243,15 +244,17 @@ class HznTimeline extends HTMLElement {
           <span class="swatch" data-colour="${p.colour}"></span><strong>${p.name}</strong>
           <lds-icon name="chevron-right" size="sm"></lds-icon><span>${t("planning.layouts.timeline")}</span>
         </div>
+        <div class="controls">
+          <lds-button variant="ghost" size="sm" data-action="today">${t("timeline.today")}</lds-button>
+          <lds-segmented size="sm" data-zoom value="${this.zoom}" label="${t("timeline.zoom")}">
+            ${Object.keys(ZOOMS).map((z) => html`<lds-segment value="${z}">${t(`timeline.zooms.${z}`)}</lds-segment>`)}
+          </lds-segmented>
+        </div>
       </header>
       ${p.archived_at ? html`<lds-alert intent="warning">${t("projects.isArchived")}</lds-alert>` : ""}
       <div class="toolbar">
         ${viewSwitch(t, this.ws, p.key, "timeline")}
         <hzn-view-bar></hzn-view-bar>
-        <lds-segmented size="sm" data-zoom value="${this.zoom}" label="${t("timeline.zoom")}">
-          ${Object.keys(ZOOMS).map((z) => html`<lds-segment value="${z}">${t(`timeline.zooms.${z}`)}</lds-segment>`)}
-        </lds-segmented>
-        <lds-button variant="ghost" size="sm" data-action="today">${t("timeline.today")}</lds-button>
       </div>
       <div class="gantt" data-gantt><lds-skeleton></lds-skeleton></div>
       <hzn-reschedule></hzn-reschedule>`);

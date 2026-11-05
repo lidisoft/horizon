@@ -14,8 +14,8 @@ export const settingsStyles = sheet(`
     color: var(--lds-color-fg-muted); margin: var(--lds-space-5) 0 var(--lds-space-2) var(--lds-space-2); }
   nav.settings h2:first-of-type { margin-top: 0; }
   .page { flex: 1; min-width: 0; }
-  header.bar { display: flex; align-items: center; gap: var(--lds-space-3); padding: var(--lds-space-4) var(--lds-space-6);
-    border-bottom: 1px solid var(--lds-color-border-subtle); }
+  header.bar { display: flex; align-items: center; gap: var(--lds-space-3); block-size: 3.25rem; padding: 0 var(--lds-space-6);
+    border-bottom: 1px solid var(--lds-color-border-default); }
   header.bar .actions { margin-inline-start: auto; display: flex; gap: var(--lds-space-3); align-items: center; }
   .content { padding: var(--lds-space-5) var(--lds-space-6) var(--lds-space-8); }
   .muted { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }

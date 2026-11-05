@@ -7,7 +7,7 @@
 import "horizon/components/hzn-milestone-list.js";
 import "horizon/components/hzn-release-dialog.js";
 import { issueHref, issueStyles, projectData, statusGlyph } from "horizon/components/issue-ui.js";
-import { loadReleases, localDate, planningStyles, progress, viewSwitch } from "horizon/components/planning-ui.js";
+import { loadReleases, localDate, planningStyles, progress } from "horizon/components/planning-ui.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
@@ -154,7 +154,7 @@ class HznReleases extends HTMLElement {
         ${this.canManage ? html`<lds-button variant="primary" size="sm" data-action="new"><lds-icon slot="start" name="plus" size="sm"></lds-icon>${t("releases.new")}</lds-button>` : ""}
       </header>
       ${p.archived_at ? html`<lds-alert intent="warning">${t("projects.isArchived")}</lds-alert>` : ""}
-      <div class="toolbar">${viewSwitch(t, this.ws, p.key, "releases")}<span class="grow"></span>
+      <div class="toolbar"><span class="grow"></span>
         <lds-switch data-archived ${this.archived ? html`checked` : ""}>${t("releases.showArchived")}</lds-switch></div>
       <div class="content">
         <section aria-labelledby="releases-title"><h2 id="releases-title">${t("releases.title")}</h2><div data-releases><lds-skeleton></lds-skeleton></div></section>

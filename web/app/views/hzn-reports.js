@@ -9,7 +9,7 @@
 import "horizon/components/charts.js";
 import "horizon/components/hzn-view-bar.js";
 import { projectData, issueHref, issueStyles } from "horizon/components/issue-ui.js";
-import { loadIterations, loadReleases, planningStyles, viewSwitch } from "horizon/components/planning-ui.js";
+import { loadIterations, loadReleases, planningStyles } from "horizon/components/planning-ui.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
@@ -28,7 +28,7 @@ const styles = sheet(`
   .crumb lds-icon { color: var(--lds-color-fg-subtle); }
   .swatch { display: inline-block; inline-size: 0.625rem; block-size: 0.625rem; border-radius: var(--lds-radius-xs); }
   .toolbar { display: flex; align-items: center; gap: var(--lds-space-2); padding: var(--lds-space-2) var(--lds-space-5);
-    border-block-end: 1px solid var(--lds-color-border-subtle); flex-wrap: wrap; }
+    border-block-end: 1px solid var(--lds-color-border-subtle); box-sizing: border-box; min-block-size: 3rem; }
   .controls { display: flex; align-items: center; gap: var(--lds-space-3); padding: var(--lds-space-3) var(--lds-space-5); flex-wrap: wrap; }
   .controls lds-select { min-inline-size: 12rem; }
   .grow { flex: 1; }
@@ -119,7 +119,7 @@ class HznReports extends HTMLElement {
           <lds-icon name="chevron-right" size="sm"></lds-icon><span>${t("planning.layouts.reports")}</span>
         </div>
       </header>
-      <div class="toolbar">${viewSwitch(t, this.ws, p.key, "reports")}<span class="barwrap" data-barwrap><hzn-view-bar></hzn-view-bar></span></div>
+      <div class="toolbar"><span class="barwrap" data-barwrap><hzn-view-bar></hzn-view-bar></span></div>
       <div class="controls" data-controls></div>
       <div data-notice></div>
       <div class="panels" data-panels><lds-skeleton></lds-skeleton></div>`);

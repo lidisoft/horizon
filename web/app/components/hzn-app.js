@@ -6,8 +6,11 @@
 // public routes (sign-in, password reset, invitations) render without the
 // sidebar. Settings routes bring their own navigation instead of it.
 //
-// The sidebar's switcher lists the user's workspaces; the last one opened is
-// remembered, and "/" goes there.
+// The sidebar follows the Sidebar wireframe: the workspace switcher and the
+// account menu, search (⌘K) and New issue, the inbox and my issues, each
+// project with its pages, the saved views, then members and settings. The
+// switcher lists the user's workspaces; the last one opened is remembered,
+// and "/" goes there.
 
 import "horizon/components/hzn-issue-create.js";
 import { ISSUE_KEY, issueHref } from "horizon/components/issue-ui.js";
@@ -68,6 +71,17 @@ export const ROUTES = [
   { name: "magic-link", path: "/magic-link", view: "hzn-magic-link", public: true },
 ];
 const NOT_FOUND_VIEW = "hzn-not-found";
+/** A project's pages in the sidebar, under its name (wireframes: Sidebar). */
+const PROJECT_PAGES = [
+  { route: "project", path: "", icon: "eye", label: "planning.layouts.overview" },
+  { route: "project-issues", path: "/issues", icon: "list", label: "nav.issues" },
+  { route: "project-board", path: "/board", icon: "kanban", label: "planning.layouts.board" },
+  { route: "project-backlog", path: "/backlog", icon: "layers", label: "planning.layouts.backlog" },
+  { route: "project-releases", path: "/releases", icon: "rocket", label: "planning.layouts.releases" },
+  { route: "project-reports", path: "/reports", icon: "chart-column", label: "planning.layouts.reports" },
+];
+/** Where a saved view's layout lives under /w/:ws/p/:key/. */
+const LAYOUT_PATHS = { list: "issues", board: "board", table: "table", timeline: "timeline", calendar: "calendar" };
 const OUTCOME_ICONS = { unstarted: "circle", started: "circle-dot", completed: "circle-check", abandoned: "circle-x" };
 const THEME_KEY = "horizon.theme";
 const WORKSPACE_KEY = "horizon.workspace";
@@ -93,21 +107,33 @@ const styles = sheet(`
   :host { display: block; height: 100vh; }
   .frame { display: flex; height: 100%; }
   .frame:is([data-layout="public"], [data-layout="settings"]) lds-nav { display: none; }
-  .switcher { display: block; }
-  .section { margin: var(--lds-space-5) 0 var(--lds-space-1) var(--lds-space-2); display: flex; align-items: center; justify-content: space-between;
+  lds-nav { flex: none; --lds-nav-width: 15rem; }
+  .top { display: flex; flex-direction: column; gap: var(--lds-space-3); inline-size: 100%; }
+  .top .row { display: flex; align-items: center; justify-content: space-between; gap: var(--lds-space-2); min-inline-size: 0; }
+  .switcher { min-inline-size: 0; }
+  .switcher lds-button { max-inline-size: 100%; }
+  .switcher [data-ws-name] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--lds-font-weight-semibold); }
+  .tile { display: inline-flex; inline-size: 1.375rem; block-size: 1.375rem; flex: none; align-items: center; justify-content: center;
+    border-radius: var(--lds-radius-md); background: var(--lds-color-accent-default); color: var(--lds-color-fg-on-accent);
+    font-family: var(--lds-font-family-display); font-weight: var(--lds-font-weight-bold); font-size: var(--lds-font-size-xs); }
+  button.me { display: inline-flex; padding: 0; border: 0; border-radius: var(--lds-radius-full); background: none; cursor: pointer; }
+  button.me:focus-visible { outline: 2px solid var(--lds-color-focus-ring, var(--lds-color-accent-default)); outline-offset: 2px; }
+  .quick { display: flex; gap: var(--lds-space-2); }
+  .quick[hidden] { display: none; }
+  button.search { flex: 1; display: flex; align-items: center; gap: var(--lds-space-2); block-size: 2rem; min-inline-size: 0;
+    padding: 0 var(--lds-space-2) 0 var(--lds-space-3); border: 1px solid var(--lds-color-border-default); border-radius: var(--lds-radius-md);
+    background: var(--lds-color-bg-canvas); color: var(--lds-color-fg-muted); font: inherit; font-size: var(--lds-font-size-sm); cursor: pointer; }
+  button.search:hover { border-color: var(--lds-color-border-strong, var(--lds-color-border-default)); color: var(--lds-color-fg-default); }
+  button.search span { flex: 1; text-align: start; }
+  .section { margin: var(--lds-space-4) 0 var(--lds-space-1) var(--lds-space-2); display: flex; align-items: center; justify-content: space-between;
     font-size: var(--lds-font-size-2xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--lds-color-fg-muted); }
-  .dot { width: 0.625rem; height: 0.625rem; border-radius: var(--lds-radius-xs); margin-inline: 0.1875rem; }
-  .project-key { font-size: var(--lds-font-size-2xs); color: var(--lds-color-fg-muted); }
-  .switcher lds-button { max-width: 100%; }
-  .switcher [data-ws-name] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  lds-nav { flex: none; }
-  /* Project keys sit at the end of their row. */
-  lds-nav-item[data-project]::part(label) { flex: 1; }
-  lds-badge[hidden] { display: none; } /* lds-badge sets its own display */
-  .footer { display: grid; gap: var(--lds-space-1); }
+  .dot { inline-size: 0.625rem; block-size: 0.625rem; border-radius: var(--lds-radius-xs); }
+  .project-key, .count { font-size: var(--lds-font-size-xs); color: var(--lds-color-fg-muted); }
+  .count[hidden] { display: none; }
   /* position: relative keeps absolutely positioned descendants (visually
-     hidden labels) inside the scrolling area instead of stretching the page. */
-  main { flex: 1; min-width: 0; overflow: auto; position: relative; }
+     hidden labels) inside the scrolling area instead of stretching the page.
+     Views read at the wireframes' 14px. */
+  main { flex: 1; min-width: 0; overflow: auto; position: relative; font-size: var(--lds-font-size-sm); }
   .brand {
     font-family: var(--lds-font-family-display);
     font-weight: var(--lds-font-weight-semibold);
@@ -168,30 +194,39 @@ export class HznApp extends HTMLElement {
     root.innerHTML = String(html`
       <div class="frame">
         <lds-nav aria-label="${t("nav.label")}">
-          <div slot="brand" class="switcher">
-            <a class="brand" href="/" data-brand>${t("app.name")}</a>
-            <lds-menu placement="bottom-start" hidden data-switcher>
-              <lds-button slot="trigger" variant="ghost" size="sm" label="${t("nav.switchWorkspace")}">
-                <span data-ws-name></span><lds-icon slot="end" name="chevron-down"></lds-icon>
-              </lds-button>
-            </lds-menu>
+          <div slot="brand" class="top">
+            <div class="row">
+              <a class="brand" href="/" data-brand>${t("app.name")}</a>
+              <lds-menu placement="bottom-start" class="switcher" hidden data-switcher>
+                <lds-button slot="trigger" variant="ghost" size="sm" label="${t("nav.switchWorkspace")}">
+                  <span slot="start" class="tile" data-ws-tile></span><span data-ws-name></span><lds-icon slot="end" name="chevron-down" size="sm"></lds-icon>
+                </lds-button>
+              </lds-menu>
+              <lds-menu placement="bottom-end" data-account>
+                <button slot="trigger" type="button" class="me" aria-label="${t("nav.account")}"><lds-avatar size="sm" data-me></lds-avatar></button>
+                <lds-menu-item href="/account" data-route="account"><lds-icon slot="start" name="user"></lds-icon><span data-user></span></lds-menu-item>
+                <hr>
+                <lds-menu-item data-action="theme"><lds-icon slot="start" name="moon"></lds-icon><span data-label>${t("theme.dark")}</span></lds-menu-item>
+                <lds-menu-item data-action="sign-out"><lds-icon slot="start" name="log-out"></lds-icon>${t("nav.signOut")}</lds-menu-item>
+              </lds-menu>
+            </div>
+            <div class="quick" data-quick hidden>
+              <button type="button" class="search" data-action="palette">
+                <lds-icon name="search" size="sm"></lds-icon><span>${t("nav.search")}</span><lds-kbd>${displayKeys("mod+k").join("")}</lds-kbd>
+              </button>
+              <lds-tooltip content="${t("issues.new")}">
+                <lds-button variant="secondary" size="sm" label="${t("issues.new")}" data-action="create-issue"><lds-icon name="plus" size="sm"></lds-icon></lds-button>
+              </lds-tooltip>
+            </div>
           </div>
-          <lds-nav-item href="/" data-route="workspace" data-nav="home"><lds-icon slot="start" name="layers"></lds-icon>${t("nav.home")}</lds-nav-item>
-          <lds-nav-item href="/" data-route="inbox" data-nav="inbox" hidden><lds-icon slot="start" name="inbox"></lds-icon>${t("nav.inbox")}<lds-badge slot="end" size="sm" intent="info" data-unread hidden></lds-badge></lds-nav-item>
-          <lds-nav-item href="/" data-route="search" data-nav="search" hidden><lds-icon slot="start" name="search"></lds-icon>${t("nav.search")}</lds-nav-item>
+          <lds-nav-item href="/" data-route="inbox" data-nav="inbox" hidden><lds-icon slot="start" name="inbox"></lds-icon>${t("nav.inbox")}<span slot="end" class="count" data-unread hidden></span></lds-nav-item>
+          <lds-nav-item href="/" data-route="workspace" data-nav="my-issues" hidden><lds-icon slot="start" name="user"></lds-icon>${t("nav.myIssues")}</lds-nav-item>
           <lds-nav-item href="/" data-route="roadmap" data-nav="roadmap" hidden><lds-icon slot="start" name="chart-gantt"></lds-icon>${t("nav.roadmap")}</lds-nav-item>
           <lds-nav-item href="/" data-route="milestones" data-nav="milestones" hidden><lds-icon slot="start" name="flag"></lds-icon>${t("nav.milestones")}</lds-nav-item>
-          <lds-nav-item href="/" data-route="settings" data-nav="settings" hidden><lds-icon slot="start" name="settings"></lds-icon>${t("nav.settings")}</lds-nav-item>
           <div data-projects></div>
-          <div slot="footer" class="footer">
-            <lds-nav-item href="/account" data-route="account"><lds-avatar slot="start" size="sm"></lds-avatar><span data-user></span></lds-nav-item>
-            <lds-button variant="ghost" size="sm" data-action="theme">
-              <lds-icon slot="start" name="moon"></lds-icon><span data-label>${t("theme.dark")}</span>
-            </lds-button>
-            <lds-button variant="ghost" size="sm" data-action="sign-out">
-              <lds-icon slot="start" name="log-out"></lds-icon>${t("nav.signOut")}
-            </lds-button>
-          </div>
+          <div data-views></div>
+          <lds-nav-item slot="footer" href="/" data-route="settings-members" data-nav="members" hidden><lds-icon slot="start" name="users"></lds-icon>${t("nav.members")}</lds-nav-item>
+          <lds-nav-item slot="footer" href="/" data-route="settings" data-nav="settings" hidden><lds-icon slot="start" name="settings"></lds-icon>${t("nav.settings")}</lds-nav-item>
         </lds-nav>
         <main id="outlet"></main>
       </div>
@@ -263,8 +298,9 @@ export class HznApp extends HTMLElement {
       this.palette.removeAttribute("open");
       action();
     });
-    root.querySelector('[data-action="theme"]').addEventListener("click", actions.theme);
-    root.querySelector('[data-action="sign-out"]').addEventListener("click", actions["sign-out"]);
+    for (const name of ["theme", "sign-out", "palette", "create-issue"]) {
+      root.querySelector(`[data-action="${name}"]`).addEventListener("click", actions[name]);
+    }
 
     this.renderTheme();
     router.subscribe((match) => this.show(match));
@@ -416,6 +452,7 @@ export class HznApp extends HTMLElement {
     }
     // An issue's page belongs to its project (by its key's prefix).
     this.currentProject = (match.params.key ?? match.params.issue?.replace(/-\d+$/, ""))?.toUpperCase();
+    this.renderViews();
     this.markProject();
     const tag = match.route ? match.route.view : NOT_FOUND_VIEW;
     const params = match.route ? match.params : { path: match.path };
@@ -427,7 +464,8 @@ export class HznApp extends HTMLElement {
     } else {
       for (const [k, v] of Object.entries(params)) view.setAttribute(k, v);
     }
-    const section = match.route?.name.startsWith("settings-") ? "settings" : match.route?.name;
+    const name = match.route?.name;
+    const section = name !== "settings-members" && name?.startsWith("settings-") ? "settings" : name;
     if (match.route?.name !== "issue") this.context.commands.clear("issue");
     for (const item of this.shadowRoot.querySelectorAll("lds-nav-item[data-route]")) {
       item.toggleAttribute("active", item.dataset.route === section);
@@ -464,44 +502,82 @@ export class HznApp extends HTMLElement {
     badge.closest("lds-nav-item").setAttribute("aria-label", unread ? this.context.i18n.t("nav.inboxUnread", { count: unread }) : this.context.i18n.t("nav.inbox"));
   }
 
-  /** Loads the current workspace's projects for the sidebar. */
+  /** Loads the current workspace's projects and saved views for the sidebar. */
   async loadProjects() {
     const slug = this.currentSlug;
     const box = this.shadowRoot.querySelector("[data-projects]");
+    const viewsBox = this.shadowRoot.querySelector("[data-views]");
     if (!slug) {
       box.replaceChildren();
+      viewsBox.replaceChildren();
       return;
     }
     let projects = [];
     let can = [];
+    let views = [];
     try {
       const enc = encodeURIComponent(slug);
-      const [list, ws] = await Promise.all([this.context.api.get(`/w/${enc}/projects`), this.context.api.get(`/w/${enc}`)]);
+      const [list, ws, saved] = await Promise.all([
+        this.context.api.get(`/w/${enc}/projects`), this.context.api.get(`/w/${enc}`),
+        this.context.api.get(`/w/${enc}/views`).catch(() => ({ data: { items: [] } })),
+      ]);
       projects = list.data.items.filter((p) => !p.archived_at);
       can = ws.data.can;
+      views = saved.data.items;
     } catch {
       // not a member (yet), or offline: no project list
     }
     if (slug !== this.currentSlug) return; // the user moved on meanwhile
+    this.projects = projects;
+    this.views = views;
     const { t } = this.context.i18n;
     box.innerHTML = String(html`
       ${projects.length || can.includes("project.create") ? html`
         <div class="section">${t("nav.projects")}
-          ${can.includes("project.create") ? html`<lds-button size="sm" variant="ghost" label="${t("projects.new")}" data-new-project><lds-icon name="plus"></lds-icon></lds-button>` : ""}
+          ${can.includes("project.create") ? html`<lds-button size="sm" variant="ghost" label="${t("projects.new")}" data-new-project><lds-icon name="plus" size="sm"></lds-icon></lds-button>` : ""}
         </div>` : ""}
       ${projects.map((p) => html`
-        <lds-nav-item href="/w/${slug}/p/${p.key}/issues" data-project="${p.key}">
-          <span slot="start" class="dot" data-colour="${p.colour}"></span>${p.name}<span slot="end" class="project-key">${p.key}</span>
-        </lds-nav-item>`)}`);
+        <lds-nav-group label="${p.name}" href="/w/${slug}/p/${p.key}" data-project="${p.key}">
+          <span slot="start" class="dot" data-colour="${p.colour}"></span><span slot="end" class="project-key">${p.key}</span>
+          ${PROJECT_PAGES.map((page) => html`<lds-nav-item href="/w/${slug}/p/${p.key}${page.path}" data-page="${page.route}">
+            <lds-icon slot="start" name="${page.icon}"></lds-icon>${t(page.label)}</lds-nav-item>`)}
+        </lds-nav-group>`)}`);
     paintSwatches(box);
     box.querySelector("[data-new-project]")?.addEventListener("click", () => this.context.router.navigate(`/w/${slug}/settings/projects?new=1`));
+    this.renderViews();
     this.markProject();
   }
 
+  /**
+   * The saved views, each opening its layout in its project (a workspace
+   * view: in the current project, else the first).
+   */
+  renderViews() {
+    const slug = this.currentSlug;
+    const box = this.shadowRoot.querySelector("[data-views]");
+    const byID = new Map((this.projects ?? []).map((p) => [p.id, p]));
+    const fallback = (this.projects ?? []).find((p) => p.key === this.currentProject) ?? this.projects?.[0];
+    const links = (this.views ?? []).flatMap((v) => {
+      const p = v.project_id ? byID.get(v.project_id) : fallback;
+      return p && LAYOUT_PATHS[v.layout] ? [{ v, href: `/w/${slug}/p/${p.key}/${LAYOUT_PATHS[v.layout]}?view=${v.id}` }] : [];
+    });
+    box.innerHTML = links.length ? String(html`
+      <lds-nav-group label="${this.context.i18n.t("nav.views")}" open>
+        ${links.map(({ v, href }) => html`<lds-nav-item href="${href}" data-view="${v.id}"><lds-icon slot="start" name="bookmark"></lds-icon>${v.name}</lds-nav-item>`)}
+      </lds-nav-group>`) : "";
+  }
+
   markProject() {
-    for (const item of this.shadowRoot.querySelectorAll("lds-nav-item[data-project]")) {
-      item.toggleAttribute("active", item.dataset.project === this.currentProject && ["project", "project-issues", "project-backlog", "project-board", "project-releases", "issue"].includes(this.context.router.current?.route?.name));
+    const route = this.context.router.current?.route?.name;
+    const viewID = this.context.router.current?.query?.get("view");
+    for (const group of this.shadowRoot.querySelectorAll("lds-nav-group[data-project]")) {
+      const here = group.dataset.project === this.currentProject;
+      if (here) group.setAttribute("open", "");
+      for (const item of group.querySelectorAll("lds-nav-item")) {
+        item.toggleAttribute("active", here && !viewID && (item.dataset.page === route || (route === "issue" && item.dataset.page === "project-issues")));
+      }
     }
+    for (const item of this.shadowRoot.querySelectorAll("lds-nav-item[data-view]")) item.toggleAttribute("active", item.dataset.view === viewID);
   }
 
   renderSwitcher() {
@@ -523,29 +599,20 @@ export class HznApp extends HTMLElement {
         <lds-menu-item href="/w/${current.slug}/settings/general"><lds-icon slot="start" name="settings"></lds-icon>${t("nav.workspaceSettings")}</lds-menu-item>
       `));
     }
-    const home = root.querySelector('[data-nav="home"]');
-    const settings = root.querySelector('[data-nav="settings"]');
-    const inbox = root.querySelector('[data-nav="inbox"]');
-    inbox.hidden = !current;
-    if (current) inbox.setAttribute("href", `/w/${current.slug}/inbox`);
-    const search = root.querySelector('[data-nav="search"]');
-    search.hidden = !current;
-    if (current) search.setAttribute("href", `/w/${current.slug}/search`);
-    const roadmap = root.querySelector('[data-nav="roadmap"]');
-    roadmap.hidden = !current;
-    if (current) roadmap.setAttribute("href", `/w/${current.slug}/roadmap`);
-    const milestones = root.querySelector('[data-nav="milestones"]');
-    milestones.hidden = !current;
-    if (current) milestones.setAttribute("href", `/w/${current.slug}/milestones`);
-    home.setAttribute("href", current ? `/w/${current.slug}` : "/");
-    settings.hidden = !current;
-    if (current) settings.setAttribute("href", `/w/${current.slug}/settings/general`);
+    const base = current ? `/w/${current.slug}` : "";
+    for (const [nav, path] of Object.entries({ inbox: "/inbox", "my-issues": "", roadmap: "/roadmap", milestones: "/milestones", members: "/settings/members", settings: "/settings/general" })) {
+      const item = root.querySelector(`[data-nav="${nav}"]`);
+      item.hidden = !current;
+      if (current) item.setAttribute("href", base + path);
+    }
+    root.querySelector("[data-quick]").hidden = !current;
+    root.querySelector("[data-ws-tile]").textContent = current ? [...current.name.trim()][0]?.toUpperCase() ?? "" : "";
   }
 
   renderUser() {
     const user = this.context.session.user;
     this.shadowRoot.querySelector("[data-user]").textContent = user?.name ?? "";
-    this.shadowRoot.querySelector("lds-avatar").setAttribute("name", user?.name ?? "");
+    this.shadowRoot.querySelector("[data-me]").setAttribute("name", user?.name ?? "");
   }
 
   toggleTheme() {

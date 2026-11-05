@@ -6,7 +6,7 @@
 
 import "horizon/components/charts.js";
 import { changesProjectData, describeEvent, forgetProjects, issueHref, issueStyles, projectData, statusGlyph } from "horizon/components/issue-ui.js";
-import { planningStyles, viewSwitch } from "horizon/components/planning-ui.js";
+import { planningStyles } from "horizon/components/planning-ui.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
@@ -115,7 +115,6 @@ class HznProjectHome extends HTMLElement {
     const days = (v) => (v == null ? "–" : t("reports.days", { count: v }));
     this.shadowRoot.innerHTML = String(html`
       <header class="bar"><div class="crumb"><span class="swatch" data-colour="${p.colour}"></span><strong>${p.name}</strong></div></header>
-      <div class="toolbar">${viewSwitch(t, this.ws, p.key, "")}</div>
       <div class="grid">
         <lds-card data-block="sprint">
           <h2>${t("overview.sprint")}${sp ? html`<a href="${base}/reports?tab=sprint&iteration=${sp.iteration.id}">${t("overview.reports")}</a>` : ""}</h2>

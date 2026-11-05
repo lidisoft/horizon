@@ -26,13 +26,13 @@ export const LAYOUT_ROUTES = { list: "issues", board: "board", table: "table", t
 
 const styles = sheet(`
   :host { display: contents; }
-  .bar { display: flex; align-items: center; gap: var(--lds-space-2); flex-wrap: wrap; flex: 1; min-inline-size: 0; }
+  .bar { display: flex; align-items: center; gap: var(--lds-space-2); flex: 1; min-inline-size: 0; }
   .chip { display: inline-flex; align-items: center; gap: var(--lds-space-1); block-size: 1.75rem; padding-inline: var(--lds-space-2) 0;
     border: 1px solid var(--lds-color-border-default); border-radius: var(--lds-radius-full); background: var(--lds-color-bg-subtle);
     font-size: var(--lds-font-size-sm); white-space: nowrap; }
   .chip .op { color: var(--lds-color-fg-muted); }
   .grow { flex: 1; }
-  lds-input[data-text] { inline-size: 14rem; }
+  lds-input[data-text] { flex: 0 1 12rem; min-inline-size: 7rem; }
   .builder { display: grid; gap: var(--lds-space-3); padding: var(--lds-space-3); min-inline-size: 18rem; }
   .builder .actions, .actions { display: flex; justify-content: flex-end; gap: var(--lds-space-2); }
   form { display: grid; gap: var(--lds-space-4); }

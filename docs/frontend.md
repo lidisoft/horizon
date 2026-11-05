@@ -88,12 +88,21 @@ socket event ─▶ store.apply(event) ─▶ subscribed components re-render
 ## Sessions and routes
 
 Routes: `/` goes to the workspace opened last (remembered in local storage)
-or the first one; `/w/:ws` is the workspace, `/w/:ws/p/:key` a project (a
+or the first one; `/w/:ws` is the user's issues in the workspace, `/w/:ws/p/:key` a project (a
 former key redirects), `/w/:ws/settings/…` its settings (with their own
 sidebar), `/invitation` accepts an invitation, and
 `/account` holds the user's profile, password, sessions and tokens. The
 sidebar's switcher lists the user's workspaces; views call
 `context.workspaces.refresh()` after creating, renaming or joining one.
+
+The sidebar follows the Sidebar wireframe. At the top are the workspace
+switcher, the account menu (account, theme, sign out), search (opens ⌘K) and
+New issue. Then come Inbox with its unread count, My issues, Roadmap and
+Milestones; each project as a group linking to its overview, with its pages
+(Overview, Issues, Board, Backlog, Releases, Reports); and the saved views.
+Members and Settings sit at the bottom. Views read at 14px
+(`--lds-font-size-sm`) under a 52px header, with the view switcher (List,
+Board, Backlog, Table, Timeline, Calendar) and the filter bar on one row.
 
 `hzn-app` asks `GET /api/v1/me` who is signed in before it starts routing.
 Routes marked `public` (sign-in, forgot and reset password) render without
@@ -147,6 +156,7 @@ semantic tokens only, `:host` display):
 | Element | Purpose |
 |---------|---------|
 | `hzn-app` | Frame: sidebar, routing outlet, ⌘K, toasts |
+| `hzn-workspace-home` (view) | `/w/{ws}`: My issues: the open issues assigned to the user in every project, started then unstarted, in rank order |
 | `hzn-issue-list` (view) | A project's issues grouped by status in workflow order, rank order within; peek panel (non-modal `lds-drawer`) beside it |
 | `hzn-issue-detail` | Issue page and peek panel (`mode="page" \| "peek"`): properties save as they change (If-Match), description, sub-issues, links, attachments, activity and comments |
 | `hzn-issue-create` | New issue dialog (button, `C`, ⌘K) |

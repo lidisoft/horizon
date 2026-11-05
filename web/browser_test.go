@@ -480,6 +480,9 @@ const view = appRoot + `.getElementById("outlet").firstElementChild.shadowRoot`
 func (p *page) signIn(email, password string) {
 	p.t.Helper()
 	signIn := appRoot + `.querySelector("hzn-sign-in")?.shadowRoot`
+	// The form focuses its email field a frame after rendering: typing
+	// before that would lose keys to it.
+	p.poll(signIn + `?.activeElement?.getAttribute("name") === "email" && "focused"`)
 	p.typeInto(signIn+`?.querySelector('[name="email"]')`, email)
 	p.typeInto(signIn+`.querySelector('[name="password"]')`, password+"\r")
 	p.poll(`location.pathname !== "/sign-in" && "signed in"`)
@@ -757,8 +760,8 @@ func TestProjects(t *testing.T) {
 	}
 	admin.eval(view + `.querySelector('[data-action="create"]').click()`)
 	admin.poll(`location.pathname === "/w/acme/p/DS" && "created"`) // its overview
-	item := appRoot + `.querySelector('lds-nav-item[data-project="DS"]')`
-	if got := admin.poll(item + `?.textContent.trim() + " | " + ` + item + `?.querySelector(".project-key")?.textContent`); got != "Design systemDS | DS" {
+	item := appRoot + `.querySelector('lds-nav-group[data-project="DS"]')`
+	if got := admin.poll(item + `?.getAttribute("label") + " | " + ` + item + `?.querySelector(".project-key")?.textContent`); got != "Design system | DS" {
 		t.Errorf("sidebar item = %q", got)
 	}
 
@@ -796,7 +799,7 @@ func TestProjects(t *testing.T) {
 	grace.typeInto(view+`.querySelector('[name="name"]')`, "Grace Hopper")
 	grace.typeInto(view+`.querySelector('[name="password"]')`, testPassword+"\r")
 	grace.poll(`location.pathname === "/w/acme" && "joined"`)
-	grace.poll(appRoot + `.querySelector('lds-nav-item[data-project="LDS"]') && "sees it"`)
+	grace.poll(appRoot + `.querySelector('lds-nav-group[data-project="LDS"]') && "sees it"`)
 
 	admin.do(chromedp.Navigate(a.base + "/w/acme/settings/projects/LDS"))
 	admin.poll(view + `.querySelector('lds-radio-group button[value="private"]') && "form"`)
@@ -804,12 +807,12 @@ func TestProjects(t *testing.T) {
 	admin.eval(view + `.querySelector('[data-action="save"]').click()`)
 	admin.poll(view + `.querySelector("[data-saved]")?.textContent && "saved"`)
 	// Pushed: it leaves Grace's sidebar without a reload.
-	grace.poll(`!` + appRoot + `.querySelector('lds-nav-item[data-project="LDS"]') && "gone"`)
+	grace.poll(`!` + appRoot + `.querySelector('lds-nav-group[data-project="LDS"]') && "gone"`)
 	grace.do(chromedp.Navigate(a.base + "/w/acme/p/LDS"))
 	if got := grace.poll(view + `.querySelector("h2")?.textContent.trim()`); got != "This project doesn't exist, or you can't see it." {
 		t.Errorf("private project for a viewer: %q", got)
 	}
-	if got := grace.poll(`String(!!` + appRoot + `.querySelector('lds-nav-item[data-project="LDS"]'))`); got != "false" {
+	if got := grace.poll(`String(!!` + appRoot + `.querySelector('lds-nav-group[data-project="LDS"]'))`); got != "false" {
 		t.Error("the private project is still in Grace's sidebar")
 	}
 
@@ -2010,7 +2013,7 @@ func TestReleases(t *testing.T) {
 	}
 
 	pg.do(chromedp.Navigate(a.base + "/w/acme/p/HZN/issues"))
-	pg.click(view + `.querySelector('nav.views a[href$="/releases"]')`)
+	pg.click(appRoot + `.querySelector('lds-nav-group[data-project="HZN"] lds-nav-item[data-page="project-releases"]')`)
 	pg.poll(`location.pathname === "/w/acme/p/HZN/releases" && "releases"`)
 	pg.poll(view + `.querySelector("[data-releases] .none") && "empty"`)
 
@@ -2598,6 +2601,9 @@ func TestSingleSignOn(t *testing.T) {
 func (p *page) signIn2(email, password string) {
 	p.t.Helper()
 	signIn := appRoot + `.querySelector("hzn-sign-in")?.shadowRoot`
+	// The form focuses its email field a frame after rendering: typing
+	// before that would lose keys to it.
+	p.poll(signIn + `?.activeElement?.getAttribute("name") === "email" && "focused"`)
 	p.typeInto(signIn+`?.querySelector('[name="email"]')`, email)
 	p.typeInto(signIn+`.querySelector('[name="password"]')`, password+"\r")
 }
