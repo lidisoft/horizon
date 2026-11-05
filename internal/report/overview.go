@@ -21,7 +21,8 @@ type SprintBlock struct {
 	Goal      string       `json:"goal"`
 	// DaysLeft counts the working days from today to the end date.
 	DaysLeft int `json:"days_left"`
-	// Remaining and Ideal are its burndown, a value a day.
+	// Days, Remaining and Ideal are its burndown, a value a day.
+	Days      []string   `json:"days" example:"2026-11-02"`
 	Remaining []*float64 `json:"remaining"`
 	Ideal     []float64  `json:"ideal"`
 	// ByOutcome is its issues now, by outcome.
@@ -87,7 +88,7 @@ func (s *Service) Overview(ctx context.Context, pc project.Context) (Overview, e
 		if err != nil {
 			return Overview{}, err
 		}
-		block := &SprintBlock{Iteration: bd.Iteration, Goal: sp.it.Goal, Remaining: bd.Remaining, Ideal: bd.Ideal,
+		block := &SprintBlock{Iteration: bd.Iteration, Goal: sp.it.Goal, Days: bd.Days, Remaining: bd.Remaining, Ideal: bd.Ideal,
 			ByOutcome: map[string]float64{"completed": 0, "started": 0, "unstarted": 0, "abandoned": 0}}
 		for _, id := range sp.in(now) {
 			if o := sp.h.outcome(id, now); o != "" {

@@ -1912,10 +1912,16 @@ func TestReports(t *testing.T) {
 	emit("[data-metric]", "estimate")
 	pg.poll(`new URLSearchParams(location.search).get("metric") === "estimate" && "estimate"`)
 	pg.poll(view + `.querySelector('[data-item="HZN-1"] td.num')?.textContent === "3" && "weighted"`)
-	emit("[data-tab]", "flow")
+	// One report at a time, from the list beside them.
+	pick := func(id string) {
+		pg.click(view + `.querySelector('nav.reports [data-report="` + id + `"]')`)
+		pg.poll(`new URLSearchParams(location.search).get("report") === "` + id + `" && "` + id + `"`)
+	}
+	pick("cfd")
 	pg.poll(chart("hzn-chart-area", 0) + `?.querySelectorAll("path.area").length > 0 && "cfd"`)
+	pick("cycle-time")
 	pg.poll(chart("hzn-chart-scatter", 0) + `?.querySelectorAll("circle.point").length === 1 && "cycle time"`)
-	emit("[data-tab]", "workload")
+	pick("distribution")
 	pg.poll(chart("hzn-chart-bar", 0) + `?.querySelectorAll("rect.bar").length === 1 && "distribution"`)
 	pg.logs.failOnErrors(t)
 }
@@ -1967,8 +1973,8 @@ func TestOverview(t *testing.T) {
 		t.Errorf("someone else's issue in my work: %s", got)
 	}
 	pg.poll(block("activity") + `.querySelectorAll("li a.key").length > 0 && "activity"`)
-	pg.poll(block("sprint") + `.querySelector("hzn-sparkline")?.shadowRoot?.querySelector("path.line") && "sparkline"`)
-	pg.poll(block("sprint") + `.querySelector(".legend")?.textContent.includes("2 ") && "outcomes"`)
+	pg.poll(block("sprint") + `.querySelector("hzn-chart-line")?.shadowRoot?.querySelector("path.line") && "burndown"`)
+	pg.poll(block("sprint") + `.querySelector(".legend")?.textContent.replace(/\s+/g, " ").includes("Unstarted 2") && "outcomes"`)
 
 	// A pushed change refreshes it: HZN-1 in progress shows in the WIP.
 	_, cfg = pg.api("GET", "/w/acme/projects/HZN/config/resolved", "")
@@ -1983,7 +1989,7 @@ func TestOverview(t *testing.T) {
 			}
 		}
 	}
-	pg.poll(block("flow") + `?.querySelector(".wip")?.textContent.includes("In progress") && "wip"`)
+	pg.poll(block("flow") + `?.querySelector('[data-figure="wip"]')?.getAttribute("title").includes("In progress: 1") && "wip"`)
 	pg.logs.failOnErrors(t)
 }
 

@@ -11279,6 +11279,16 @@ const docTemplate = `{
                         "format": "float64"
                     }
                 },
+                "days": {
+                    "description": "Days, Remaining and Ideal are its burndown, a value a day.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "2026-11-02"
+                    ]
+                },
                 "days_left": {
                     "description": "DaysLeft counts the working days from today to the end date.",
                     "type": "integer"
@@ -11296,7 +11306,6 @@ const docTemplate = `{
                     "$ref": "#/definitions/report.IterationRef"
                 },
                 "remaining": {
-                    "description": "Remaining and Ideal are its burndown, a value a day.",
                     "type": "array",
                     "items": {
                         "type": "number"

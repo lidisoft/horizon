@@ -77,9 +77,9 @@ One fixed page per project, not customisable in v1:
 
 | Block | Content |
 |-------|---------|
-| Active sprint | Goal, days left, burndown sparkline, scope by outcome |
+| Active sprint | Goal, days left, scope by outcome, burndown chart (the full width) |
 | Releases and milestones | Next upcoming, with progress bars |
-| Flow health | Throughput over the last 4 weeks, cycle time p50/p85, WIP by status |
+| Flow health | Cycle time p50/p85 and work in progress as figures, throughput over the last 4 weeks as bars |
 | Activity and my work | Recent project activity; the viewer's open issues in the project |
 
 ## How reports are computed
@@ -143,7 +143,7 @@ read at the day's end (now for today), `null` for days to come.
 
 `GET /api/v1/w/{ws}/projects/{key}/overview` returns all overview blocks in one
 response, in issue count: `sprint` (the active iteration, its goal, working
-days left, burndown and scope by outcome), `next_release` (the soonest
+days left, burndown with its `days`, and scope by outcome), `next_release` (the soonest
 dated unreleased one) and `next_milestone` (the project's or the
 workspace's, from today) with their scope by outcome, `flow` (completed per
 week over the last 4, cycle time p50/p85 over 90 days, WIP by status), the
