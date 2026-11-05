@@ -41,7 +41,7 @@ var shots = []shot{
 	{board: "Board", path: "/p/HZN/board", w: 1440, h: 900},
 	{board: "Backlog", path: "/p/HZN/backlog", w: 1440, h: 1000},
 	{board: "CommandPalette", path: "/p/HZN/issues", setup: `palette`, w: 1440, h: 900},
-	{board: "Inbox", path: "/inbox", w: 1440, h: 900},
+	{board: "Inbox", path: "/inbox", setup: `inbox`, w: 1440, h: 900},
 	{board: "States", props: "state=empty", path: "/p/WEB/issues", w: 1440, h: 900},
 	{board: "States", props: "state=no-results", path: "/search?q=zzzz", w: 1440, h: 900},
 	{board: "States", props: "state=loading", w: 1440, h: 900},
@@ -123,6 +123,8 @@ func TestWireframeShots(t *testing.T) {
 		case "palette":
 			app.eval(`document.activeElement?.blur()`)
 			app.do(chromedp.KeyEvent("k", chromedp.KeyModifiers(chromedp.ModifierCtrl)))
+		case "inbox":
+			app.click(view + `.querySelector(".row [data-select]")`)
 		case "move":
 			app.eval(`(() => { const d = ` + view + `.querySelector("hzn-issue-detail")?.shadowRoot ?? ` + view + `;
 				d.querySelector('[data-action="move"]')?.click(); })()`)

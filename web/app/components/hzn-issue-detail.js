@@ -9,7 +9,7 @@ import "horizon/components/hzn-editor.js";
 import "horizon/components/hzn-issue-create.js";
 import "horizon/components/hzn-move-issue.js";
 import {
-  PRIORITIES, avatar, describeEvent, issueHref, issueStyles, priorityIcon, projectData, statusGlyph,
+  PRIORITIES, avatar, describeEvent, issueHref, issueStyles, priorityGlyph, priorityIcon, projectData, statusGlyph,
 } from "horizon/components/issue-ui.js";
 import { isOpen } from "horizon/components/planning-ui.js";
 import { Collab } from "horizon/editor/collab.js";
@@ -28,9 +28,21 @@ const styles = sheet(`
   :host([mode="page"]) main { padding: var(--lds-space-8) var(--lds-space-10); max-inline-size: 52rem; }
   :host([mode="page"]) aside { padding: var(--lds-space-5); border-inline-start: 1px solid var(--lds-color-border-default); }
   :host([mode="page"]) aside .props { display: grid; gap: var(--lds-space-4); }
-  :host([mode="peek"]) .props { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: var(--lds-space-2) var(--lds-space-3); align-items: center; }
+  :host([mode="peek"]) .props { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: var(--lds-space-1) var(--lds-space-3); align-items: center; }
   :host([mode="peek"]) .props > label { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
   :host([mode="peek"]) .props lds-field::part(label) { display: none; }
+  /* In the peek panel properties read as values; a control shows on hover and focus (wireframes: IssuePeek). */
+  :host([mode="peek"]) .props lds-combobox::part(control),
+  :host([mode="peek"]) .props :is(lds-select, lds-input, lds-date-picker)::part(wrap) { border-color: transparent; background: transparent; box-shadow: none; }
+  :host([mode="peek"]) .props lds-select:not(:hover, :focus-within)::part(chevron) { opacity: 0; }
+  :host([mode="peek"]) .props lds-combobox:is(:hover, :focus-within)::part(control),
+  :host([mode="peek"]) .props :is(lds-select, lds-input, lds-date-picker):is(:hover, :focus-within)::part(wrap) { border-color: var(--lds-color-border-default); }
+  :host([mode="peek"]) .dates { grid-template-columns: 1fr 1fr; }
+  .glyphed { display: flex; align-items: center; gap: var(--lds-space-1); }
+  .glyphed > :last-child { flex: 1; min-inline-size: 0; }
+  :host([mode="page"]) .glyphed { position: relative; }
+  :host([mode="page"]) .glyphed > .glyph { position: absolute; inset-inline-start: var(--lds-space-3); z-index: 1; pointer-events: none; }
+  :host([mode="page"]) .glyphed lds-select::part(select) { padding-inline-start: calc(var(--lds-space-3) + 1.5rem); }
   .presence { display: inline-flex; gap: 2px; }
   .presence lds-avatar[data-state="editing"] { outline: 2px solid var(--lds-color-accent-fg); border-radius: var(--lds-radius-full); }
   .bar { display: flex; align-items: center; justify-content: space-between; gap: var(--lds-space-3);
@@ -58,8 +70,15 @@ const styles = sheet(`
   .item .type { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); min-inline-size: 6rem; }
   .linker { display: flex; gap: var(--lds-space-2); align-items: end; margin-block-start: var(--lds-space-2); }
   .linker lds-input { flex: 1; }
-  .feed { display: grid; gap: var(--lds-space-3); }
-  .event { display: flex; gap: var(--lds-space-2); align-items: baseline; font-size: var(--lds-font-size-sm); color: var(--lds-color-fg-muted); }
+  .feed { display: grid; gap: var(--lds-space-3); position: relative; }
+  .event { display: flex; gap: var(--lds-space-2); align-items: baseline; font-size: var(--lds-font-size-sm); color: var(--lds-color-fg-muted);
+    position: relative; padding-inline-start: var(--lds-space-6); }
+  /* The events read as a timeline: a dot each, on a thread (wireframes: IssueDetail). */
+  .event::before { content: ""; position: absolute; inset-inline-start: 0.3125rem; inset-block-start: 0.375rem; inline-size: 0.5rem; block-size: 0.5rem;
+    border-radius: var(--lds-radius-full); background: var(--lds-color-fg-subtle); box-shadow: 0 0 0 2px var(--lds-color-bg-canvas); }
+  .event::after { content: ""; position: absolute; inset-inline-start: 0.5625rem; inset-block: 1rem calc(-1 * var(--lds-space-3)); inline-size: 1px;
+    background: var(--lds-color-border-default); }
+  .event:has(+ :not(.event))::after, .event:last-child::after { display: none; }
   .event strong { color: var(--lds-color-fg-default); font-weight: var(--lds-font-weight-medium); }
   .comment { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--lds-space-3); }
   .comment .box { border: 1px solid var(--lds-color-border-default); border-radius: var(--lds-radius-md); padding: var(--lds-space-3); }
@@ -321,6 +340,10 @@ class HznIssueDetail extends HTMLElement {
   bell() {
     const { t } = this.context.i18n;
     const on = !!this.subscription?.subscribed;
+    if (this.mode === "page") {
+      return html`<lds-button variant="secondary" size="sm" data-action="subscription" aria-pressed="${String(on)}"
+        title="${t(on ? "issue.unsubscribe" : "issue.subscribe")}"><lds-icon slot="start" name="bell" size="sm"></lds-icon>${t(on ? "issue.subscribedShort" : "issue.subscribe")}</lds-button>`;
+    }
     return html`<lds-button variant="ghost" size="sm" data-action="subscription" aria-pressed="${String(on)}"
       label="${t(on ? "issue.unsubscribe" : "issue.subscribe")}" title="${on ? t("issue.subscribed") : t("issue.subscribe")}"><lds-icon name="bell"></lds-icon></lds-button>`;
   }
@@ -349,6 +372,7 @@ class HznIssueDetail extends HTMLElement {
       <lds-menu placement="bottom-end">
         <lds-button slot="trigger" variant="ghost" size="sm" label="${t("issues.more")}"><lds-icon name="more-horizontal"></lds-icon></lds-button>
         <lds-menu-item data-action="copy"><lds-icon slot="start" name="link"></lds-icon>${t("issues.copyLink")}</lds-menu-item>
+        ${this.can.includes("issue.attach") && !archived ? html`<lds-menu-item data-action="attach"><lds-icon slot="start" name="paperclip"></lds-icon>${t("issues.attach")}</lds-menu-item>` : ""}
         ${this.can.includes("issue.move") && !archived ? html`<lds-menu-item data-action="move"><lds-icon slot="start" name="folder"></lds-icon>${t("issues.move")}</lds-menu-item>` : ""}
         ${this.can.includes("issue.archive") ? html`<lds-menu-item data-action="${archived ? "unarchive" : "archive"}"><lds-icon slot="start" name="archive"></lds-icon>${t(archived ? "issues.unarchive" : "issues.archive")}</lds-menu-item>` : ""}
         ${this.can.includes("issue.delete") ? html`<hr><lds-menu-item data-action="delete"><lds-icon slot="start" name="trash-2"></lds-icon>${t("issues.delete")}</lds-menu-item>` : ""}
@@ -367,18 +391,19 @@ class HznIssueDetail extends HTMLElement {
     const scale = d.config.estimation;
     const types = d.config.issue_types;
     const prop = (label, control) => (this.mode === "peek" ? html`<label>${label}</label>${control}` : html`<lds-field label="${label}">${control}</lds-field>`);
+    const glyphed = (glyph, control) => html`<div class="glyphed">${glyph}${control}</div>`;
     const fields = d.fieldsOf(i.type_id);
     const values = i.fields ?? {};
     return html`
-      ${prop(t("issues.status"), html`
+      ${prop(t("issues.status"), glyphed(statusGlyph(d, i.status_id), html`
         <lds-select data-prop="status" value="${i.status_id}" ${off("issue.transition")}>
           <option value="${i.status_id}">${current?.name ?? "?"}</option>
           ${targets.map((x) => html`<option value="${x.to_status_id}">${x.name} → ${d.statuses.get(x.to_status_id)?.name ?? ""}</option>`)}
-        </lds-select>`)}
-      ${prop(t("issues.priority"), html`
+        </lds-select>`))}
+      ${prop(t("issues.priority"), glyphed(priorityGlyph(i.priority, t), html`
         <lds-select data-prop="priority" value="${i.priority}" ${off("issue.edit")}>
           ${PRIORITIES.map((p) => html`<option value="${p}">${t(`priority.${p}`)}</option>`)}
-        </lds-select>`)}
+        </lds-select>`))}
       ${prop(t("issues.assignee"), html`
         <lds-combobox data-prop="assignee" value="${i.assignee_id ?? ""}" placeholder="${t("issue.unassigned")}" label="${t("issues.assignee")}" ${off("issue.assign")}>
           <lds-option value="">${t("issue.unassigned")}</lds-option>
@@ -463,7 +488,7 @@ class HznIssueDetail extends HTMLElement {
     const { t } = this.context.i18n;
     const done = this.subIssues.filter((c) => ["completed", "abandoned"].includes(this.data.statuses.get(c.status_id)?.outcome)).length;
     const canAdd = this.can.includes("issue.create") && !this.issue.archived_at && this.data.types.get(this.issue.type_id)?.parent_rule !== "required";
-    if (!this.subIssues.length && !canAdd) return "";
+    if (!this.subIssues.length && (!canAdd || this.mode === "peek")) return "";
     return html`
       <h2>${t("issues.subIssues")}
         ${this.subIssues.length ? html`<span class="progress">${t("issues.doneOf", { done, total: this.subIssues.length })}
@@ -479,15 +504,16 @@ class HznIssueDetail extends HTMLElement {
   linksBlock() {
     const { t } = this.context.i18n;
     const canLink = this.can.includes("issue.link") && !this.issue.archived_at;
-    if (!this.links.length && !canLink) return "";
+    if (!this.links.length && (!canLink || this.mode === "peek")) return "";
     return html`
-      <h2>${t("issues.links")}</h2>
+      <h2>${t("issues.links")}<span class="grow"></span>
+        ${canLink && !this.linking ? html`<lds-button variant="ghost" size="sm" data-action="show-linker"><lds-icon slot="start" name="plus" size="sm"></lds-icon>${t("issues.add")}</lds-button>` : ""}</h2>
       <div class="list">${this.links.map((l) => html`
         <div class="item"><span class="type">${t(`link.${l.type}`)}${l.lag_days ? ` ${l.lag_days > 0 ? "+" : ""}${l.lag_days}d` : ""}</span>
           <span class="key">${l.key}</span><a href="${issueHref(this.ws, l.key)}">${l.title}</a>
           ${canLink ? html`<lds-button variant="ghost" size="sm" data-action="unlink" data-id="${l.id}" label="${t("issues.unlink", { key: l.key })}"><lds-icon name="x" size="sm"></lds-icon></lds-button>` : html`<span></span>`}
         </div>`)}</div>
-      ${canLink ? html`
+      ${canLink && this.linking ? html`
         <div class="linker" data-linker>
           <lds-select size="sm" data-link-type value="relates_to" aria-label="${t("issues.linkType")}">${LINK_TYPES.map((x) => html`<option value="${x}">${t(`link.${x}`)}</option>`)}</lds-select>
           <lds-input size="sm" data-link-target placeholder="${this.data.project.key}-1" aria-label="${t("issues.linkTarget")}"></lds-input>
@@ -516,7 +542,7 @@ class HznIssueDetail extends HTMLElement {
     const { i18n } = this.context;
     const { t } = i18n;
     const canAttach = this.can.includes("issue.attach") && !this.issue.archived_at;
-    if (!this.attachments.length && !canAttach) return "";
+    if (!this.attachments.length) return canAttach ? html`<input type="file" data-file multiple>` : "";
     const me = this.context.session.user?.id;
     return html`
       <h2>${t("issues.attachments")}<span class="grow"></span>
@@ -802,6 +828,10 @@ class HznIssueDetail extends HTMLElement {
         return this.remove(el);
       case "add-child":
         return this.shadowRoot.querySelector("hzn-issue-create").show({ ws: this.ws, project: this.data.project.key, parent: this.issue.key });
+      case "show-linker":
+        this.linking = true;
+        this.paint();
+        return this.shadowRoot.querySelector("[data-link-target]")?.focus();
       case "link":
         return this.link();
       case "unlink":
@@ -874,6 +904,7 @@ class HznIssueDetail extends HTMLElement {
       globalThis.LDS?.toast?.({ intent: "danger", title: errorMessage(err, i18n) });
       return;
     }
+    this.linking = false;
     this.load();
   }
 

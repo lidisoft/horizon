@@ -1016,7 +1016,7 @@ func TestIssues(t *testing.T) {
 	pg.poll(view + `.querySelector('.row[data-key="HZN-1"] .priority')?.dataset.priority === "high" && "prioritized"`)
 	todo := pg.poll(peek + `.querySelector('[data-prop="status"] option:nth-child(2)')?.value`)
 	change(peek, `[data-prop="status"]`, todo)
-	pg.poll(`[...` + view + `.querySelectorAll(".group")].map((g) => g.textContent.replace(/\s+/g, " ").trim()).join(",") === "Backlog 1,Todo 1" && "moved"`)
+	pg.poll(`[...` + view + `.querySelectorAll(".group")].map((g) => g.textContent.replace(/\s+/g, " ").trim()).join(",") === "Todo 1,Backlog 1" && "moved"`)
 
 	// A comment from the peek shows in the activity.
 	// A change saved mid-comment doesn't take the focus away: the rest of
@@ -2308,7 +2308,7 @@ func TestInbox(t *testing.T) {
 	row := view + `.querySelector('.row[data-unread]')`
 	text := `(` + row + `?.textContent.replace(/\s+/g, " ").trim() ?? "")`
 	got := grace.poll(text + `.includes("Ada Lovelace created the issue") && ` + text)
-	if !strings.Contains(got, "HZN-1Outbox relay") || !strings.Contains(got, "Assigned") {
+	if !strings.Contains(got, "HZN-1") || !strings.Contains(got, "Outbox relay") || !strings.Contains(got, "Assigned") {
 		t.Errorf("row = %q", got)
 	}
 	ada.api("POST", "/w/acme/issues/HZN-1/comments", `{"body":"Looks good"}`)
@@ -2317,10 +2317,13 @@ func TestInbox(t *testing.T) {
 		t.Errorf("badge = %q", got)
 	}
 
-	// Opening the row reads it and goes to the issue, Grace following it.
-	grace.click(row + `.querySelector("[data-open]")`)
-	grace.poll(`location.pathname === "/w/acme/issues/HZN-1" && "issue"`)
+	// Selecting the row reads it and shows the issue beside the list; Open
+	// issue goes to its page, Grace following it.
+	grace.click(row + `.querySelector("[data-select]")`)
+	grace.poll(view + `.querySelector(".pane hzn-issue-detail")?.shadowRoot?.querySelector("h1")?.textContent === "Outbox relay" && "shown"`)
 	grace.poll(noBadge + ` && "read"`)
+	grace.click(view + `.querySelector(".pane [data-open]")`)
+	grace.poll(`location.pathname === "/w/acme/issues/HZN-1" && "issue"`)
 	bell := view + `.querySelector("hzn-issue-detail").shadowRoot.querySelector('[data-action="subscription"]')`
 	grace.poll(bell + `?.getAttribute("aria-pressed") === "true" && "subscribed"`)
 	grace.click(bell)

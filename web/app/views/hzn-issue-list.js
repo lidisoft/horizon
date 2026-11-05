@@ -1,5 +1,6 @@
 // <hzn-issue-list>: /w/:ws/p/:key/issues — a project's issues grouped by
-// status, in rank order (wireframes: Main, IssuePeek). A row opens the peek
+// status, work in progress first, then what is next, the backlog and what
+// is closed; in rank order (wireframes: Main, IssuePeek). A row opens the peek
 // panel beside the list; o or a double click opens the issue's page. j/k
 // move between rows, Enter peeks, c creates. Pushed events refresh it.
 // The view bar filters it and picks saved views (?view=, ?filter=).
@@ -16,6 +17,9 @@ import { requestContext } from "horizon/core/context.js";
 import { html, sheet } from "horizon/core/dom.js";
 import { errorMessage } from "horizon/core/forms.js";
 
+/** Where each outcome's groups go: started work first (wireframes: Main). */
+const GROUP_ORDER = { started: 0, unstarted: 1, backlog: 2, completed: 3, abandoned: 4 };
+
 const styles = sheet(`
   :host { display: flex; flex-direction: column; min-block-size: 100%; }
   header.bar { display: flex; align-items: center; justify-content: space-between; gap: var(--lds-space-3);
@@ -29,7 +33,7 @@ const styles = sheet(`
   .toolbar .grow { flex: 1; }
   .group { display: flex; align-items: center; gap: var(--lds-space-2); block-size: 2.25rem; padding: 0 var(--lds-space-5);
     background: var(--lds-color-bg-subtle); border-block-end: 1px solid var(--lds-color-border-subtle);
-    font-size: var(--lds-font-size-sm); font-weight: var(--lds-font-weight-semibold); }
+    font-size: var(--lds-font-size-xs); font-weight: var(--lds-font-weight-semibold); }
   .group .count { color: var(--lds-color-fg-muted); font-weight: normal; }
   .row { display: grid; grid-template-columns: 1.25rem 4.5rem 1.25rem minmax(0, 1fr) auto 2rem 3.5rem 1.75rem;
     align-items: center; gap: var(--lds-space-3); block-size: 2.5rem; padding: 0 var(--lds-space-5);
@@ -38,7 +42,8 @@ const styles = sheet(`
   .row:focus-visible, .row[aria-current="true"] { background: var(--lds-color-accent-subtle); }
   .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .labels { display: flex; gap: var(--lds-space-1); justify-content: flex-end; }
-  .num, .due { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); text-align: end; font-variant-numeric: tabular-nums; }
+  .row .key { font-size: var(--lds-font-size-xs); }
+  .num, .due { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-xs); text-align: end; font-variant-numeric: tabular-nums; }
   .empty { padding: var(--lds-space-12) var(--lds-space-6); }
   lds-drawer { --lds-drawer-width: min(34rem, 100vw); }
   [slot="header"] { display: flex; align-items: center; gap: var(--lds-space-2); font-size: var(--lds-font-size-sm); }
@@ -179,7 +184,11 @@ class HznIssueList extends HTMLElement {
       if (!groups.has(i.status_id)) groups.set(i.status_id, []);
       groups.get(i.status_id).push(i);
     }
-    const order = [...groups.keys()].sort((a, b) => (this.data.statuses.get(a)?.position ?? 0) - (this.data.statuses.get(b)?.position ?? 0));
+    const rank = (id) => {
+      const st = this.data.statuses.get(id);
+      return (GROUP_ORDER[st?.backlog ? "backlog" : st?.outcome] ?? 1) * 1e6 + (st?.position ?? 0);
+    };
+    const order = [...groups.keys()].sort((a, b) => rank(a) - rank(b));
     box.innerHTML = String(html`${order.map((statusId) => {
       const s = this.data.statuses.get(statusId);
       const rows = groups.get(statusId);
