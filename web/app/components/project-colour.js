@@ -4,11 +4,16 @@
 
 export const COLOURS = ["blue", "green", "purple", "pink", "coral", "yellow", "grey"];
 
-/** Paints every [data-colour] element under root with its swatch. */
+/**
+ * Paints every [data-colour] element under root with its swatch, and every
+ * [data-tint] element with a light wash of it: a background for a glyph
+ * in the text colour, which a full swatch can't carry.
+ */
 export function paintSwatches(root) {
-  for (const el of root.querySelectorAll("[data-colour]")) {
-    // CSSOM writes are allowed by the CSP; style attributes are not.
-    el.style.background = `var(--lds-color-swatch-${el.dataset.colour})`;
+  // CSSOM writes are allowed by the CSP; style attributes are not.
+  for (const el of root.querySelectorAll("[data-colour]")) el.style.background = `var(--lds-color-swatch-${el.dataset.colour})`;
+  for (const el of root.querySelectorAll("[data-tint]")) {
+    el.style.background = `color-mix(in srgb, var(--lds-color-swatch-${el.dataset.tint}) 24%, transparent)`;
   }
 }
 

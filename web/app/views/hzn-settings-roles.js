@@ -21,7 +21,10 @@ const styles = sheet(`
     letter-spacing: 0.08em; text-transform: uppercase; color: var(--lds-color-fg-muted); }
   .matrix tr.area td { text-align: center; letter-spacing: normal; text-transform: none; }
   .key { font-family: var(--lds-font-family-mono); font-size: var(--lds-font-size-xs); white-space: nowrap; }
-  .desc { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
+  /* A permission on one line: its key, then what it allows (wireframes: Roles). */
+  .matrix tbody tr:not(.area) th { background: var(--lds-color-bg-canvas); }
+  .perm { display: grid; grid-template-columns: 13rem minmax(0, 12rem); gap: var(--lds-space-3); align-items: baseline; font-weight: normal; }
+  .desc { color: var(--lds-color-fg-default); font-size: var(--lds-font-size-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: var(--lds-color-accent-default); cursor: pointer; }
   input[type="checkbox"]:disabled { cursor: default; }
   td.end { text-align: end; white-space: nowrap; width: 1%; }
@@ -160,7 +163,7 @@ class HznSettingsRoles extends HTMLElement {
                 })}</tr>
               ${area.permissions.map((key) => html`
                 <tr>
-                  <th scope="row"><span class="key">${key}</span><br><span class="desc">${has(`perm.${key}`) ? t(`perm.${key}`) : ""}</span></th>
+                  <th scope="row"><span class="perm"><span class="key">${key}</span><span class="desc" title="${has(`perm.${key}`) ? t(`perm.${key}`) : ""}">${has(`perm.${key}`) ? t(`perm.${key}`) : ""}</span></span></th>
                   ${this.roles.map((r) => {
                     const on = this.perms(r).has(key);
                     const changed = on !== r.permissions.includes(key);

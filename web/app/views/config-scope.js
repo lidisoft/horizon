@@ -48,3 +48,8 @@ export function originBadge(t, item, scope) {
 export function statusIcon(outcome) {
   return { unstarted: "circle", started: "circle-dot", completed: "circle-check", abandoned: "circle-x" }[outcome] ?? "circle-dashed";
 }
+
+/** An outcome's glyph in its colour (settingsStyles colours it, as issue screens do). */
+export function outcomeIcon(outcome) {
+  return html`<lds-icon class="outcome" data-outcome="${outcome ?? ""}" name="${statusIcon(outcome)}"></lds-icon>`;
+}

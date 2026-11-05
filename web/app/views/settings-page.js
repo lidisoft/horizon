@@ -20,6 +20,10 @@ export const settingsStyles = sheet(`
   .content { padding: var(--lds-space-5) var(--lds-space-6) var(--lds-space-8); }
   .muted { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
   lds-alert:empty { display: none; }
+  lds-icon.outcome[data-outcome="unstarted"] { color: var(--lds-color-fg-muted); }
+  lds-icon.outcome[data-outcome="started"] { color: var(--lds-color-accent-fg); }
+  lds-icon.outcome[data-outcome="completed"] { color: var(--lds-color-success-fg); }
+  lds-icon.outcome[data-outcome="abandoned"], lds-icon.outcome[data-outcome=""] { color: var(--lds-color-fg-subtle); }
 `);
 
 const GROUPS = [

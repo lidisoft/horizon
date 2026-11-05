@@ -5,7 +5,7 @@
 import { requestContext } from "horizon/core/context.js";
 import { html, ldsLightSheet, sheet } from "horizon/core/dom.js";
 import { busy, clearFieldErrors, errorMessage, formValues, showFieldErrors } from "horizon/core/forms.js";
-import { loadScope, originBadge, scopePicker, statusIcon, watchScope } from "horizon/views/config-scope.js";
+import { loadScope, originBadge, outcomeIcon, scopePicker, watchScope } from "horizon/views/config-scope.js";
 import { settingsPage, settingsStyles } from "horizon/views/settings-page.js";
 
 const OUTCOMES = ["unstarted", "started", "completed", "abandoned"];
@@ -80,7 +80,7 @@ class HznSettingsCategories extends HTMLElement {
               </tr></thead>
               <tbody>${this.items.map((c) => html`
                 <tr>
-                  <td><span class="name"><lds-icon name="${statusIcon(c.outcome)}"></lds-icon>${c.name} ${originBadge(t, c, scope)}</span></td>
+                  <td><span class="name">${outcomeIcon(c.outcome)}${c.name} ${originBadge(t, c, scope)}</span></td>
                   <td>${this.editable(c) ? html`
                     <lds-select size="sm" data-outcome="${c.id}" value="${c.outcome}" label="${t("categories.outcomeOf", { name: c.name })}">
                       ${OUTCOMES.map((o) => html`<option value="${o}">${t(`outcome.${o}`)} · ${t(open(o) ? "outcome.open" : "outcome.final")}</option>`)}
@@ -91,11 +91,11 @@ class HznSettingsCategories extends HTMLElement {
             </table>
           </lds-table>
           <h3>${t("categories.columns")}</h3>
-          <div class="columns">${visible.map((c) => html`<div class="column"><lds-icon name="${statusIcon(c.outcome)}"></lds-icon>${c.name}</div>`)}</div>
+          <div class="columns">${visible.map((c) => html`<div class="column">${outcomeIcon(c.outcome)}${c.name}</div>`)}</div>
         </div>
         <aside>
           <h3>${t("categories.drives")}</h3>
-          ${OUTCOMES.map((o) => html`<lds-card><strong><lds-icon name="${statusIcon(o)}"></lds-icon> ${t(`outcome.${o}`)}</strong><p>${t(`outcome.${o}.help`)}</p></lds-card>`)}
+          ${OUTCOMES.map((o) => html`<lds-card><strong>${outcomeIcon(o)} ${t(`outcome.${o}`)}</strong><p>${t(`outcome.${o}.help`)}</p></lds-card>`)}
         </aside>
       </div>
       ${this.dialogs()}`;

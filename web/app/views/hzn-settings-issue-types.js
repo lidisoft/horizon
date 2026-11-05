@@ -30,7 +30,7 @@ const styles = sheet(`
   .item:hover { background: var(--lds-color-bg-muted); }
   .item small { display: block; color: var(--lds-color-fg-muted); }
   .chip { width: 1.75rem; height: 1.75rem; border-radius: var(--lds-radius-md); display: grid; place-items: center;
-    color: var(--lds-color-fg-on-accent); }
+    color: var(--lds-color-fg-default); }
   .detail { padding: var(--lds-space-5) var(--lds-space-6); }
   .head { display: flex; gap: var(--lds-space-3); align-items: center; margin-bottom: var(--lds-space-5); }
   .head h2 { margin: 0; font-size: var(--lds-font-size-lg); }
@@ -119,7 +119,7 @@ class HznSettingsIssueTypes extends HTMLElement {
     const own = scope.project ? this.types.filter((x) => !x.inherited) : this.types;
     const row = (it) => html`
       <div class="item" role="button" tabindex="0" data-select="${it.id}" aria-current="${it.id === this.selected ? "true" : "false"}">
-        <span class="chip" data-colour="${it.colour}"><lds-icon name="${it.icon}"></lds-icon></span>
+        <span class="chip" data-tint="${it.colour}"><lds-icon name="${it.icon}"></lds-icon></span>
         <span>${it.name}<small>${it.disabled ? t("types.switchedOff") : `${this.wfName(it.workflow_id)} · ${t(`types.parent.${it.parent_rule}`)}`}</small></span>
         ${scope.project && it.inherited && this.canManage
           ? html`<lds-switch size="sm" data-toggle="${it.id}" ${it.disabled ? "" : html`checked`} label="${t("types.useIn", { name: it.name, project: scope.project.name })}"></lds-switch>`
@@ -173,7 +173,7 @@ class HznSettingsIssueTypes extends HTMLElement {
     if (edit) actions.push(["delete", "types.delete"]);
     return html`
       <div class="head">
-        <span class="chip" data-colour="${it.colour}"><lds-icon name="${it.icon}"></lds-icon></span>
+        <span class="chip" data-tint="${it.colour}"><lds-icon name="${it.icon}"></lds-icon></span>
         <div><h2>${it.name}</h2><span class="muted">${origin}</span></div>
         ${actions.length ? html`
           <lds-menu class="menu" placement="bottom-end" data-type-menu>

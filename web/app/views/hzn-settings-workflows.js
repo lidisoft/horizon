@@ -9,7 +9,7 @@ import { newIdempotencyKey as uuid } from "horizon/core/api.js";
 import { requestContext } from "horizon/core/context.js";
 import { html, ldsLightSheet, sheet } from "horizon/core/dom.js";
 import { errorMessage } from "horizon/core/forms.js";
-import { loadScope, originBadge, scopePicker, statusIcon, watchScope } from "horizon/views/config-scope.js";
+import { loadScope, originBadge, outcomeIcon, scopePicker, watchScope } from "horizon/views/config-scope.js";
 import { settingsPage, settingsStyles } from "horizon/views/settings-page.js";
 
 const FIELDS = ["assignee", "estimate", "priority", "due_date", "start_date", "iteration", "release", "description", "labels"];
@@ -17,6 +17,10 @@ const SAVE_DELAY = 500;
 
 const styles = sheet(`
   .content { padding: 0 !important; }
+  /* Status names and categories read as text; their control shows on hover and focus (wireframes: Workflow). */
+  td :is(lds-input, lds-select)::part(wrap) { border-color: transparent; background: transparent; box-shadow: none; }
+  td lds-select:not(:hover, :focus-within)::part(chevron) { opacity: 0; }
+  td :is(lds-input, lds-select):is(:hover, :focus-within)::part(wrap) { border-color: var(--lds-color-border-default); background: var(--lds-color-bg-canvas); }
   .split { display: grid; grid-template-columns: minmax(0, 1fr) 20rem; min-height: calc(100vh - 4.5rem); }
   .main { padding: var(--lds-space-5) var(--lds-space-6); min-width: 0; }
   .panel { border-inline-start: 1px solid var(--lds-color-border-subtle); padding: var(--lds-space-5); display: grid; gap: var(--lds-space-4); align-content: start; }
@@ -198,7 +202,7 @@ class HznSettingsWorkflows extends HTMLElement {
             const edit = this.editable && !gone;
             return html`
               <tr class="${gone ? "removed" : added.has(s.id) ? "added" : ""}">
-                <td><span class="status"><lds-icon name="${statusIcon(cat?.outcome)}"></lds-icon>
+                <td><span class="status">${outcomeIcon(cat?.outcome)}
                   ${edit ? html`<lds-input size="sm" data-status-name="${s.id}" value="${s.name}" maxlength="40" label="${t("workflows.name")}"></lds-input>` : html`<span>${s.name}</span>`}
                   ${s.initial ? html`<lds-badge size="sm" intent="info">${t("workflows.initial")}</lds-badge>` : ""}
                   ${added.has(s.id) ? html`<lds-badge size="sm" intent="success">${t("workflows.new")}</lds-badge>` : ""}
