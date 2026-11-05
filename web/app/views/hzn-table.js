@@ -57,12 +57,18 @@ const styles = sheet(`
   .bulk[hidden] { display: none; }
   .bulk lds-select { min-inline-size: 9rem; }
   .scroll { flex: 1; overflow: auto; }
-  table { border-collapse: separate; border-spacing: 0; min-inline-size: 100%; font-size: var(--lds-font-size-sm); }
+  table { border-collapse: separate; border-spacing: 0; min-inline-size: 100%; font-size: var(--lds-font-size-xs); }
   th, td { padding: 0 var(--lds-space-3); block-size: 2.5rem; border-block-end: 1px solid var(--lds-color-border-subtle);
     text-align: start; white-space: nowrap; outline: none; }
-  th { position: sticky; top: 0; z-index: 1; background: var(--lds-color-bg-canvas); font-weight: var(--lds-font-weight-semibold);
+  th { position: sticky; top: 0; z-index: 1; background: var(--lds-color-bg-subtle); font-weight: var(--lds-font-weight-semibold);
     color: var(--lds-color-fg-muted); border-block-end-color: var(--lds-color-border-default); }
+  /* Keys read as the list's: muted, not links (wireframes: Table); the row opens the issue. */
+  a.key { color: var(--lds-color-fg-muted); text-decoration: none; font-variant-numeric: tabular-nums; }
+  a.key:hover { color: var(--lds-color-fg-default); text-decoration: underline; }
+  td { font-size: var(--lds-font-size-sm); }
+  td.num, td.muted { font-size: var(--lds-font-size-xs); }
   th button { all: unset; display: inline-flex; align-items: center; gap: var(--lds-space-1); cursor: pointer; }
+  th .unsorted { opacity: 0.4; }
   th button:focus-visible { outline: 2px solid var(--lds-color-accent-border); outline-offset: 2px; }
   td.title { max-inline-size: 28rem; overflow: hidden; text-overflow: ellipsis; }
   td .cell { display: inline-flex; align-items: center; gap: var(--lds-space-2); }
@@ -298,7 +304,7 @@ class HznTable extends HTMLElement {
             const s = this.sort.find((x) => x.field === c.sort);
             const sort = s ? (s.dir === "desc" ? "descending" : "ascending") : "none";
             return html`<th scope="col" aria-sort="${sort}">${c.sort
-              ? html`<button type="button" data-sort="${c.sort}">${c.label}${s ? html`<lds-icon name="${s.dir === "desc" ? "chevron-down" : "chevron-up"}" size="sm"></lds-icon>` : ""}</button>`
+              ? html`<button type="button" data-sort="${c.sort}">${c.label}${s ? html`<lds-icon name="${s.dir === "desc" ? "chevron-down" : "chevron-up"}" size="sm"></lds-icon>` : html`<lds-icon class="unsorted" name="chevron-down" size="sm"></lds-icon>`}</button>`
               : c.label}</th>`;
           })}
         </tr></thead>

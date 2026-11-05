@@ -1130,6 +1130,7 @@
   "timeline.zooms.month": "Months",
   "timeline.zooms.quarter": "Quarters",
   "timeline.today": "Today",
+  "timeline.nonWorking": "Non-working day",
   "timeline.iterations": "Iterations",
   "timeline.clickToSchedule": "Click a day to schedule it",
   "timeline.barLabel": "{key} {title}, {start} to {due}. Alt+arrows move it; with Shift, its due date.",

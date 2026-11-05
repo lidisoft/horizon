@@ -40,9 +40,13 @@ const styles = sheet(`
   .weekdays div { padding: var(--lds-space-1) var(--lds-space-2); font-size: var(--lds-font-size-xs); color: var(--lds-color-fg-muted);
     font-weight: var(--lds-font-weight-semibold); text-transform: uppercase; }
   .week { position: relative; border-block-start: 1px solid var(--lds-color-border-subtle); }
-  .strips { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; gap: 2px 0; padding-block: 2px; }
+  /* Iterations run across the week under the day numbers (wireframes: Calendar); the days make room for them. */
+  .strips { position: absolute; inset-inline: 0; inset-block-start: 1.625rem; z-index: 1; display: grid;
+    grid-template-columns: repeat(7, minmax(7rem, 1fr)); gap: 2px 0; padding-inline: var(--lds-space-1); pointer-events: none; }
   .strips:empty { display: none; }
-  .strip { font-size: var(--lds-font-size-xs); padding-inline: var(--lds-space-2); border-radius: var(--lds-radius-xs); white-space: nowrap;
+  .day .top { margin-block-end: calc(var(--strips, 0) * 1.375rem); }
+  .strip { display: flex; align-items: center; gap: var(--lds-space-1); block-size: 1.25rem; box-sizing: border-box;
+    font-size: var(--lds-font-size-xs); padding-inline: var(--lds-space-2); border-radius: var(--lds-radius-xs); white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis; background: var(--lds-color-bg-subtle); border: 1px solid var(--lds-color-border-default); }
   .strip[data-state="active"] { background: var(--lds-color-accent-subtle); border-color: var(--lds-color-accent-border); }
   .day { min-block-size: 7rem; padding: var(--lds-space-1); border-inline-start: 1px solid var(--lds-color-border-subtle); outline: none;
@@ -280,7 +284,7 @@ class HznCalendar extends HTMLElement {
           return html`
           <div class="week${this.mode === "week" ? " tall" : ""}" role="row">
             <div class="strips">${strips.map((it) => html`<div class="strip" data-state="${it.state}" data-from="${it.start_date < week[0] ? week[0] : it.start_date}"
-              data-to="${it.end_date > week[6] ? week[6] : it.end_date}" data-week="${week[0]}" title="${it.name}">${it.name}</div>`)}</div>
+              data-to="${it.end_date > week[6] ? week[6] : it.end_date}" data-week="${week[0]}" title="${it.name}"><lds-icon name="repeat" size="sm"></lds-icon>${it.name}</div>`)}</div>
             ${week.map((d) => {
               const holiday = this.calendar.holiday(d);
               const list = due.get(d) ?? [];
@@ -299,6 +303,7 @@ class HznCalendar extends HTMLElement {
           </div>`;
         })}
       </div>`);
+    for (const w of box.querySelectorAll(".week")) w.style.setProperty("--strips", String(w.querySelectorAll(".strip").length));
     for (const s of box.querySelectorAll(".strip")) {
       const from = daysBetween(s.dataset.week, s.dataset.from) + 1;
       const to = daysBetween(s.dataset.week, s.dataset.to) + 2;

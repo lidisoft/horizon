@@ -14,7 +14,7 @@
 import "horizon/components/hzn-reschedule.js";
 import "horizon/components/hzn-view-bar.js";
 import { Calendar, addDays, daysBetween } from "horizon/components/calendar.js";
-import { changesProjectData, forgetProjects, issueHref, issueStyles, projectData, statusGlyph } from "horizon/components/issue-ui.js";
+import { avatar, changesProjectData, forgetProjects, issueHref, issueStyles, projectData, shortDate, statusGlyph } from "horizon/components/issue-ui.js";
 import { fetchIssues, loadIterations, loadReleases, planningStyles, viewSwitch } from "horizon/components/planning-ui.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
 import { requestContext } from "horizon/core/context.js";
@@ -67,12 +67,23 @@ const styles = sheet(`
     background: var(--lds-color-bg-surface); padding-inline: 4px; border-radius: var(--lds-radius-xs); }
   .lane { position: relative; block-size: ${ROW}px; border-block-end: 1px solid var(--lds-color-border-subtle); }
   .lane.unscheduled { cursor: copy; }
-  .gbar { position: absolute; inset-inline-start: var(--x); inline-size: var(--w); inset-block: 7px; border-radius: var(--lds-radius-sm);
-    background: var(--lds-color-accent-subtle); border: 1px solid var(--lds-color-accent-border); cursor: grab; z-index: 2; outline: none;
-    display: flex; align-items: center; font-size: var(--lds-font-size-xs); padding-inline: 6px; overflow: hidden; white-space: nowrap; touch-action: none; }
-  .gbar[data-outcome="completed"] { background: var(--lds-color-success-subtle); border-color: var(--lds-color-success-border, var(--lds-color-border-strong)); }
-  .gbar[data-outcome="abandoned"] { opacity: 0.5; }
-  .gbar.point { border-style: dashed; }
+  /* Bars are filled with their outcome's chart colour; dates and assignee sit beside them (wireframes: Timeline). */
+  .gbar { position: absolute; inset-inline-start: var(--x); inline-size: var(--w); inset-block: 9px; border-radius: var(--lds-radius-sm);
+    background: var(--lds-color-chart-unstarted); cursor: grab; z-index: 2; outline: none; touch-action: none; }
+  .gbar[data-outcome="started"] { background: var(--lds-color-chart-started); }
+  .gbar[data-outcome="completed"] { background: var(--lds-color-chart-completed); }
+  .gbar[data-outcome="abandoned"] { background: var(--lds-color-chart-abandoned); opacity: 0.5; }
+  .gbar.point { background: transparent; border: 2px dashed var(--lds-color-chart-unstarted); }
+  .blabel { position: absolute; inset-inline-start: calc(var(--x) + var(--w) + var(--lds-space-2)); inset-block: 0; display: flex; align-items: center;
+    gap: var(--lds-space-2); font-size: var(--lds-font-size-xs); color: var(--lds-color-fg-muted); white-space: nowrap; pointer-events: none; z-index: 2; }
+  .legend { display: flex; align-items: center; gap: var(--lds-space-3); margin-inline-end: var(--lds-space-3); font-size: var(--lds-font-size-xs);
+    color: var(--lds-color-fg-muted); white-space: nowrap; }
+  .legend i { display: inline-block; inline-size: 0.625rem; block-size: 0.625rem; border-radius: 2px; margin-inline-end: var(--lds-space-1);
+    vertical-align: -1px; background: var(--lds-color-chart-unstarted); }
+  .legend i.started { background: var(--lds-color-chart-started); }
+  .legend i.completed { background: var(--lds-color-chart-completed); }
+  .legend i.nonworking { background: var(--lds-color-bg-subtle); border: 1px solid var(--lds-color-border-default); }
+  @media (max-width: 80rem) { .legend { display: none; } }
   .gbar:focus-visible, .gbar[aria-current="true"] { box-shadow: 0 0 0 2px var(--lds-color-accent-border); }
   .gbar.dragging { opacity: 0.7; cursor: grabbing; }
   .gbar .grip { position: absolute; inset-block: 0; inline-size: 6px; cursor: ew-resize; }
@@ -110,7 +121,7 @@ class HznTimeline extends HTMLElement {
     this.offSocket = this.context.socket.on((m) => this.onPush(m));
     this.onChanged = () => this.refresh();
     document.addEventListener("hzn-issue-changed", this.onChanged);
-    this.zoom = ZOOMS[storedZoom()] ? storedZoom() : "month";
+    this.zoom = ZOOMS[storedZoom()] ? storedZoom() : "week";
     this.load();
   }
 
@@ -245,6 +256,8 @@ class HznTimeline extends HTMLElement {
           <lds-icon name="chevron-right" size="sm"></lds-icon><span>${t("planning.layouts.timeline")}</span>
         </div>
         <div class="controls">
+          <span class="legend" aria-hidden="true"><span><i class="completed"></i>${t("outcome.completed")}</span><span><i class="started"></i>${t("outcome.started")}</span>
+            <span><i></i>${t("outcome.unstarted")}</span><span><i class="nonworking"></i>${t("timeline.nonWorking")}</span></span>
           <lds-button variant="ghost" size="sm" data-action="today">${t("timeline.today")}</lds-button>
           <lds-segmented size="sm" data-zoom value="${this.zoom}" label="${t("timeline.zoom")}">
             ${Object.keys(ZOOMS).map((z) => html`<lds-segment value="${z}">${t(`timeline.zooms.${z}`)}</lds-segment>`)}
@@ -288,8 +301,8 @@ class HznTimeline extends HTMLElement {
     const months = dates.filter((d) => d === from || d.endsWith("-01")).map((d, k, all) => ({
       date: d, to: all[k + 1] ? addDays(all[k + 1], -1) : last, label: monthName.format(new Date(`${d}T00:00:00Z`)),
     }));
-    // Every day when there's room, else Mondays (and every other one at the widest zoom).
-    const step = this.px >= 14 ? 1 : this.px >= 5 ? 7 : 14;
+    // Every day when there's room for two digits, else every week (every other one at the widest zoom).
+    const step = this.px >= 24 ? 1 : this.px >= 5 ? 7 : 14;
     const dayLabels = dates.filter((d, k) => k % step === 0);
     const off = dates.filter((d) => !this.calendar.working(d));
     const markers = [
@@ -322,8 +335,9 @@ class HznTimeline extends HTMLElement {
               <div class="gbar${s.point ? " point" : ""}" role="button" tabindex="0" data-bar="${i.key}" data-outcome="${outcome(i)}" data-x="${s.start}" data-to="${s.due}"
                 aria-label="${t("timeline.barLabel", { key: i.key, title: i.title, start: s.start, due: s.due })}">
                 ${this.canEdit && !i.archived_at ? html`<span class="grip start" data-grip="start"></span><span class="grip end" data-grip="end"></span>` : ""}
-                ${i.title}
-              </div></div>`;
+              </div>
+              <span class="blabel" data-x="${s.start}" data-to="${s.due}">${avatar(this.data, i.assignee_id)}
+                ${s.point ? shortDate(s.due, i18n) : `${shortDate(s.start, i18n)} – ${shortDate(s.due, i18n)}`}</span></div>`;
           })}
           <svg class="links" data-links aria-hidden="true"></svg>
         </div>

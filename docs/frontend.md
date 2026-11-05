@@ -200,14 +200,16 @@ shell adapter would provide the same object.
 ## Timeline
 
 `hzn-timeline` draws each issue from its start to its due date (a due date
-alone is a one-day bar, dashed), in rows sorted by start, with issues
+alone is a one-day bar, dashed), filled with its outcome's chart colour and
+followed by its assignee and dates, in rows sorted by start, with issues
 without dates last: a click in their row gives them that working day.
 Arrows are `precedes` links (`GET /projects/{key}/dependencies`), red when
 the successor starts too early for the lag. The project's non-working days
 are shaded (holidays in the warning tone), its iterations form a band
 under the dates, milestones and release dates are dashed markers, and
-today is a solid one. Zoom is weeks, months or quarters (remembered in the
-browser and in a saved timeline view).
+today is a solid one. Zoom is weeks (the default), months or quarters
+(remembered in the browser and in a saved timeline view); the scale labels
+days when they fit, weeks otherwise.
 
 Dragging a bar moves it, dragging an end moves that date; on a focused bar
 `Alt+←/→` moves it by a working day and `Alt+Shift+←/→` its due date. Every
