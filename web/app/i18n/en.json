@@ -731,6 +731,10 @@
   "issues.estimate": "Estimate",
   "issues.noEstimate": "Not estimated",
   "issues.dates": "Start → due",
+  "issues.points": {
+    "one": "{value} point",
+    "other": "{value} points"
+  },
   "issues.startDate": "Start date",
   "issues.dueDate": "Due date",
   "issues.parent": "Parent",

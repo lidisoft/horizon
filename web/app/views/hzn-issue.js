@@ -5,7 +5,7 @@ import "horizon/components/hzn-issue-detail.js";
 import { requestContext } from "horizon/core/context.js";
 import { sheet } from "horizon/core/dom.js";
 
-const styles = sheet(`:host { display: block; min-block-size: 100%; }`);
+const styles = sheet(`:host { display: flex; flex-direction: column; min-block-size: 100%; } hzn-issue-detail { flex: 1; }`);
 
 class HznIssue extends HTMLElement {
   static observedAttributes = ["ws", "issue"];

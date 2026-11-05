@@ -275,6 +275,11 @@ func seedWireframeData(t *testing.T, a app, pg *page) {
 	for _, st := range []string{"Todo", "In progress", "Done"} {
 		must("POST", "/w/lidisoft/issues/HZN-11/transition", `{"status_id":"`+statuses[st]+`"}`)
 	}
+	must("POST", "/w/lidisoft/issues", `{"project":"HZN","type_id":"`+types["Epic"]+`","title":"Event log and outbox"}`)
+	must("PATCH", "/w/lidisoft/issues/HZN-1", `{"parent":"HZN-12"}`)
+	var rel struct{ ID string }
+	_ = json.Unmarshal([]byte(must("POST", "/w/lidisoft/projects/HZN/releases", `{"name":"v0.1 Skeleton","release_date":"2026-11-20"}`)), &rel)
+	must("POST", "/w/lidisoft/issues/HZN-1/release", `{"release_id":"`+rel.ID+`"}`)
 	must("POST", "/w/lidisoft/issues/HZN-1/comments", `{"body":"Relay is in; replay after reconnect is HZN-5."}`)
 
 	var it struct{ ID string }

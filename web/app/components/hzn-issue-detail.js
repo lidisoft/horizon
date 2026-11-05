@@ -9,9 +9,9 @@ import "horizon/components/hzn-editor.js";
 import "horizon/components/hzn-issue-create.js";
 import "horizon/components/hzn-move-issue.js";
 import {
-  PRIORITIES, avatar, describeEvent, issueHref, issueStyles, priorityGlyph, priorityIcon, projectData, statusGlyph,
+  PRIORITIES, avatar, describeEvent, issueHref, issueStyles, priorityGlyph, priorityIcon, projectData, shortDate, statusGlyph,
 } from "horizon/components/issue-ui.js";
-import { isOpen } from "horizon/components/planning-ui.js";
+import { dateSpan, isOpen } from "horizon/components/planning-ui.js";
 import { Collab } from "horizon/editor/collab.js";
 import { docStyles, renderDoc } from "horizon/editor/render.js";
 import { paintSwatches } from "horizon/components/project-colour.js";
@@ -24,10 +24,18 @@ const GIT_INTENTS = { open: "info", merged: "success", closed: "neutral", delete
 
 const styles = sheet(`
   :host { display: block; }
-  :host([mode="page"]) .layout { display: grid; grid-template-columns: minmax(0, 1fr) 18rem; min-block-size: 100%; }
+  :host([mode="page"]) { display: flex; flex-direction: column; }
+  :host([mode="page"]) .layout { flex: 1; }
+  :host([mode="page"]) .layout { display: grid; min-block-size: 100%; }
   :host([mode="page"]) main { padding: var(--lds-space-8) var(--lds-space-10); max-inline-size: 52rem; }
-  :host([mode="page"]) aside { padding: var(--lds-space-5); border-inline-start: 1px solid var(--lds-color-border-default); }
+  :host([mode="page"]) .layout { grid-template-columns: minmax(0, 1fr) 20rem; }
+  /* The properties panel (wireframes: IssueDetail): shaded, compact controls under muted labels. */
+  :host([mode="page"]) aside { padding: var(--lds-space-6) var(--lds-space-5); border-inline-start: 1px solid var(--lds-color-border-default);
+    background: var(--lds-color-bg-subtle); font-size: var(--lds-font-size-sm); }
   :host([mode="page"]) aside .props { display: grid; gap: var(--lds-space-4); }
+  :host([mode="page"]) aside lds-field::part(label) { color: var(--lds-color-fg-muted); font-weight: normal; font-size: var(--lds-font-size-sm); }
+  :host([mode="page"]) aside .section-title { margin-block: var(--lds-space-2) 0; padding-block-start: var(--lds-space-4);
+    border-block-start: 1px solid var(--lds-color-border-default); font-size: var(--lds-font-size-2xs); letter-spacing: 0.08em; }
   :host([mode="peek"]) .props { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: var(--lds-space-1) var(--lds-space-3); align-items: center; }
   :host([mode="peek"]) .props > label { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
   :host([mode="peek"]) .props lds-field::part(label) { display: none; }
@@ -37,12 +45,13 @@ const styles = sheet(`
   :host([mode="peek"]) .props lds-select:not(:hover, :focus-within)::part(chevron) { opacity: 0; }
   :host([mode="peek"]) .props lds-combobox:is(:hover, :focus-within)::part(control),
   :host([mode="peek"]) .props :is(lds-select, lds-input, lds-date-picker):is(:hover, :focus-within)::part(wrap) { border-color: var(--lds-color-border-default); }
-  :host([mode="peek"]) .dates { grid-template-columns: 1fr 1fr; }
+  :host([mode="peek"]) .props lds-date-range::part(wrap) { border-color: transparent; background: transparent; box-shadow: none; }
+  :host([mode="peek"]) .props lds-date-range:is(:hover, :focus-within)::part(wrap) { border-color: var(--lds-color-border-default); }
   .glyphed { display: flex; align-items: center; gap: var(--lds-space-1); }
   .glyphed > :last-child { flex: 1; min-inline-size: 0; }
   :host([mode="page"]) .glyphed { position: relative; }
-  :host([mode="page"]) .glyphed > .glyph { position: absolute; inset-inline-start: var(--lds-space-3); z-index: 1; pointer-events: none; }
-  :host([mode="page"]) .glyphed lds-select::part(select) { padding-inline-start: calc(var(--lds-space-3) + 1.5rem); }
+  :host([mode="page"]) .glyphed > .glyph { position: absolute; inset-inline-start: var(--lds-space-2); z-index: 1; pointer-events: none; }
+  :host([mode="page"]) .glyphed lds-select::part(select) { padding-inline-start: calc(var(--lds-space-2) + 1.375rem); }
   .presence { display: inline-flex; gap: 2px; }
   .presence lds-avatar[data-state="editing"] { outline: 2px solid var(--lds-color-accent-fg); border-radius: var(--lds-radius-full); }
   .bar { display: flex; align-items: center; justify-content: space-between; gap: var(--lds-space-3);
@@ -392,62 +401,57 @@ class HznIssueDetail extends HTMLElement {
     const types = d.config.issue_types;
     const prop = (label, control) => (this.mode === "peek" ? html`<label>${label}</label>${control}` : html`<lds-field label="${label}">${control}</lds-field>`);
     const glyphed = (glyph, control) => html`<div class="glyphed">${glyph}${control}</div>`;
+    const sm = html`size="sm"`;
     const fields = d.fieldsOf(i.type_id);
     const values = i.fields ?? {};
     return html`
       ${prop(t("issues.status"), glyphed(statusGlyph(d, i.status_id), html`
-        <lds-select data-prop="status" value="${i.status_id}" ${off("issue.transition")}>
+        <lds-select ${sm} data-prop="status" value="${i.status_id}" ${off("issue.transition")}>
           <option value="${i.status_id}">${current?.name ?? "?"}</option>
           ${targets.map((x) => html`<option value="${x.to_status_id}">${x.name} → ${d.statuses.get(x.to_status_id)?.name ?? ""}</option>`)}
         </lds-select>`))}
       ${prop(t("issues.priority"), glyphed(priorityGlyph(i.priority, t), html`
-        <lds-select data-prop="priority" value="${i.priority}" ${off("issue.edit")}>
+        <lds-select ${sm} data-prop="priority" value="${i.priority}" ${off("issue.edit")}>
           ${PRIORITIES.map((p) => html`<option value="${p}">${t(`priority.${p}`)}</option>`)}
         </lds-select>`))}
       ${prop(t("issues.assignee"), html`
-        <lds-combobox data-prop="assignee" value="${i.assignee_id ?? ""}" placeholder="${t("issue.unassigned")}" label="${t("issues.assignee")}" ${off("issue.assign")}>
+        <lds-combobox ${sm} data-prop="assignee" value="${i.assignee_id ?? ""}" placeholder="${t("issue.unassigned")}" label="${t("issues.assignee")}" ${off("issue.assign")}>
           <lds-option value="">${t("issue.unassigned")}</lds-option>
           ${d.peopleList.map((p) => html`<lds-option value="${p.id}"><lds-avatar slot="start" size="sm" name="${p.name}"></lds-avatar>${p.name}</lds-option>`)}
         </lds-combobox>`)}
       ${prop(t("issues.labels"), html`
-        <lds-combobox data-prop="labels" multiple value="${i.labels.join(",")}" label="${t("issues.labels")}" ${off("issue.edit")}>
-          ${d.config.labels.filter((l) => !l.disabled || i.labels.includes(l.id)).map((l) => html`<lds-option value="${l.id}">${l.name}</lds-option>`)}
+        <lds-combobox ${sm} data-prop="labels" multiple value="${i.labels.join(",")}" label="${t("issues.labels")}" ${off("issue.edit")}>
+          ${d.config.labels.filter((l) => !l.disabled || i.labels.includes(l.id)).map((l) => html`<lds-option value="${l.id}"><span slot="start" class="dot" data-colour="${l.colour}"></span>${l.name}</lds-option>`)}
         </lds-combobox>`)}
-      ${scale.kind !== "none" ? prop(t("issues.estimate"), scale.values.length <= 6 ? html`
-        <lds-segmented data-prop="estimate" size="sm" value="${i.estimate ?? ""}" label="${t("issues.estimate")}" ${off("issue.estimate")}>
-          ${scale.values.map((v) => html`<lds-segment value="${v.label}">${v.label}</lds-segment>`)}
-          <lds-segment value="">–</lds-segment>
-        </lds-segmented>` : html`
-        <lds-combobox data-prop="estimate" value="${i.estimate ?? ""}" placeholder="${t("issues.noEstimate")}" label="${t("issues.estimate")}" ${off("issue.estimate")}>
-          <lds-option value="">${t("issues.noEstimate")}</lds-option>
-          ${scale.values.map((v) => html`<lds-option value="${v.label}">${v.label}</lds-option>`)}
-        </lds-combobox>`) : ""}
+      ${scale.kind !== "none" ? prop(t("issues.estimate"), html`
+        <lds-select ${sm} data-prop="estimate" value="${i.estimate ?? ""}" aria-label="${t("issues.estimate")}" ${off("issue.estimate")}>
+          <option value="">${t("issues.noEstimate")}</option>
+          ${scale.values.map((v) => html`<option value="${v.label}">${["fibonacci", "linear"].includes(scale.kind) ? t("issues.points", { count: Number(v.label) || 0, value: v.label }) : v.label}</option>`)}
+        </lds-select>`) : ""}
       ${prop(t("issues.iteration"), html`
-        <lds-combobox data-prop="iteration" value="${i.iteration_id ?? ""}" placeholder="${t("issues.noIteration")}" label="${t("issues.iteration")}" ${off("iteration.manage")}>
+        <lds-combobox ${sm} data-prop="iteration" value="${i.iteration_id ?? ""}" placeholder="${t("issues.noIteration")}" label="${t("issues.iteration")}" ${off("iteration.manage")}>
           <lds-option value="">${t("issues.noIteration")}</lds-option>
-          ${this.iterations.filter((it) => isOpen(it) || it.id === i.iteration_id).map((it) => html`<lds-option value="${it.id}">${it.name}<span slot="end">${t(`iterations.state.${it.state}`)}</span></lds-option>`)}
+          ${this.iterations.filter((it) => isOpen(it) || it.id === i.iteration_id).map((it) => html`<lds-option value="${it.id}"><lds-icon slot="start" name="repeat"></lds-icon>${it.name}<span slot="end">${dateSpan(it, i18n) || t(`iterations.state.${it.state}`)}</span></lds-option>`)}
         </lds-combobox>`)}
       ${prop(t("issues.release"), html`
-        <lds-combobox data-prop="release" value="${i.release_id ?? ""}" placeholder="${t("issues.noRelease")}" label="${t("issues.release")}" ${off("issue.edit")}>
+        <lds-combobox ${sm} data-prop="release" value="${i.release_id ?? ""}" placeholder="${t("issues.noRelease")}" label="${t("issues.release")}" ${off("issue.edit")}>
           <lds-option value="">${t("issues.noRelease")}</lds-option>
-          ${this.releases.filter((r) => r.state !== "archived" || r.id === i.release_id).map((r) => html`<lds-option value="${r.id}">${r.name}</lds-option>`)}
+          ${this.releases.filter((r) => r.state !== "archived" || r.id === i.release_id).map((r) => html`<lds-option value="${r.id}"><lds-icon slot="start" name="rocket"></lds-icon>${r.name}${r.release_date ? html`<span slot="end">${shortDate(r.release_date, i18n)}</span>` : ""}</lds-option>`)}
         </lds-combobox>`)}
       ${prop(t("issues.dates"), html`
-        <div class="dates">
-          <lds-date-picker data-prop="start_date" value="${i.start_date ?? ""}" aria-label="${t("issues.startDate")}" ${off("issue.edit")}></lds-date-picker>
-          <lds-date-picker data-prop="due_date" value="${i.due_date ?? ""}" aria-label="${t("issues.dueDate")}" ${off("issue.edit")}></lds-date-picker>
-        </div>`)}
+        <lds-date-range ${sm} data-prop="dates" start="${i.start_date ?? ""}" end="${i.due_date ?? ""}" label="${t("issues.dates")}"
+          start-label="${t("issues.startDate")}" end-label="${t("issues.dueDate")}" ${off("issue.edit")}></lds-date-range>`)}
       ${prop(t("issues.type"), html`
-        <lds-select data-prop="type" value="${i.type_id}" ${off("issue.edit")}>${types.map((x) => html`<option value="${x.id}">${x.name}</option>`)}</lds-select>`)}
+        <lds-select ${sm} data-prop="type" value="${i.type_id}" ${off("issue.edit")}>${types.map((x) => html`<option value="${x.id}">${x.name}</option>`)}</lds-select>`)}
       ${prop(t("issues.parent"), html`
-        <lds-input data-prop="parent" value="${this.parent?.key ?? ""}" placeholder="${d.project.key}-1" ${off("issue.edit")}></lds-input>`)}
+        <lds-input ${sm} data-prop="parent" value="${this.parent?.key ?? ""}" placeholder="${d.project.key}-1" ${off("issue.edit")}></lds-input>`)}
       ${fields.length ? html`<div class="section-title" ${this.mode === "peek" ? html`hidden` : ""}>${t("issues.customFields")}</div>` : ""}
       ${fields.map((f) => prop(f.name + (f.required ? " *" : ""), this.fieldControl(f, values[f.id], off("issue.edit"))))}`;
   }
 
   fieldControl(f, value, off) {
     const { t } = this.context.i18n;
-    const attrs = html`data-field="${f.id}" data-field-type="${f.type}" ${off}`;
+    const attrs = html`size="sm" data-field="${f.id}" data-field-type="${f.type}" ${off}`;
     switch (f.type) {
       case "select":
         return html`<lds-select ${attrs} value="${value ?? ""}"><option value="">–</option>${f.options.map((o) => html`<option value="${o.id}">${o.name}</option>`)}</lds-select>`;
@@ -701,10 +705,15 @@ class HznIssueDetail extends HTMLElement {
       case "release":
         if (value !== (this.issue.release_id ?? "")) this.post("release", { release_id: value || null });
         break;
-      case "start_date":
-      case "due_date":
-        if (value !== (this.issue[prop] ?? "")) this.patch({ [prop]: value });
+      case "dates": {
+        // "start/end", either side possibly empty.
+        const [start = "", due = ""] = value.split("/");
+        const body = {};
+        if (start !== (this.issue.start_date ?? "")) body.start_date = start;
+        if (due !== (this.issue.due_date ?? "")) body.due_date = due;
+        if (Object.keys(body).length) this.patch(body);
         break;
+      }
       case "type":
         if (value !== this.issue.type_id) this.changeType(value);
         break;
