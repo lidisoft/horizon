@@ -47,10 +47,16 @@ const styles = sheet(`
   section.bucket[data-collapsed] .toggle lds-icon { transform: rotate(-90deg); }
   section.bucket[data-collapsed] .rows, section.bucket[data-collapsed] .goal { display: none; }
   .goal { margin: 0; padding: var(--lds-space-2) var(--lds-space-4) 0; color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
-  .rows { min-block-size: 2.5rem; padding-block: var(--lds-space-1); }
+  .rows { min-block-size: 2.5rem; }
   .rows.drop-end { box-shadow: inset 0 -2px 0 var(--lds-color-accent-fg); }
   .row { display: grid; grid-template-columns: 0.75rem 1.25rem 4.5rem 1.25rem minmax(0, 1fr) auto 2.5rem 1.75rem;
-    align-items: center; gap: var(--lds-space-3); block-size: 2.25rem; padding: 0 var(--lds-space-3); cursor: pointer; outline: none; }
+    align-items: center; gap: var(--lds-space-3); block-size: 2.375rem; padding: 0 var(--lds-space-3); cursor: pointer; outline: none;
+    border-block-end: 1px solid var(--lds-color-border-subtle); }
+  .row .key { font-size: var(--lds-font-size-xs); }
+  .create { display: flex; align-items: center; gap: var(--lds-space-2); inline-size: 100%; block-size: 2.5rem; padding: 0 var(--lds-space-4);
+    border: 0; background: none; color: var(--lds-color-fg-muted); font: inherit; font-size: var(--lds-font-size-sm); cursor: pointer;
+    border-radius: 0 0 var(--lds-radius-md) var(--lds-radius-md); }
+  .create:hover { background: var(--lds-color-bg-subtle); color: var(--lds-color-fg-default); }
   .row:hover { background: var(--lds-color-bg-subtle); }
   .row:focus-visible, .row[aria-current="true"] { background: var(--lds-color-accent-subtle); }
   .row.drop-before { box-shadow: inset 0 2px 0 var(--lds-color-accent-fg); }
@@ -58,7 +64,7 @@ const styles = sheet(`
   .handle { color: var(--lds-color-fg-subtle); cursor: grab; font-size: var(--lds-font-size-xs); }
   .row:not([draggable="true"]) .handle { visibility: hidden; }
   .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .num { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); text-align: end; font-variant-numeric: tabular-nums; }
+  .num { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-xs); text-align: end; font-variant-numeric: tabular-nums; }
   .none { padding: var(--lds-space-3) var(--lds-space-4); color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
   .empty { padding: var(--lds-space-12) var(--lds-space-6); }
   lds-drawer { --lds-drawer-width: min(34rem, 100vw); }
@@ -297,6 +303,8 @@ class HznBacklog extends HTMLElement {
               <span>${avatar(this.data, i.assignee_id)}</span>
             </div>`) : html`<div class="none">${t(it ? "planning.emptyIteration" : "planning.emptyBacklog")}</div>`}
         </div>
+        ${!it && this.data.project.can.includes("issue.create") && !this.data.project.archived_at
+          ? html`<button type="button" class="create" data-action="create"><lds-icon name="plus" size="sm"></lds-icon>${t("planning.createIssue")}</button>` : ""}
       </section>`;
   }
 

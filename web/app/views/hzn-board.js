@@ -43,34 +43,41 @@ const styles = sheet(`
   .toolbar .grow { flex: 1; }
   .controls lds-select { min-inline-size: 10rem; }
   .board { flex: 1; overflow: auto; padding: var(--lds-space-4) var(--lds-space-5); }
-  .grid { display: grid; grid-template-columns: repeat(var(--columns), minmax(15rem, 1fr)); gap: var(--lds-space-3); min-inline-size: min-content; }
-  .colhead { display: flex; align-items: center; gap: var(--lds-space-2); padding: var(--lds-space-1) var(--lds-space-2);
-    font-size: var(--lds-font-size-sm); font-weight: var(--lds-font-weight-semibold); position: sticky; top: 0; background: var(--lds-color-bg-canvas); z-index: 1; }
+  /* Columns are panels as tall as their cards (wireframes: Board): the head and the cells of a column share its background. */
+  .grid { display: grid; grid-template-columns: repeat(var(--columns), minmax(15rem, 17rem)); gap: 0 var(--lds-space-3); min-inline-size: min-content;
+    align-items: start; }
+  .colhead { display: flex; align-items: center; gap: var(--lds-space-2); block-size: 2.5rem; box-sizing: border-box; padding: 0 var(--lds-space-3);
+    font-size: var(--lds-font-size-sm); font-weight: var(--lds-font-weight-semibold); position: sticky; top: 0; z-index: 1;
+    background: var(--lds-color-bg-subtle); border-radius: var(--lds-radius-md) var(--lds-radius-md) 0 0; }
   .colhead .count { color: var(--lds-color-fg-muted); font-weight: normal; font-variant-numeric: tabular-nums; }
   .colhead.over { background: var(--lds-color-danger-subtle); border-radius: var(--lds-radius-sm); }
   .colhead.over .count { color: var(--lds-color-danger-fg); font-weight: var(--lds-font-weight-semibold); }
   .colhead .wip { margin-inline-start: auto; }
+  .colhead .count:last-child { margin-inline-start: auto; }
   .controls { display: flex; align-items: center; gap: var(--lds-space-2); }
   header.bar .grow { flex: 1; }
   form { display: grid; gap: var(--lds-space-4); }
   .actions { display: flex; justify-content: flex-end; gap: var(--lds-space-3); }
-  .lane { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--lds-space-2); padding: var(--lds-space-2) var(--lds-space-1) 0;
+  .lane { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--lds-space-2); margin-block-start: var(--lds-space-3);
+    padding: var(--lds-space-2) var(--lds-space-1);
     font-size: var(--lds-font-size-sm); font-weight: var(--lds-font-weight-semibold); border-block-start: 1px solid var(--lds-color-border-subtle); }
   .lane .count { color: var(--lds-color-fg-muted); font-weight: normal; }
-  .cell { display: flex; flex-direction: column; gap: var(--lds-space-2); min-block-size: 4rem; padding: var(--lds-space-2);
-    border-radius: var(--lds-radius-md); background: var(--lds-color-bg-subtle); }
+  .cell { display: flex; flex-direction: column; gap: var(--lds-space-2); min-block-size: 2.5rem; padding: 0 var(--lds-space-2) var(--lds-space-2);
+    border-radius: 0 0 var(--lds-radius-md) var(--lds-radius-md); background: var(--lds-color-bg-subtle); }
+  /* Under swimlanes, each lane's cells are panels of their own. */
+  .lane ~ .cell { border-radius: var(--lds-radius-md); padding-block-start: var(--lds-space-2); }
   .cell.blocked { opacity: 0.45; }
   .cell.drop-end { box-shadow: inset 0 -2px 0 var(--lds-color-accent-fg); }
-  .card { display: grid; gap: var(--lds-space-2); padding: var(--lds-space-3); border: 1px solid var(--lds-color-border-default);
+  .card { display: grid; gap: var(--lds-space-2); padding: var(--lds-space-3); border: 1px solid var(--lds-color-border-subtle);
     border-radius: var(--lds-radius-md); background: var(--lds-color-bg-surface); cursor: pointer; outline: none; }
   .card:hover { border-color: var(--lds-color-border-strong); }
   .card:focus-visible, .card[aria-current="true"] { border-color: var(--lds-color-accent-border); box-shadow: 0 0 0 1px var(--lds-color-accent-border); }
   .card.drop-before { box-shadow: 0 -3px 0 var(--lds-color-accent-fg); }
   .card.dragging { opacity: 0.5; }
   .card .top, .card .bottom { display: flex; align-items: center; gap: var(--lds-space-2); }
-  .card .top .key { flex: 1; font-size: var(--lds-font-size-sm); }
+  .card .top .key { flex: 1; font-size: var(--lds-font-size-xs); }
   .card .bottom .grow { flex: 1; }
-  .card .num { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); font-variant-numeric: tabular-nums; }
+  .card .num { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-xs); font-variant-numeric: tabular-nums; }
   .card .title { overflow-wrap: anywhere; }
   .empty { padding: var(--lds-space-12) var(--lds-space-6); }
   lds-drawer { --lds-drawer-width: min(34rem, 100vw); }

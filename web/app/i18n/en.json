@@ -886,6 +886,7 @@
   "settings.calendar": "Working calendar",
   "planning.layout": "Project views",
   "planning.layouts.issues": "List",
+  "planning.createIssue": "Create issue",
   "planning.layouts.overview": "Overview",
   "planning.layouts.board": "Board",
   "planning.layouts.table": "Table",
