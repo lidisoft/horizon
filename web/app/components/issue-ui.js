@@ -3,6 +3,7 @@
 // when configuration changes), status and priority glyphs, people, labels
 // and dates (wireframes: StatusIcon, PriorityIcon, Main, IssueDetail).
 
+import { COLOURS } from "horizon/components/project-colour.js";
 import { html, sheet } from "horizon/core/dom.js";
 
 export const PRIORITIES = ["urgent", "high", "medium", "low", "none"];
@@ -12,12 +13,21 @@ const OUTCOME_ICONS = { backlog: "circle-dashed", unstarted: "circle", started: 
 /** Issue keys as people type them: HZN-42, hzn-42. */
 export const ISSUE_KEY = /^[A-Za-z][A-Za-z0-9]{1,9}-[1-9][0-9]*$/;
 
+/**
+ * CSS giving each [data-ink] element matching selector its swatch: a
+ * status's colour (its category's), as a glyph's ink or a dot's fill.
+ */
+export function inkRules(selector, property) {
+  return COLOURS.map((c) => `${selector}[data-ink="${c}"] { ${property}: var(--lds-color-swatch-${c}); }`).join("\n");
+}
+
 export const issueStyles = sheet(`
   .glyph { display: inline-flex; inline-size: 1rem; block-size: 1rem; flex: none; align-items: center; justify-content: center; }
   .status[data-outcome="backlog"], .status[data-outcome="abandoned"] { color: var(--lds-color-fg-subtle); }
   .status[data-outcome="unstarted"] { color: var(--lds-color-fg-muted); }
   .status[data-outcome="started"] { color: var(--lds-color-accent-fg); }
   .status[data-outcome="completed"] { color: var(--lds-color-success-fg); }
+  ${inkRules(".status", "color")}
   .priority { color: var(--lds-color-fg-default); }
   .priority[data-priority="urgent"] { color: var(--lds-color-danger-fg); }
   .priority[data-priority="none"] { color: var(--lds-color-fg-subtle); }
@@ -72,7 +82,7 @@ function indexProject(project, config, people) {
   for (const w of config.workflows) {
     w.statuses.forEach((s, i) => {
       const c = categories.get(s.category_id);
-      statuses.set(s.id, { ...s, workflow: w.id, outcome: c?.outcome ?? "unstarted", position: (c?.position ?? 0) * 1000 + i,
+      statuses.set(s.id, { ...s, workflow: w.id, outcome: c?.outcome ?? "unstarted", colour: c?.colour, position: (c?.position ?? 0) * 1000 + i,
         backlog: unstarted.length > 1 && c?.id === unstarted[0].id });
     });
   }
@@ -98,7 +108,7 @@ function indexProject(project, config, people) {
 export function statusGlyph(data, statusId) {
   const s = data.statuses.get(statusId);
   const outcome = s?.backlog ? "backlog" : s?.outcome ?? "unstarted";
-  return html`<span class="glyph status" data-outcome="${outcome}"><lds-icon name="${OUTCOME_ICONS[outcome]}" size="sm" label="${s?.name ?? ""}"></lds-icon></span>`;
+  return html`<span class="glyph status" data-outcome="${outcome}" data-ink="${s?.colour ?? ""}"><lds-icon name="${OUTCOME_ICONS[outcome]}" size="sm" label="${s?.name ?? ""}"></lds-icon></span>`;
 }
 
 export function priorityGlyph(priority, t) {

@@ -9,7 +9,7 @@ import "horizon/components/hzn-editor.js";
 import "horizon/components/hzn-issue-create.js";
 import "horizon/components/hzn-move-issue.js";
 import {
-  PRIORITIES, avatar, describeEvent, issueHref, issueStyles, priorityGlyph, priorityIcon, projectData, shortDate, statusGlyph,
+  PRIORITIES, avatar, describeEvent, inkRules, issueHref, issueStyles, priorityGlyph, priorityIcon, projectData, shortDate, statusGlyph,
 } from "horizon/components/issue-ui.js";
 import { dateSpan, isOpen } from "horizon/components/planning-ui.js";
 import { Collab } from "horizon/editor/collab.js";
@@ -84,9 +84,11 @@ const styles = sheet(`
     position: relative; padding-inline-start: var(--lds-space-6); }
   /* The events read as a timeline: a dot each, on a thread (wireframes: IssueDetail). */
   .event::before { content: ""; position: absolute; inset-inline-start: 0.3125rem; inset-block-start: 0.375rem; inline-size: 0.5rem; block-size: 0.5rem;
-    border-radius: var(--lds-radius-full); background: var(--lds-color-fg-subtle); box-shadow: 0 0 0 2px var(--lds-color-bg-canvas); }
+    border-radius: var(--lds-radius-full); background: var(--dot, var(--lds-color-fg-subtle)); box-shadow: 0 0 0 2px var(--lds-color-bg-canvas); }
   .event::after { content: ""; position: absolute; inset-inline-start: 0.5625rem; inset-block: 1rem calc(-1 * var(--lds-space-3)); inline-size: 1px;
     background: var(--lds-color-border-default); }
+  /* A status change takes the colour of the status it went to. */
+  ${inkRules(".event", "--dot")}
   .event:has(+ :not(.event))::after, .event:last-child::after { display: none; }
   .event strong { color: var(--lds-color-fg-default); font-weight: var(--lds-font-weight-medium); }
   .comment { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--lds-space-3); }
@@ -585,7 +587,7 @@ class HznIssueDetail extends HTMLElement {
             <div class="body">${renderDoc(x.comment.body_doc, this.docContext())}</div>
           </div>
         </div>` : html`
-        <div class="event"><span><strong>${x.event.actor ? x.event.actor.name || t("issue.someone") : t("issue.system")}</strong> ${this.describe(x.event)}</span>
+        <div class="event" data-ink="${this.data.statuses.get(x.event.payload?.to?.id)?.colour ?? ""}"><span><strong>${x.event.actor ? x.event.actor.name || t("issue.someone") : t("issue.system")}</strong> ${this.describe(x.event)}</span>
           <span>· ${i18n.relative(x.event.occurred_at)}</span></div>`))}</div>
       ${canComment ? html`
         <div class="composer" data-composer>

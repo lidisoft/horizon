@@ -1017,6 +1017,11 @@ func TestIssues(t *testing.T) {
 	todo := pg.poll(peek + `.querySelector('[data-prop="status"] option:nth-child(2)')?.value`)
 	change(peek, `[data-prop="status"]`, todo)
 	pg.poll(`[...` + view + `.querySelectorAll(".group")].map((g) => g.textContent.replace(/\s+/g, " ").trim()).join(",") === "Todo 1,Backlog 1" && "moved"`)
+	// The move's dot and the status glyphs take the colour of Todo's category.
+	if got := pg.poll(`(() => { const e = [...` + peek + `.querySelectorAll(".event")].find((e) => e.textContent.includes("to Todo"));
+		return e && getComputedStyle(e, "::before").backgroundColor + " " + getComputedStyle(` + view + `.querySelector('.row[data-key="HZN-1"] .status')).color; })()`); got != "rgb(124, 135, 152) rgb(124, 135, 152)" {
+		t.Errorf("status colours = %s", got)
+	}
 
 	// A comment from the peek shows in the activity.
 	// A change saved mid-comment doesn't take the focus away: the rest of
