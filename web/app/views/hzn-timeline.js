@@ -92,7 +92,7 @@ const styles = sheet(`
   svg.links { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: visible; }
   svg.links path { fill: none; stroke: var(--lds-color-fg-subtle); stroke-width: 1.5; }
   svg.links path.late { stroke: var(--lds-color-danger-fg); }
-  .empty { padding: var(--lds-space-12) var(--lds-space-6); }
+  .empty { padding: var(--lds-space-12) var(--lds-space-6); grid-column: 1 / -1; }
 `);
 
 function storedZoom() {

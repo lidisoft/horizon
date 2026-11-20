@@ -57,7 +57,7 @@ const styles = sheet(`
   .marker.today { border-inline-start: 2px solid var(--lds-color-accent-fg); }
   .marker span { position: absolute; top: 2px; inset-inline-start: 4px; font-size: var(--lds-font-size-xs); white-space: nowrap;
     background: var(--lds-color-bg-surface); padding-inline: 4px; border-radius: var(--lds-radius-xs); }
-  .empty { padding: var(--lds-space-12) var(--lds-space-6); }
+  .empty { padding: var(--lds-space-12) var(--lds-space-6); grid-column: 1 / -1; }
 `);
 
 class HznRoadmap extends HTMLElement {

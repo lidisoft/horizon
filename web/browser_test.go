@@ -1814,9 +1814,16 @@ func TestRoadmap(t *testing.T) {
 	}
 	pg.poll(view + `.querySelector(".marker.milestone")?.textContent.includes("Launch") && "milestone"`)
 
-	// Words narrow it; the address keeps them.
-	pg.eval(`(() => { const i = ` + view + `.querySelector("[data-q]");
-		i.dispatchEvent(new CustomEvent("lds-input", { detail: { value: "monitor" }, bubbles: true, composed: true })); })()`)
+	// Words narrow it; the address keeps them. With nothing left, the empty
+	// state spans the chart rather than the names column.
+	search := func(q string) {
+		pg.eval(`(() => { const i = ` + view + `.querySelector("[data-q]");
+			i.dispatchEvent(new CustomEvent("lds-input", { detail: { value: "` + q + `" }, bubbles: true, composed: true })); })()`)
+	}
+	search("nothing matches this")
+	pg.poll(`(() => { const e = ` + view + `.querySelector("[data-gantt] lds-empty-state");
+		return e && e.getBoundingClientRect().width === ` + view + `.querySelector("[data-gantt]").clientWidth && "centred"; })()`)
+	search("monitor")
 	pg.poll(view + `.querySelectorAll("[data-bar]").length === 1 && "narrowed"`)
 	if got := keys(); got != "OPS-1" {
 		t.Errorf("narrowed = %s", got)
