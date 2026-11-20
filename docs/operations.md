@@ -9,7 +9,7 @@ lives in a **separate operations repository**, built against this contract.
 
 | Component | Required | Notes |
 |-----------|----------|-------|
-| `horizon` | Yes | One OCI image (`ghcr.io/lidisoft/horizon`), non-root, single static binary. Runs `serve`, `worker`, or both |
+| `horizon` | Yes | One static binary, shipped as an OCI image (`ghcr.io/lidisoft/horizon`, non-root, amd64 and arm64) and as Linux packages (see [Linux packages](#linux-packages)). Runs `serve`, `worker`, or both |
 | PostgreSQL | Yes | Supported versions documented per release. Extensions: `pg_trgm`, `citext` |
 | NATS with JetStream | Yes | Streams and consumers are created by Horizon at startup |
 | S3-compatible storage | Yes | One bucket per instance (RustFS for self-hosting) |
@@ -53,6 +53,33 @@ horizon migrate up
 horizon admin create-user --email admin@example.com --instance-admin
 horizon serve --with-worker
 ```
+
+### Linux packages
+
+Each [GitHub release](https://github.com/lidisoft/horizon/releases) has `.deb`
+and `.rpm` packages for amd64 and arm64, beside tarballs of the binary. A
+package installs:
+
+- `/usr/bin/horizon`;
+- a `horizon` system user;
+- `/etc/horizon/horizon.env`, the configuration (a config file: upgrades keep
+  your edits);
+- the `horizon` systemd service, running `serve --with-worker` as that user,
+  after `migrate up`.
+
+The service isn't started on install. Fill in `horizon.env`, create the first
+user, then start it:
+
+```bash
+sudo apt install ./horizon_0.0.1_amd64.deb   # or: sudo dnf install ./horizon-0.0.1-1.x86_64.rpm
+sudoedit /etc/horizon/horizon.env
+sudo -u horizon sh -c 'set -a; . /etc/horizon/horizon.env; horizon migrate up && horizon admin create-user --email admin@example.com --instance-admin'
+sudo systemctl enable --now horizon
+```
+
+An upgrade restarts a running service, which applies the new release's
+migrations first. To run `serve` and `worker` apart, override the unit
+(`systemctl edit horizon`).
 
 ### Health
 

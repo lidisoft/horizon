@@ -1,0 +1,35 @@
+# Horizon, serve and worker in one process (docs/operations.md#linux-packages).
+# Fill in /etc/horizon/horizon.env, then: systemctl enable --now horizon
+[Unit]
+Description=Horizon
+Documentation=https://github.com/lidisoft/horizon/blob/main/docs/operations.md
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=horizon
+Group=horizon
+EnvironmentFile=/etc/horizon/horizon.env
+# Migrations are expand/contract, so applying them before start is safe.
+ExecStartPre=/usr/bin/horizon migrate up
+ExecStart=/usr/bin/horizon serve --with-worker
+Restart=on-failure
+RestartSec=5
+# In-flight work gets 30 s to finish.
+TimeoutStopSec=35
+
+# Horizon keeps no local state.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

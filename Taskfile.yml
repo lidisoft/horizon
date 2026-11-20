@@ -52,6 +52,11 @@ tasks:
     cmds:
       - docker build --build-arg VERSION={{.VERSION}} --build-arg COMMIT={{.COMMIT}} -t horizon:dev .
 
+  release-snapshot:
+    desc: Build the release (binaries, packages, image) into dist/ without publishing
+    cmds:
+      - goreleaser release --snapshot --clean
+
   # --- Quality -------------------------------------------------------------
 
   test:

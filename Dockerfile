@@ -1,4 +1,6 @@
-# Release image: one static binary, non-root (docs/operations.md).
+# The release image built from source (task image); releases build it from
+# GoReleaser's binaries instead (packaging/Dockerfile). One static binary,
+# non-root (docs/operations.md).
 FROM golang:1.26 AS build
 WORKDIR /src
 COPY go.mod go.sum ./

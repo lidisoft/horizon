@@ -31,27 +31,18 @@ jobs:
       - name: task check
         run: task check
 
+      # GoReleaser builds the binaries, Linux packages and image, and
+      # publishes the image and the GitHub release (.goreleaser.yaml). Keep
+      # the version in step with mise.toml.
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push the image
-        uses: docker/build-push-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
-          context: .
-          push: true
-          build-args: |
-            VERSION=${{ github.ref_name }}
-            COMMIT=${{ github.sha }}
-          tags: |
-            ghcr.io/lidisoft/horizon:${{ github.ref_name }}
-            ghcr.io/lidisoft/horizon:latest
-
-      # Generated notes list the merged pull requests, whose titles are
-      # conventional commits (squash merges).
-      - name: Publish the GitHub release
+          version: v2.20.3
+          args: release --clean
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" --generate-notes --verify-tag
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

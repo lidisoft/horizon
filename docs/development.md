@@ -7,8 +7,8 @@ conventions. The environment itself is described in
 ## Prerequisites
 
 Go, [Task](https://taskfile.dev) and Docker (Compose and testcontainers).
-[mise](https://mise.jdx.dev) installs the pinned Go, Task and golangci-lint
-versions from `mise.toml`: run `mise install` once, and the tools are on the `PATH` inside the
+[mise](https://mise.jdx.dev) installs the pinned Go, Task, golangci-lint and
+GoReleaser versions from `mise.toml`: run `mise install` once, and the tools are on the `PATH` inside the
 repository when mise is activated in your shell (otherwise prefix commands with
 `mise exec --`). Browser tests run headless Chrome in a container; set
 `HORIZON_TEST_CHROME` to a local Chrome or Chromium binary to use it instead. Code generators
@@ -109,7 +109,7 @@ GitHub Actions:
 | Workflow | Trigger | Does |
 |----------|---------|------|
 | `check` | Pull requests, pushes to `main` | `task check`: formatting, vet, golangci-lint, generated code freshness (sqlc, swagger), unit and integration tests, headless browser tests |
-| `release` | Tags `v*` | `task check`, then build and push the OCI image to `ghcr.io/lidisoft/horizon`, and publish a GitHub release with notes generated from conventional commits |
+| `release` | Tags `v*` | `task check`, then [GoReleaser](https://goreleaser.com) (`.goreleaser.yaml`): linux/amd64 and arm64 binaries, tarballs, `.deb` and `.rpm` packages (`packaging/`), the multi-arch OCI image pushed to `ghcr.io/lidisoft/horizon`, and a GitHub release carrying them, with notes generated from conventional commits. `task release-snapshot` builds all of it into `dist/` without publishing |
 
 ## Branches, commits and pull requests
 

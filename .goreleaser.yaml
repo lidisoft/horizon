@@ -1,0 +1,90 @@
+# Release build (docs/development.md#ci): on a v* tag, the release workflow
+# runs `goreleaser release`. `task release-snapshot` builds the same locally.
+version: 2
+
+project_name: horizon
+
+builds:
+  - id: horizon
+    main: ./cmd/horizon
+    binary: horizon
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X github.com/lidisoft/horizon/internal/version.Version={{ .Tag }}
+      - -X github.com/lidisoft/horizon/internal/version.Commit={{ .ShortCommit }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - COPYING
+      - README.md
+      - packaging/horizon.service
+      - packaging/horizon.env
+
+# Packages run serve and worker as one systemd service (docs/operations.md#linux-packages).
+nfpms:
+  - id: horizon
+    package_name: horizon
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: LiDiSoft
+    homepage: https://github.com/lidisoft/horizon
+    maintainer: LiDiSoft <jwasi@lidisoft.com>
+    description: Self-hosted issue tracker and project planning.
+    license: GPL-3.0
+    formats: [deb, rpm]
+    bindir: /usr/bin
+    contents:
+      - src: packaging/horizon.service
+        dst: /usr/lib/systemd/system/horizon.service
+        file_info:
+          mode: 0644
+      - src: packaging/horizon.env
+        dst: /etc/horizon/horizon.env
+        type: config|noreplace
+        file_info:
+          mode: 0640
+          owner: root
+          group: horizon
+    scripts:
+      preinstall: packaging/preinstall.sh
+      postinstall: packaging/postinstall.sh
+      preremove: packaging/preremove.sh
+      postremove: packaging/postremove.sh
+
+dockers_v2:
+  - id: horizon
+    dockerfile: packaging/Dockerfile
+    images:
+      - ghcr.io/lidisoft/horizon
+    tags:
+      - "{{ .Tag }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms: [linux/amd64, linux/arm64]
+    labels:
+      org.opencontainers.image.title: Horizon
+      org.opencontainers.image.source: https://github.com/lidisoft/horizon
+      org.opencontainers.image.version: "{{ .Tag }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .CommitDate }}"
+      org.opencontainers.image.licenses: GPL-3.0
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+# Notes list the merged pull requests, whose titles are conventional
+# commits (squash merges).
+changelog:
+  use: github-native
+
+release:
+  prerelease: auto
