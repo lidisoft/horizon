@@ -46,6 +46,8 @@ const styles = sheet(`
   .num, .due { color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-xs); text-align: end; font-variant-numeric: tabular-nums; }
   .empty { padding: var(--lds-space-12) var(--lds-space-6); }
   lds-drawer { --lds-drawer-width: min(34rem, 100vw); }
+  lds-drawer::part(header) { min-block-size: 3.25rem; padding-block: 0;
+    border-block-end-color: var(--lds-color-border-default); } /* level with the page header */
   [slot="header"] { display: flex; align-items: center; gap: var(--lds-space-2); font-size: var(--lds-font-size-sm); }
   @media (max-width: 48rem) {
     .row { grid-template-columns: 1.25rem 4.5rem 1.25rem minmax(0, 1fr) 1.75rem; }

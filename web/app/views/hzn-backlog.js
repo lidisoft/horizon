@@ -68,6 +68,8 @@ const styles = sheet(`
   .none { padding: var(--lds-space-3) var(--lds-space-4); color: var(--lds-color-fg-muted); font-size: var(--lds-font-size-sm); }
   .empty { padding: var(--lds-space-12) var(--lds-space-6); }
   lds-drawer { --lds-drawer-width: min(34rem, 100vw); }
+  lds-drawer::part(header) { min-block-size: 3.25rem; padding-block: 0;
+    border-block-end-color: var(--lds-color-border-default); } /* level with the page header */
   [slot="header"] { display: flex; align-items: center; gap: var(--lds-space-2); font-size: var(--lds-font-size-sm); }
   .confirm { display: flex; justify-content: flex-end; gap: var(--lds-space-3); }
   @media (max-width: 48rem) {
